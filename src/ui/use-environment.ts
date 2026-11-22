@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createBrowserEnvironment } from "@/env/boot";
-import type { ExecutionEnvironment } from "@/env/execution";
+import type { ExecutionEnvironment, ShellOptions, TerminalSession } from "@/env/execution";
 import { runEnvironmentSelfTest, type SelfTestResult } from "@/env/self-test";
 import { INITIAL_ENVIRONMENT, type EnvironmentSnapshot } from "@/env/status";
 
@@ -32,6 +32,11 @@ export interface EnvironmentBootState {
   error: string | null;
   boot: () => void;
   runSelfTest: () => void;
+  /**
+   * Open a real pty in the guest for the user's terminal. Rejects when the environment
+   * is not running: there is no machine to open a shell on.
+   */
+  openShell: (options?: ShellOptions) => Promise<TerminalSession>;
   shutdown: () => void;
 }
 
@@ -103,6 +108,12 @@ export function useEnvironmentBoot(): EnvironmentBootState {
     })();
   }, [selfTestBusy]);
 
+  const openShell = useCallback(async (options?: ShellOptions): Promise<TerminalSession> => {
+    const env = environment.current;
+    if (!env) throw new Error("The Linux environment is not running. Boot it first.");
+    return env.openShell(options);
+  }, []);
+
   const shutdown = useCallback(() => {
     const env = environment.current;
     if (!env) return;
@@ -130,6 +141,7 @@ export function useEnvironmentBoot(): EnvironmentBootState {
     error,
     boot,
     runSelfTest,
+    openShell,
     shutdown,
   };
 }

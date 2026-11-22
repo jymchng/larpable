@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { DEFAULT_WORKSPACE_PATH } from "@/env/default-project";
 import { summarizeDistro } from "@/env/distro";
 import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
+import { TerminalPanel } from "@/ui/terminal-panel";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 
 /**
@@ -45,6 +47,14 @@ export function App() {
           onBoot={environment.boot}
           onSelfTest={environment.runSelfTest}
           onShutdown={environment.shutdown}
+        />
+      }
+      terminal={
+        <TerminalPanel
+          ready={environment.snapshot.status === "ready"}
+          cwd={DEFAULT_WORKSPACE_PATH}
+          openShell={environment.openShell}
+          unavailableReason={environment.error}
         />
       }
     />

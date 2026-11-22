@@ -83,6 +83,32 @@ describe("Dashboard", () => {
   it("shows the image size when it is actually served", () => {
     expect(renderDashboard()).toContain("3.9 MiB");
   });
+
+  it("puts the guest terminal in the agent pane when one is supplied", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([alpineAsset], null)}
+        terminal={<div data-testid="terminal-slot">shell</div>}
+      />,
+    );
+
+    expect(html).toContain('data-testid="terminal-slot"');
+    // The placeholder is what a dashboard with no terminal shows, not both at once.
+    expect(html).not.toContain("The agent has nothing to work with yet.");
+  });
+
+  it("offers an accessible toggle for the browser report", () => {
+    const html = renderDashboard();
+
+    expect(html).toContain('data-testid="diagnostics-toggle"');
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-controls="diagnostics-body"');
+    expect(html).toContain('id="diagnostics-body"');
+    expect(html).toContain("3/3 requirements");
+  });
 });
 
 describe("describeEnvironment", () => {

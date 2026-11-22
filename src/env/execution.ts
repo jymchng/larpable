@@ -68,6 +68,61 @@ export interface ExecutionResult {
   truncated: boolean;
 }
 
+/**
+ * How an interactive session ended.
+ *
+ * `closed` and `lost` both mean "no EXIT frame arrived" (the host hung up, or the
+ * connection dropped), so `exitCode` is unknowable and callers must not pretend
+ * otherwise.
+ */
+export type TerminalEnd =
+  | { type: "exit"; code: number }
+  | { type: "signal"; signal: number }
+  | { type: "closed" }
+  | { type: "lost" };
+
+/**
+ * A live terminal in the guest: a real pty, not a command runner.
+ *
+ * The distinction matters for what the user can do with it. A pty session has a
+ * controlling terminal, so `ls` colours its output, `cat` streams a file as it reads
+ * it, and interactive programs (`top`, an editor, a build's progress bar) behave the
+ * way they do on a laptop. A pipe-based command runner gives none of that.
+ */
+export interface TerminalSession {
+  /**
+   * What the terminal prints, as bytes in order. Pull stream: the guest blocks once
+   * the window is full, so keep reading. It ends after the program exits or
+   * `close()`.
+   */
+  readonly output: ReadableStream<Uint8Array>;
+  /** Settles once `output` has been read to its end. */
+  readonly ended: Promise<TerminalEnd>;
+  /** Type into the terminal. Strings are UTF-8. */
+  write(data: string | Uint8Array): Promise<void>;
+  /** Tell the guest the window size, so the foreground program gets SIGWINCH. */
+  resize(cols: number, rows: number): void;
+  /** Signal the foreground program (SIGTERM by default). */
+  kill(signal?: string): void;
+  /** Hang up the session; resolves once the connection is gone. */
+  close(): Promise<void>;
+}
+
+export interface ShellOptions {
+  /** Guest directory to start in. Defaults to the workspace root. */
+  cwd?: string;
+  /** Window size at start. Default 80 columns by 24 rows. */
+  cols?: number;
+  rows?: number;
+  /** Extra environment variables for the shell. */
+  env?: Record<string, string>;
+  /** `TERM` for the guest program. Default `xterm-256color`. */
+  term?: string;
+  /** Program to run. Default `/bin/sh` with `-l`, so the user's profile is loaded. */
+  file?: string;
+  args?: readonly string[];
+}
+
 export type FileKind = "file" | "directory" | "symlink";
 
 export interface FileEntry {
@@ -125,6 +180,15 @@ export interface ExecutionEnvironment {
    * reinterpreted.
    */
   execute(command: string, options?: ExecutionOptions): Promise<ExecutionResult>;
+
+  /**
+   * Open an interactive terminal (a real pty in the guest), for the user's own shell.
+   *
+   * Separate from `execute()` on purpose: a command runner collects output and reports
+   * an exit code, while a terminal is a conversation the user drives, with a
+   * controlling terminal, a working `cd`, and a window size.
+   */
+  openShell(options?: ShellOptions): Promise<TerminalSession>;
 
   /** Run a program with an explicit argv, with no shell in between. */
   executeArgv(

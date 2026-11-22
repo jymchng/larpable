@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { Check, Terminal, TriangleAlert, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Check, ChevronRight, Terminal, TriangleAlert, X } from "lucide-react";
 
 import type { DistroSummary } from "@/env/distro";
 import type { EnvironmentSnapshot } from "@/env/status";
@@ -16,6 +16,11 @@ export interface DashboardProps {
   distro: DistroSummary;
   /** The live boot card. Injected so the dashboard stays a pure function of its props. */
   environmentPanel?: ReactNode;
+  /**
+   * The guest terminal. Injected for the same reason as the boot card: the dashboard
+   * renders it without knowing there is a Linux machine behind it.
+   */
+  terminal?: ReactNode;
 }
 
 /**
@@ -23,7 +28,24 @@ export interface DashboardProps {
  * identically in tests (no fetch, no VM) and can never display state the caller
  * did not supply.
  */
-export function Dashboard({ version, support, environment, distro, environmentPanel }: DashboardProps) {
+export function Dashboard({
+  version,
+  support,
+  environment,
+  distro,
+  environmentPanel,
+  terminal,
+}: DashboardProps) {
+  // Open by default: this report is why a boot button is disabled when it is, and
+  // hiding that behind a collapsed panel would hide the explanation. The user
+  // collapses it once they have read it.
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
+  const passed = [
+    support.probe.jspi,
+    support.probe.crossOriginIsolated,
+    support.probe.sharedArrayBuffer,
+  ].filter(Boolean).length;
+
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-3 sm:px-6">
@@ -50,13 +72,17 @@ export function Dashboard({ version, support, environment, distro, environmentPa
           >
             Agent
           </h2>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-            <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
-            <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
-            <p className="text-muted-foreground max-w-[42ch] text-[13px]">
-              Describe a website here once the Linux environment reports ready.
-            </p>
-          </div>
+          {terminal ? (
+            <div className="flex min-h-0 flex-1 flex-col p-3">{terminal}</div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+              <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
+              <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
+              <p className="text-muted-foreground max-w-[42ch] text-[13px]">
+                Describe a website here once the Linux environment reports ready.
+              </p>
+            </div>
+          )}
         </section>
 
         <section aria-labelledby="preview-heading" className="flex min-h-0 flex-col">
@@ -78,13 +104,33 @@ export function Dashboard({ version, support, environment, distro, environmentPa
       </main>
 
       <section aria-labelledby="diagnostics-heading" className="border-t bg-card/40">
-        <h2
-          id="diagnostics-heading"
-          className="text-muted-foreground border-b px-4 py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-6"
-        >
+        <h2 id="diagnostics-heading" className="sr-only">
           This browser
         </h2>
-        <div className="grid gap-3 p-4 sm:p-6 lg:grid-cols-2">
+        <button
+          type="button"
+          data-testid="diagnostics-toggle"
+          aria-expanded={diagnosticsOpen}
+          aria-controls="diagnostics-body"
+          onClick={() => setDiagnosticsOpen((open) => !open)}
+          className="text-muted-foreground hover:bg-muted/60 flex w-full items-center gap-2 border-b px-4 py-2.5 text-left text-[11px] font-semibold tracking-[0.1em] uppercase transition-colors sm:px-6"
+        >
+          <ChevronRight
+            aria-hidden="true"
+            className={cn("size-3.5 transition-transform", diagnosticsOpen && "rotate-90")}
+          />
+          This browser
+          <Badge
+            variant={passed === 3 ? "success" : "warning"}
+            className="ml-auto font-mono text-[10px] normal-case"
+          >
+            {passed}/3 requirements
+          </Badge>
+        </button>
+
+        {diagnosticsOpen && (
+          <div id="diagnostics-body">
+            <div className="grid gap-3 p-4 sm:p-6 lg:grid-cols-2">
           {environmentPanel}
           <Card>
             <CardHeader>
@@ -142,6 +188,8 @@ export function Dashboard({ version, support, environment, distro, environmentPa
               </li>
             ))}
           </ul>
+        )}
+          </div>
         )}
       </section>
 

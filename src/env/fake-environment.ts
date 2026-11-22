@@ -23,6 +23,9 @@ import type {
   FileKind,
   InitializeOptions,
   OutputChunk,
+  ShellOptions,
+  TerminalEnd,
+  TerminalSession,
 } from "./execution";
 import { joinGuestPath, resolveWorkspacePath, toMountedPath } from "./paths";
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
@@ -66,12 +69,115 @@ export interface FakeEnvironmentOptions {
 export type FakeCall =
   | { method: "initialize" }
   | { method: "execute"; command: string; cwd: string }
+  | { method: "openShell"; cwd: string; cols: number; rows: number }
   | { method: "readFile"; path: string }
   | { method: "writeFile"; path: string; bytes: number }
   | { method: "listFiles"; path: string }
   | { method: "createDirectory"; path: string }
   | { method: "removeFile"; path: string }
   | { method: "shutdown" };
+
+/**
+ * A terminal that behaves like a shell without a VM: it echoes what is typed, runs the
+ * line through `execute()` once Enter arrives, prints the result and prompts again.
+ *
+ * That is exactly the contract the UI depends on — keystrokes in, output out, one
+ * command per line — so a component test can drive the terminal for real instead of
+ * asserting that some mock was called.
+ */
+class FakeShellSession implements TerminalSession {
+  readonly output: ReadableStream<Uint8Array>;
+  readonly ended: Promise<TerminalEnd>;
+  readonly writes: string[] = [];
+  readonly resizes: Array<{ cols: number; rows: number }> = [];
+  cols: number;
+  rows: number;
+
+  readonly #encoder = new TextEncoder();
+  #controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  #resolveEnd: ((end: TerminalEnd) => void) | null = null;
+  #buffer = "";
+  #ended = false;
+
+  constructor(
+    private readonly run: (line: string) => Promise<string>,
+    cols: number,
+    rows: number,
+    private readonly prompt: string,
+  ) {
+    this.cols = cols;
+    this.rows = rows;
+    this.output = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        this.#controller = controller;
+      },
+      cancel: () => {
+        this.#settle({ type: "lost" });
+      },
+    });
+    this.ended = new Promise<TerminalEnd>((resolve) => {
+      this.#resolveEnd = resolve;
+    });
+    this.#print(this.prompt);
+  }
+
+  async write(data: string | Uint8Array): Promise<void> {
+    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
+    this.writes.push(text);
+
+    for (const char of text) {
+      if (char === "\u0003") {
+        this.#buffer = "";
+        this.#print("^C\r\n" + this.prompt);
+        continue;
+      }
+      if (char === "\r" || char === "\n") {
+        const line = this.#buffer;
+        this.#buffer = "";
+        // A real pty echoes the keystrokes, so the transcript shows the command.
+        this.#print(`\r\n${await this.run(line)}${this.prompt}`);
+        continue;
+      }
+      if (char === "\u007f") {
+        this.#buffer = this.#buffer.slice(0, -1);
+        continue;
+      }
+      this.#buffer += char;
+      this.#print(char);
+    }
+  }
+
+  resize(cols: number, rows: number): void {
+    this.cols = cols;
+    this.rows = rows;
+    this.resizes.push({ cols, rows });
+  }
+
+  kill(): void {
+    this.#settle({ type: "signal", signal: 15 });
+  }
+
+  async close(): Promise<void> {
+    this.#settle({ type: "closed" });
+  }
+
+  #print(text: string): void {
+    if (this.#ended || !this.#controller || text.length === 0) return;
+    this.#controller.enqueue(this.#encoder.encode(text));
+  }
+
+  #settle(end: TerminalEnd): void {
+    if (this.#ended) return;
+    this.#ended = true;
+    try {
+      this.#controller?.close();
+    } catch {
+      // Already closed by a cancelled reader.
+    }
+    this.#resolveEnd?.(end);
+  }
+}
+
 
 export class FakeEnvironment implements ExecutionEnvironment {
   readonly workspacePath: string;
@@ -192,12 +298,43 @@ export class FakeEnvironment implements ExecutionEnvironment {
     return this.execute([file, ...args].join(" "), options);
   }
 
+  /**
+   * A terminal over `execute()`: the same commands, one per line, with a prompt. It is
+   * not a pty — there is no VM here — but the shape the UI sees is the real one, so a
+   * component test can type a command and assert on what came back.
+   */
+  async openShell(options: ShellOptions = {}): Promise<TerminalSession> {
+    this.#requireReady("open a terminal");
+    const cwd = options.cwd
+      ? resolveWorkspacePath(this.workspacePath, options.cwd)
+      : this.workspacePath;
+    const cols = options.cols ?? 80;
+    const rows = options.rows ?? 24;
+    this.calls.push({ method: "openShell", cwd, cols, rows });
+
+    return new FakeShellSession(
+      async (line) => {
+        const command = line.trim();
+        if (command.length === 0) return "";
+        const result = await this.execute(command, { cwd });
+        const out = `${result.stdout}${result.stderr}`.replace(/\n/g, "\r\n");
+        const status =
+          result.exitCode === 0 || result.exitCode === null
+            ? ""
+            : `[exit ${String(result.exitCode)}]\r\n`;
+        return `${out}${status}`;
+      },
+      cols,
+      rows,
+      `user@larpable:${cwd}$ `,
+    );
+  }
+
   async readFile(path: string): Promise<Uint8Array> {
     const target = this.#requireFile(`read ${path}`, path);
     this.calls.push({ method: "readFile", path: target });
     return this.#fs.readFile(toMountedPath(this.workspacePath, target));
   }
-
   async writeFile(path: string, content: Uint8Array | string): Promise<void> {
     const target = this.#requireFile(`write ${path}`, path);
     const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;

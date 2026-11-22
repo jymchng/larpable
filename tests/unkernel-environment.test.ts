@@ -118,13 +118,28 @@ class FakeKernel implements KernelLike {
     });
   }
 
-  async spawn(
+  spawn(
     file: string,
     args: readonly string[] | undefined,
     opts: KernelSpawnOptions & { pty: false },
-  ): Promise<KernelProcessLike> {
+  ): Promise<KernelProcessLike>;
+  spawn(
+    file: string,
+    args: readonly string[] | undefined,
+    opts: KernelPtyOptions,
+  ): Promise<KernelPtyLike>;
+  async spawn(
+    file: string,
+    args: readonly string[] | undefined,
+    opts: KernelSpawnOptions & { pty?: boolean },
+  ): Promise<KernelProcessLike | KernelPtyLike> {
     const argv = args ?? [];
-    this.spawned.push({ file, args: argv, opts });
+    if (opts.pty) {
+      const pty = new FakePty({ file, args: argv, opts });
+      this.ptys.push(pty);
+      return pty;
+    }
+    this.spawned.push({ file, args: argv, opts: opts as KernelSpawnOptions & { pty: false } });
     const process = new FakeProcess(this.respond(file, argv));
     const originalKill = process.kill.bind(process);
     process.kill = (signal?: string) => {
@@ -376,6 +391,52 @@ describe("execute", () => {
     await expect(env.execute("ls", { cwd: "../../etc" })).rejects.toBeInstanceOf(
       OutsideWorkspaceError,
     );
+  });
+});
+
+describe("the user's terminal", () => {
+  it("asks the kernel for a pty in the workspace, with a real TERM and window size", async () => {
+    const kernel = bootableKernel();
+    const env = environment(kernel);
+    await env.initialize();
+
+    const session = await env.openShell({ cols: 100, rows: 30 });
+
+    const pty = kernel.ptys.at(-1);
+    expect(pty?.plan.file).toBe("/bin/sh");
+    expect(pty?.plan.args).toEqual(["-l"]);
+    expect(pty?.plan.opts.pty).toBe(true);
+    expect(pty?.plan.opts.cwd).toBe("/workspace");
+    expect(pty?.plan.opts.term).toBe("xterm-256color");
+    expect(pty?.plan.opts.cols).toBe(100);
+    expect(pty?.plan.opts.rows).toBe(30);
+
+    // The session is the kernel's pty, unchanged: typing and resizing reach the guest.
+    await session.write("ls\r");
+    session.resize(120, 40);
+    expect(pty?.writes).toEqual(["ls\r"]);
+    expect(pty?.resizes).toEqual([{ cols: 120, rows: 40 }]);
+    await session.close();
+    expect(pty?.closed).toBe(true);
+  });
+
+  it("opens in the workspace root by default and refuses to escape it", async () => {
+    const kernel = bootableKernel();
+    const env = environment(kernel);
+    await env.initialize();
+
+    await (await env.openShell()).close();
+    expect(kernel.ptys.at(-1)?.plan.opts.cwd).toBe("/workspace");
+
+    await expect(env.openShell({ cwd: "/etc" })).rejects.toBeInstanceOf(OutsideWorkspaceError);
+  });
+
+  it("refuses to open a terminal before the environment is ready", async () => {
+    const kernel = bootableKernel();
+    const env = environment(kernel);
+
+    await expect(env.openShell()).rejects.toBeInstanceOf(NotReadyError);
+    expect(kernel.ptys).toHaveLength(0);
   });
 });
 

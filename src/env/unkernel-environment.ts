@@ -41,6 +41,8 @@ import type {
   InitializeOptions,
   InitializeStage,
   OutputChunk,
+  ShellOptions,
+  TerminalSession,
 } from "./execution";
 import { joinGuestPath, resolveWorkspacePath, toMountedPath } from "./paths";
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
@@ -90,6 +92,10 @@ export interface UnkernelEnvironmentOptions {
 const DEFAULT_WORKSPACE = "/workspace";
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+const DEFAULT_TERMINAL_COLS = 80;
+const DEFAULT_TERMINAL_ROWS = 24;
+/** What the browser terminal actually renders, so colour and line editing work. */
+const DEFAULT_TERMINAL_TERM = "xterm-256color";
 const SHELL_PROBE = "printf 'larpable-ok'";
 const SHELL_PROBE_MARKER = "larpable-ok";
 
@@ -287,6 +293,46 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
     const command = [file, ...args].join(" ");
     this.#requireReady(`run \`${command}\``);
     return this.#run(file, args, command, options);
+  }
+
+  /**
+   * Open a real pty in the guest, for the user's own terminal.
+   *
+   * The shell starts in the workspace, because that is the directory every other
+   * feature works on: `ls` there shows the project the agent is editing, and a file
+   * `cat`-ed there is the file the preview will build.
+   *
+   * `TERM=xterm-256color` matches what the browser terminal renders, so colour,
+   * cursor addressing and line editing work instead of producing escape-litter.
+   */
+  async openShell(options: ShellOptions = {}): Promise<TerminalSession> {
+    this.#requireReady("open a terminal");
+
+    const kernel = this.#kernel;
+    if (!kernel) throw new NotReadyError(this.#status, "open a terminal");
+
+    const cwd = options.cwd
+      ? resolveWorkspacePath(this.workspacePath, options.cwd)
+      : this.workspacePath;
+    const file = options.file ?? "/bin/sh";
+    const args = options.args ?? ["-l"];
+
+    try {
+      return await kernel.spawn(file, args, {
+        pty: true,
+        cwd,
+        cols: options.cols ?? DEFAULT_TERMINAL_COLS,
+        rows: options.rows ?? DEFAULT_TERMINAL_ROWS,
+        term: options.term ?? DEFAULT_TERMINAL_TERM,
+        ...(options.env ? { env: options.env } : {}),
+      });
+    } catch (error) {
+      throw new EnvironmentError(
+        "spawn",
+        `Could not open a terminal in ${cwd}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
   }
 
   async readFile(path: string): Promise<Uint8Array> {

@@ -57,6 +57,37 @@ export interface KernelSpawnOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * An interactive session: `spawn(file, args, { pty: true })`.
+ *
+ * Read from unkernel's `Pty` interface. `output` is a pull stream, so a reader must
+ * keep reading or the guest program blocks once the window is full; `ended` settles
+ * only after `output` has been read to its end, which is why the UI reads both.
+ */
+export interface KernelPtyLike {
+  readonly pid: number;
+  readonly output: ReadableStream<Uint8Array>;
+  readonly ended: Promise<KernelEndEvent>;
+  /** Type into the pty. Strings are UTF-8, split into 4096-byte DATA frames. */
+  write(data: Uint8Array | string): Promise<void>;
+  /** Set the window size; the foreground process gets SIGWINCH. */
+  resize(cols: number, rows: number): void;
+  /** Signal the program; SIGHUP by default. */
+  kill(signal?: string): void;
+  /** Hang up the session (SIGHUP); resolves once the connection is gone. */
+  close(): Promise<void>;
+}
+
+export interface KernelPtyOptions extends KernelSpawnOptions {
+  pty?: true;
+  cols?: number;
+  rows?: number;
+  /** `TERM` for the guest program. Default `xterm-256color`. */
+  term?: string;
+  /** Guest user to run as. Default the image's user (uid 1000). */
+  user?: string | number;
+}
+
 /** A booted kernel: only the parts the adapter calls. */
 export interface KernelLike {
   spawn(
@@ -64,6 +95,12 @@ export interface KernelLike {
     args: readonly string[] | undefined,
     opts: KernelSpawnOptions & { pty: false },
   ): Promise<KernelProcessLike>;
+  /** The same `spawn()`, on a pty instead of pipes: an interactive session. */
+  spawn(
+    file: string,
+    args: readonly string[] | undefined,
+    opts: KernelPtyOptions,
+  ): Promise<KernelPtyLike>;
   /** Settles when the guest halts, panics, traps or is stopped. */
   readonly exited: Promise<unknown>;
   /** Stop the kernel now, without a clean shutdown. */
