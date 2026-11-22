@@ -29,6 +29,8 @@ import type {
   KernelEndEvent,
   KernelLike,
   KernelProcessLike,
+  KernelPtyLike,
+  KernelPtyOptions,
   KernelSpawnOptions,
 } from "@/env/unkernel-kernel";
 import { MemoryWorkspace } from "@/env/workspace-fs";
@@ -105,6 +107,7 @@ class FakeKernel implements KernelLike {
     opts: KernelSpawnOptions & { pty: false };
   }> = [];
   readonly processes: FakeProcess[] = [];
+  readonly ptys: FakePty[] = [];
   readonly kills: string[] = [];
   stopped = false;
   memoryMiB = 1024;
@@ -135,7 +138,7 @@ class FakeKernel implements KernelLike {
   ): Promise<KernelProcessLike | KernelPtyLike> {
     const argv = args ?? [];
     if (opts.pty) {
-      const pty = new FakePty({ file, args: argv, opts });
+      const pty = new FakePty({ file, args: argv, opts: opts as KernelPtyOptions });
       this.ptys.push(pty);
       return pty;
     }
@@ -173,6 +176,66 @@ function bootableKernel(): FakeKernel {
     if (command.includes("poweroff")) return { end: { type: "exit", code: 0 } };
     return { stdout: "ok\n", end: { type: "exit", code: 0 } };
   });
+}
+
+/** A pty the adapter can open: it records what it was asked for and what was typed. */
+class FakePty implements KernelPtyLike {
+  readonly pid = 4_242;
+  readonly output: ReadableStream<Uint8Array>;
+  readonly ended: Promise<KernelEndEvent>;
+  readonly writes: string[] = [];
+  readonly resizes: Array<{ cols: number; rows: number }> = [];
+  readonly signals: string[] = [];
+  closed = false;
+  readonly plan: { file: string; args: readonly string[]; opts: KernelPtyOptions };
+
+  #controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  #resolveEnd: ((end: KernelEndEvent) => void) | null = null;
+  #settled = false;
+
+  constructor(plan: { file: string; args: readonly string[]; opts: KernelPtyOptions }) {
+    this.plan = plan;
+    this.output = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        this.#controller = controller;
+        controller.enqueue(new TextEncoder().encode(`${plan.opts.cwd ?? "~"}$ `));
+      },
+    });
+    this.ended = new Promise<KernelEndEvent>((resolve) => {
+      this.#resolveEnd = resolve;
+    });
+  }
+
+  async write(data: Uint8Array | string): Promise<void> {
+    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
+    this.writes.push(text);
+    if (text.includes("\u0004")) this.kill("SIGHUP");
+  }
+
+  resize(cols: number, rows: number): void {
+    this.resizes.push({ cols, rows });
+  }
+
+  kill(signal = "SIGHUP"): void {
+    this.signals.push(signal);
+    this.#settle({ type: "signal", signal: 1 });
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.#settle({ type: "closed" });
+  }
+
+  #settle(end: KernelEndEvent): void {
+    if (this.#settled) return;
+    this.#settled = true;
+    try {
+      this.#controller?.close();
+    } catch {
+      // The reader cancelled first.
+    }
+    this.#resolveEnd?.(end);
+  }
 }
 
 function environment(
