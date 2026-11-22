@@ -36,7 +36,10 @@ describe("runEnvironmentSelfTest", () => {
       stdout: new TextDecoder().decode(environment.workspace().readFile("/.larpable/host-to-guest.txt")),
     }));
 
-    const result = await runEnvironmentSelfTest(environment, { token });
+    // The same clock drives the self-test's own duration. With the real `Date.now` a
+    // fake environment can finish inside one millisecond, `durationMs` would be 0, and
+    // the assertion below failed intermittently without saying anything about the code.
+    const result = await runEnvironmentSelfTest(environment, { token, now: () => (elapsed += 250) });
 
     expect(result.ok).toBe(true);
     expect(result.uname).toContain("aarch64");

@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-11-22T10:56:02.926Z",
+  "measuredAt": "2026-11-22T10:59:15.341Z",
   "distro": "/root/typescript_projects/larpable/public/distros/alpine.erofs",
   "dataDisk": "kwdata template via createImageFromKwsparse",
   "cold": {
@@ -12,13 +12,13 @@
     "reused": false,
     "downloaded": true,
     "network": "online",
-    "durationMs": 55104,
+    "durationMs": 51821,
     "attempts": [
       {
         "index": 1,
         "command": "node --version && npm --version",
         "exitCode": 0,
-        "durationMs": 54992,
+        "durationMs": 51631,
         "installed": true
       }
     ],
@@ -34,13 +34,13 @@
     "reused": true,
     "downloaded": false,
     "network": "unknown",
-    "durationMs": 13566,
+    "durationMs": 15821,
     "attempts": [
       {
         "index": 1,
         "command": "node --version && npm --version",
         "exitCode": 0,
-        "durationMs": 13533,
+        "durationMs": 15791,
         "installed": false
       }
     ],
