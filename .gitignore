@@ -27,3 +27,6 @@ tests/.cassette/
 .idea/
 .vscode/
 *.swp
+
+# Local Netlify folder
+.netlify
