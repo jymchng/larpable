@@ -3,17 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 
 import { summarizeDistro } from "@/env/distro";
 import { distroAssetsQueryOptions } from "@/env/queries";
-import { INITIAL_ENVIRONMENT } from "@/env/status";
-import { detectSupport } from "@/env/support";
+import { applySupportSimulation, detectSupport } from "@/env/support";
 import { Dashboard } from "@/ui/dashboard";
+import { EnvironmentPanel } from "@/ui/environment-panel";
+import { useEnvironmentBoot } from "@/ui/use-environment";
 
 /**
- * Container: owns the async reads and hands plain values to the dashboard.
- * Keeping the fetch here is what lets `Dashboard` stay deterministic in tests.
+ * Container: owns the async reads and the booted environment, and hands plain values
+ * to the dashboard. Keeping that here is what lets `Dashboard` and `EnvironmentPanel`
+ * stay deterministic in tests.
  */
 export function App() {
-  const support = useMemo(() => detectSupport(), []);
-  const environment = INITIAL_ENVIRONMENT;
+  const support = useMemo(
+    () => applySupportSimulation(detectSupport(), window.location.search, import.meta.env.DEV),
+    [],
+  );
+  const environment = useEnvironmentBoot();
 
   const distroQuery = useQuery(distroAssetsQueryOptions);
   const distro = summarizeDistro(
@@ -25,8 +30,23 @@ export function App() {
     <Dashboard
       version={__APP_VERSION__}
       support={support}
-      environment={environment}
+      environment={environment.snapshot}
       distro={distro}
+      environmentPanel={
+        <EnvironmentPanel
+          support={support}
+          snapshot={environment.snapshot}
+          stage={environment.stage}
+          busy={environment.busy}
+          selfTest={environment.selfTest}
+          selfTestBusy={environment.selfTestBusy}
+          bootDurationMs={environment.bootDurationMs}
+          error={environment.error}
+          onBoot={environment.boot}
+          onSelfTest={environment.runSelfTest}
+          onShutdown={environment.shutdown}
+        />
+      }
     />
   );
 }

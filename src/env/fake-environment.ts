@@ -81,6 +81,7 @@ export class FakeEnvironment implements ExecutionEnvironment {
 
   readonly #fs: MemoryWorkspace;
   readonly #options: FakeEnvironmentOptions;
+  readonly #handlers: Record<string, FakeCommandResult | FakeCommandHandler>;
   readonly #now: () => number;
   readonly #listeners = new Set<(snapshot: EnvironmentSnapshot) => void>();
 
@@ -89,6 +90,9 @@ export class FakeEnvironment implements ExecutionEnvironment {
 
   constructor(options: FakeEnvironmentOptions = {}) {
     this.#options = options;
+    // Copied, so `script()` can add an answer later — a handler sometimes needs the
+    // environment it will answer for (to write the file its shell would have).
+    this.#handlers = { ...(options.handlers ?? {}) };
     this.workspacePath = resolveWorkspacePath("/", options.workspacePath ?? "/workspace");
     // Tree keys may be workspace-relative (`package.json`) or guest-absolute
     // (`/workspace/src/App.tsx`); both mean "inside the workspace", so they are
@@ -151,7 +155,7 @@ export class FakeEnvironment implements ExecutionEnvironment {
       : this.workspacePath;
     this.calls.push({ method: "execute", command, cwd });
 
-    const handler = this.#options.handlers?.[command];
+    const handler = this.#handlers[command];
     const entry = handler ?? this.#options.fallback;
     const result =
       typeof entry === "function"
@@ -228,6 +232,11 @@ export class FakeEnvironment implements ExecutionEnvironment {
   async shutdown(): Promise<void> {
     this.calls.push({ method: "shutdown" });
     this.#set("stopped");
+  }
+
+  /** Test helper: add or replace a scripted command after construction. */
+  script(command: string, handler: FakeCommandResult | FakeCommandHandler): void {
+    this.#handlers[command] = handler;
   }
 
   /** Test helper: the workspace tree, for assertions. */

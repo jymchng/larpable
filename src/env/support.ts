@@ -28,6 +28,8 @@ export interface SupportReport {
   /** Human-readable, actionable description of every missing capability. */
   problems: string[];
   probe: SupportProbe;
+  /** True when the report was produced by the dev-only simulation below, never by the browser. */
+  simulated?: boolean;
 }
 
 export function evaluateSupport(probe: SupportProbe): SupportReport {
@@ -65,4 +67,26 @@ export function detectSupport(): SupportReport {
     jspi: typeof WebAssembly.Suspending === "function",
     sharedArrayBuffer,
   });
+}
+
+/**
+ * Dev-only: make the unsupported-browser path reachable on a browser that *is*
+ * supported.
+ *
+ * The failure this path prevents (a spinner forever because JSPI is missing) is only
+ * observable on an old browser, which CI does not have — so `?simulateSupport=no-jspi`
+ * substitutes a probe with JSPI missing and the real rendering path runs against it.
+ * The report is marked `simulated`, the UI says so, and the production build ignores
+ * the parameter entirely, so it can never make a real browser look supported.
+ */
+export function applySupportSimulation(
+  report: SupportReport,
+  search: string,
+  dev: boolean,
+): SupportReport {
+  if (!dev) return report;
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (params.get("simulateSupport") !== "no-jspi") return report;
+
+  return { ...evaluateSupport({ ...report.probe, jspi: false }), simulated: true };
 }

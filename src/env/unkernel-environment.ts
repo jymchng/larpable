@@ -69,6 +69,10 @@ export interface UnkernelEnvironmentOptions {
   network?: KernelNetwork;
   /** A self-hosted Wisp proxy, when `network` is `"wisp"`. */
   wispServer?: string;
+  /** Run the kernel in a Web Worker (browser). Ignored by injected test kernels. */
+  worker?: boolean;
+  /** Attach the persistent IndexedDB data disk (browser). */
+  persistentDataDisk?: boolean;
   /** Default budget for `execute()`. Default 120 s. */
   commandTimeoutMs?: number;
   /** Default per-stream output cap. Default 8 MiB. */
@@ -231,6 +235,8 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
         ...(this.#options.memoryMiB ? { memoryMiB: this.#options.memoryMiB } : {}),
         ...(this.#options.cpus ? { cpus: this.#options.cpus } : {}),
         ...(this.#options.wispServer ? { wispServer: this.#options.wispServer } : {}),
+        ...(this.#options.worker ? { worker: true } : {}),
+        ...(this.#options.persistentDataDisk ? { persistentDataDisk: true } : {}),
         onProgress: (stage) => report("boot", `Booting ${this.#distroName}: ${stage}`),
       };
 

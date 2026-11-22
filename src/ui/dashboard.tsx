@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Check, Terminal, TriangleAlert, X } from "lucide-react";
 
 import type { DistroSummary } from "@/env/distro";
@@ -13,6 +14,8 @@ export interface DashboardProps {
   support: SupportReport;
   environment: EnvironmentSnapshot;
   distro: DistroSummary;
+  /** The live boot card. Injected so the dashboard stays a pure function of its props. */
+  environmentPanel?: ReactNode;
 }
 
 /**
@@ -20,7 +23,7 @@ export interface DashboardProps {
  * identically in tests (no fetch, no VM) and can never display state the caller
  * did not supply.
  */
-export function Dashboard({ version, support, environment, distro }: DashboardProps) {
+export function Dashboard({ version, support, environment, distro, environmentPanel }: DashboardProps) {
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-3 sm:px-6">
@@ -82,6 +85,7 @@ export function Dashboard({ version, support, environment, distro }: DashboardPr
           This browser
         </h2>
         <div className="grid gap-3 p-4 sm:p-6 lg:grid-cols-2">
+          {environmentPanel}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Runtime requirements</CardTitle>

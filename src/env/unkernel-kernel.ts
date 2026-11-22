@@ -94,6 +94,19 @@ export interface KernelBootRequest {
   network: KernelNetwork;
   /** A self-hosted Wisp proxy, when `network` is `"wisp"`. Default: unkernel's list. */
   wispServer?: string;
+  /**
+   * Run the kernel in a Web Worker. Browsers need this for SMP (a CPU blocks while it
+   * waits for another, which a page's main thread may not) and it is what keeps a
+   * 30-second build from freezing the UI.
+   */
+  worker?: boolean;
+  /**
+   * Attach the persistent IndexedDB data disk (label `kwdata`). The guest's root is an
+   * overlay: the read-only distro image below, writes above, on this disk. Browser
+   * only — in worker mode the disk is built from a spec, which is the same
+   * `openDataDisk`/`IdbStore` machinery running inside the worker.
+   */
+  persistentDataDisk?: boolean;
   onProgress?: (stage: string) => void;
 }
 
@@ -132,7 +145,7 @@ export const browserKernelFactory: KernelFactory = async (request) => {
   // copied rather than passed by reference.
   const servers = request.wispServer ?? [...unkernel.DEFAULT_WISP_SERVERS];
 
-  const options = {
+  const base = {
     distro: request.distro,
     // The adapter owns the real MemoryFs; the cast is the single place where the
     // structural contract meets unkernel's `FsSource`.
@@ -145,9 +158,25 @@ export const browserKernelFactory: KernelFactory = async (request) => {
     ...(request.network === "none"
       ? {}
       : { net: { kind: "net" as const, backend: { kind: "wisp" as const, servers } } }),
+    // In worker mode the disk has to be a spec the worker can build, which is why the
+    // persistent disk appears here as data rather than as an `openDataDisk()` result.
+    ...(request.persistentDataDisk
+      ? {
+          disks: [
+            { kind: "data" as const, template: "bundled" as const, mode: "persistent" as const },
+          ],
+        }
+      : {}),
   };
 
-  return unkernel.createKernel(options);
+  // `worker: true` selects unkernel's WorkerKernel overload. The cast is the same
+  // deliberate bridge as `mounts`: our structural `KernelLike` describes the methods
+  // the adapter calls, and both kernel shapes satisfy it.
+  const kernel = request.worker
+    ? await unkernel.createKernel({ ...base, worker: true })
+    : await unkernel.createKernel(base);
+
+  return kernel as unknown as KernelLike;
 };
 
 /** unkernel's `MemoryFs`, loaded lazily so Node-side tests never pull in the bundle. */

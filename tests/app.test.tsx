@@ -2,9 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Dashboard } from "../src/ui/dashboard";
+import { EnvironmentPanel } from "../src/ui/environment-panel";
 import { summarizeDistro, type DistroAssetStatus } from "../src/env/distro";
 import { describeEnvironment, INITIAL_ENVIRONMENT, statusLabel } from "../src/env/status";
-import { evaluateSupport } from "../src/env/support";
+import { applySupportSimulation, evaluateSupport } from "../src/env/support";
 
 const supported = evaluateSupport({
   crossOriginIsolated: true,
