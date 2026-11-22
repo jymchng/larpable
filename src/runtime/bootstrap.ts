@@ -80,6 +80,11 @@ export interface RuntimeSnapshot {
   reused: boolean;
   /** A download actually happened in this boot (from the shim's own output). */
   downloaded: boolean;
+  /**
+   * What the last network check said. `unknown` means the probe was never needed (a warm
+   * cache) or could not run — never a guess either way.
+   */
+  network: GuestNetworkState;
   attempts: readonly RuntimeAttempt[];
   durationMs: number;
   /** Everything the person should know, in order, without contradicting the facts. */
@@ -114,6 +119,16 @@ export interface RuntimeBootstrapOptions {
   cachedTimeoutMs?: number;
   /** Budget for the cache probe. Default 20 s. */
   probeTimeoutMs?: number;
+  /**
+   * A network answer the caller already has (the boot config knows whether the guest was
+   * given `wisp` or `none`). Seeding `offline` makes a cold warm-up fail at once with
+   * {@link OFFLINE_MESSAGE} instead of spending 147 s discovering it.
+   */
+  network?: GuestNetworkState;
+  /** The probe that answers online/offline. Default {@link DEFAULT_NETWORK_PROBE}. */
+  networkCommand?: string;
+  /** Budget for that probe. Default 20 s. */
+  networkTimeoutMs?: number;
   /** Attempts including the first. Default 2: the shim's 127 is worth one retry. */
   maxAttempts?: number;
   /** Pause between attempts. Default 1 s; tests pass 0. */
@@ -270,6 +285,7 @@ export class RuntimeBootstrap {
       cache: this.#cache,
       reused: false,
       downloaded: false,
+      network: options.network ?? "unknown",
       attempts: [],
       durationMs: 0,
       warnings: this.#initialWarnings(),

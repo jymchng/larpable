@@ -70,8 +70,11 @@ src/
 Three design decisions are worth knowing up front:
 
 - **The guest is aarch64 Linux.** unkernel runs unmodified arm64 binaries, so every
-  tool used inside the guest must be an arm64 build (`bun-linux-aarch64-musl` for
-  Alpine, `nodejs` from apk).
+  tool used inside the guest must be an arm64 build. The supported toolchain is
+  **Node + npm** from the image's own first-use shim (`node --version` downloads
+  Node 26.13.1 once, then it is cached): Bun is excluded because
+  `bun-linux-aarch64-musl` exits 127 (no `libstdc++.so.6`), and `apk` cannot install
+  anything for the unprivileged guest user, so nothing depends on a package manager.
 - **Filesystem access goes through one bridge.** The guest `/workspace` is a 9p
   host mount backed by `MemoryFs`, so writes propagate in both directions and the
   agent, the build manager and the UI all see the same files.
