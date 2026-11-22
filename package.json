@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "fetch:distros": "bun scripts/fetch-distros.ts",
     "fetch:node": "bun scripts/fetch-node.ts",
-    "feasibility": "bun scripts/feasibility.ts"
+    "feasibility": "bun scripts/feasibility.ts",
+    "test:guest": "LARPABLE_GUEST_TESTS=1 ./.tooling/node/bin/node ./node_modules/vitest/vitest.mjs run tests/guest"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",

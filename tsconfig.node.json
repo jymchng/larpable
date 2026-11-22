@@ -6,6 +6,11 @@
     "moduleResolution": "bundler",
     "types": ["node"],
 
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
