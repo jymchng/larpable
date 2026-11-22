@@ -44,6 +44,7 @@ describe("resolveBrowserEnvironmentConfig", () => {
       memoryMiB: DEFAULT_MEMORY_MIB,
       cpus: DEFAULT_CPUS,
       network: "wisp",
+      wispServers: [],
       wispServer: null,
       worker: true,
       persistentDataDisk: true,

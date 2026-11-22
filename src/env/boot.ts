@@ -44,7 +44,15 @@ export interface BrowserEnvironmentConfig {
   cpus: number;
   /** `"wisp"` routes the guest's TCP/UDP through a Wisp proxy; `"none"` boots offline. */
   network: KernelNetwork;
-  /** A self-hosted Wisp proxy; `null` uses unkernel's default list. */
+  /**
+   * Every Wisp proxy to try, in order. Empty means unkernel's default list, whose
+   * server **accepts only known origins** — measured: `wss://wisp.pi0.io:6680/` opens
+   * for `http://localhost:5173` and answers HTTP 404 on the WebSocket handshake for
+   * `https://larpable.netlify.app`. A deployment on its own origin therefore has to
+   * point this at a proxy that accepts it (`?wisp=wss://…` or `VITE_WISP_SERVERS`).
+   */
+  wispServers: string[];
+  /** The first configured proxy, for a single-proxy display; `null` means the default. */
   wispServer: string | null;
   /** Run the kernel in a Web Worker. Requires cross-origin isolation for SMP. */
   worker: boolean;
@@ -89,6 +97,36 @@ function numberFrom(
   return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
+/** Split a comma/space separated proxy list, dropping empties. */
+function serverList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/**
+ * The Wisp proxies to try, most specific first: an explicit option, then `?wisp=` (the
+ * convention unkernel's own page uses, so a deployment can be unblocked by editing the
+ * URL), then `VITE_WISP_SERVERS` (a list), then `VITE_WISP_SERVER` (one).
+ */
+function resolveWispServers(
+  overrides: BrowserEnvironmentOptions,
+  env: EnvRecord,
+  search: string,
+): string[] {
+  if (overrides.wispServers && overrides.wispServers.length > 0) return [...overrides.wispServers];
+  if (overrides.wispServer) return serverList(overrides.wispServer);
+
+  const fromQuery = new URLSearchParams(search).get("wisp");
+  if (fromQuery) return serverList(fromQuery);
+
+  const fromList = serverList(stringFrom(env.VITE_WISP_SERVERS));
+  if (fromList.length > 0) return fromList;
+  return serverList(stringFrom(env.VITE_WISP_SERVER));
+}
+
 /**
  * Turn overrides and a deployment's `VITE_*` variables into one config.
  *
@@ -98,9 +136,11 @@ function numberFrom(
 export function resolveBrowserEnvironmentConfig(
   overrides: BrowserEnvironmentOptions = {},
   env: EnvRecord = (import.meta as ImportMeta & { env?: EnvRecord }).env ?? {},
+  search: string = typeof globalThis.location === "object" ? globalThis.location.search : "",
 ): BrowserEnvironmentConfig {
   const network: KernelNetwork =
     overrides.network ?? (booleanFrom(env.VITE_LINUX_NETWORK, true) ? "wisp" : "none");
+  const wispServers = resolveWispServers(overrides, env, search);
 
   return {
     distroUrl: overrides.distroUrl ?? stringFrom(env.VITE_DISTRO_URL) ?? DEFAULT_DISTRO_URL,
@@ -108,7 +148,8 @@ export function resolveBrowserEnvironmentConfig(
     memoryMiB: overrides.memoryMiB ?? numberFrom(env.VITE_LINUX_MEMORY_MIB, DEFAULT_MEMORY_MIB, 128, 4096),
     cpus: overrides.cpus ?? numberFrom(env.VITE_LINUX_CPUS, DEFAULT_CPUS, 1, 4),
     network,
-    wispServer: overrides.wispServer ?? stringFrom(env.VITE_WISP_SERVER),
+    wispServers,
+    wispServer: wispServers[0] ?? null,
     worker: overrides.worker ?? booleanFrom(env.VITE_LINUX_WORKER, true),
     persistentDataDisk:
       overrides.persistentDataDisk ?? booleanFrom(env.VITE_LINUX_DATA_DISK, true),
@@ -140,7 +181,7 @@ export async function createBrowserEnvironment(
     memoryMiB: config.memoryMiB,
     cpus: config.cpus,
     network: config.network,
-    ...(config.wispServer ? { wispServer: config.wispServer } : {}),
+    ...(config.wispServers.length > 0 ? { wispServers: config.wispServers } : {}),
     worker: config.worker,
     persistentDataDisk: config.persistentDataDisk,
     commandTimeoutMs: config.commandTimeoutMs,

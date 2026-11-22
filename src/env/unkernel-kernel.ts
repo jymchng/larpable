@@ -129,7 +129,14 @@ export interface KernelBootRequest {
    */
   mounts: Record<string, unknown>;
   network: KernelNetwork;
-  /** A self-hosted Wisp proxy, when `network` is `"wisp"`. Default: unkernel's list. */
+  /**
+   * Wisp proxies to try, in order; the backend connects to all of them and the first
+   * to answer carries the guest's traffic (unkernel's own failover). Empty uses
+   * unkernel's default list — a proxy that accepts only known origins, so a page
+   * hosted elsewhere must pass its own.
+   */
+  wispServers?: string[];
+  /** One proxy, for callers with a single URL. Merged into `wispServers`. */
   wispServer?: string;
   /**
    * Run the kernel in a Web Worker. Browsers need this for SMP (a CPU blocks while it
@@ -178,9 +185,11 @@ export const browserKernelFactory: KernelFactory = async (request) => {
     );
   }
 
-  // `servers` is `string | string[]` in NetSpec, so the readonly default list is
-  // copied rather than passed by reference.
-  const servers = request.wispServer ?? [...unkernel.DEFAULT_WISP_SERVERS];
+  // `servers` is `string | string[]` in NetSpec, so the list is copied rather than
+  // passed by reference. The default is unkernel's, which accepts only known origins.
+  const configured = request.wispServers ?? (request.wispServer ? [request.wispServer] : []);
+  const servers =
+    configured.length > 0 ? [...configured] : [...unkernel.DEFAULT_WISP_SERVERS];
 
   const base = {
     distro: request.distro,

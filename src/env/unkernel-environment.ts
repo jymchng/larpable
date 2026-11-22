@@ -69,7 +69,10 @@ export interface UnkernelEnvironmentOptions {
   /** Where the guest's network frames go. Default `"wisp"`: browsers have no
    * direct backend, only a Wisp proxy. `"direct"` is for the Node-side guest tests. */
   network?: KernelNetwork;
-  /** A self-hosted Wisp proxy, when `network` is `"wisp"`. */
+  /** Self-hosted Wisp proxies, tried in order, when `network` is `"wisp"`. Empty uses
+   * unkernel's default list (which accepts only known origins). */
+  wispServers?: string[];
+  /** One self-hosted Wisp proxy. Merged into `wispServers`. */
   wispServer?: string;
   /** Run the kernel in a Web Worker (browser). Ignored by injected test kernels. */
   worker?: boolean;
@@ -240,6 +243,7 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
         network: this.#options.network ?? "wisp",
         ...(this.#options.memoryMiB ? { memoryMiB: this.#options.memoryMiB } : {}),
         ...(this.#options.cpus ? { cpus: this.#options.cpus } : {}),
+        ...(this.#options.wispServers?.length ? { wispServers: this.#options.wispServers } : {}),
         ...(this.#options.wispServer ? { wispServer: this.#options.wispServer } : {}),
         ...(this.#options.worker ? { worker: true } : {}),
         ...(this.#options.persistentDataDisk ? { persistentDataDisk: true } : {}),
