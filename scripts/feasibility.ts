@@ -53,13 +53,13 @@ function unkernelVersion(): string {
   return pkg.version;
 }
 
-function distroMeta(): { image?: string; sha256?: string } {
+function distroMeta(): { distroImage?: string; distroSha256?: string } {
   if (!existsSync(distroManifestPath)) return {};
   const manifest = JSON.parse(readFileSync(distroManifestPath, "utf8")) as {
     distros: Array<{ name: string; image: string; sha256: string }>;
   };
   const alpine = manifest.distros.find((entry) => entry.name === "alpine");
-  return alpine ? { image: alpine.image, sha256: alpine.sha256 } : {};
+  return alpine ? { distroImage: alpine.image, distroSha256: alpine.sha256 } : {};
 }
 
 async function main(): Promise<void> {
@@ -179,28 +179,44 @@ async function main(): Promise<void> {
     });
   }
 
-  // d. Node runtime (the fallback the build pipeline depends on)
+  // d. Node runtime (the fallback the build pipeline depends on).
+  //
+  // The guest's `node` is a shim, `/usr/lib/kw/bin/node`: the first call downloads a
+  // real Node build into `~/.local` and runs it. That first call is measurably
+  // unreliable (it can exit 127 while its own bootstrap is still settling), so the
+  // probe retries once and reports every attempt instead of flattening them into a
+  // single verdict. `apk` is unusable as the guest's unprivileged user, so the shim's
+  // own path is the only supported one and is measured as-is.
   {
     const start = Date.now();
     let status: ProbeResult["status"] = "fail";
     let detail = "node did not run";
     let output = "";
-    try {
-      const result = await withTimeout(
-        vm.exec("sh", ["-c", "node --version && npm --version"]),
-        300_000,
-        "node",
-      );
-      output = `${result.stdout}${result.stderr}`;
-      const versions = result.stdout.trim().split("\n");
-      status = result.exitCode === 0 && /^v\d+\./.test(versions[0] ?? "") ? "pass" : "fail";
-      detail =
-        status === "pass"
-          ? `node ${versions[0]} , npm ${versions[1] ?? "?"}`
-          : `node exited ${result.exitCode}`;
-    } catch (error) {
-      output = error instanceof Error ? error.message : String(error);
-      detail = "node probe failed";
+    const attempts = 2;
+
+    for (let attempt = 1; attempt <= attempts && status === "fail"; attempt += 1) {
+      try {
+        const result = await withTimeout(
+          vm.exec("sh", ["-c", "node --version && npm --version"]),
+          300_000,
+          `node (attempt ${attempt})`,
+        );
+        output += `--- attempt ${attempt}: node --version && npm --version (exit ${result.exitCode}) ---\n${result.stdout}${result.stderr}\n`;
+        const lines = result.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const version = lines.find((line) => /^v\d+\.\d+/.test(line));
+        const npm = lines.find((line) => /^\d+\.\d+\.\d+/.test(line));
+        status = result.exitCode === 0 && version ? "pass" : "fail";
+        detail =
+          status === "pass"
+            ? `node ${version}, npm ${npm ?? "?"} (shim bootstrap, attempt ${attempt}, ${((Date.now() - start) / 1000).toFixed(1)} s)`
+            : `node exited ${result.exitCode}`;
+      } catch (error) {
+        output += `--- attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}\n`;
+        detail = "node probe timed out";
+      }
     }
     probes.push({
       id: "node",
@@ -239,7 +255,7 @@ async function main(): Promise<void> {
       const retry = await withTimeout(
         vm.exec("sh", [
           "-c",
-          `apk add --no-cache libstdc++ gcompat >/dev/null 2>&1; /tmp/bun/bun-linux-aarch64-musl/bun --version`,
+          "apk add --no-cache libstdc++ gcompat 2>&1 | tail -4; /tmp/bun/bun-linux-aarch64-musl/bun --version",
         ]),
         300_000,
         "bun-retry",
