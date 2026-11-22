@@ -103,17 +103,17 @@ export function EnvironmentPanel({
                 {statusLabel(snapshot.status)}
               </Badge>
               {snapshot.distro && (
-                <Badge variant="outline" className="font-mono text-[10px]">
+                <Badge data-testid="env-distro" variant="outline" className="font-mono text-[10px]">
                   {snapshot.distro}
                 </Badge>
               )}
               {snapshot.cpus !== null && (
-                <Badge variant="outline" className="font-mono text-[10px]">
+                <Badge data-testid="env-cpus" variant="outline" className="font-mono text-[10px]">
                   {snapshot.cpus} CPU{snapshot.cpus === 1 ? "" : "s"}
                 </Badge>
               )}
               {snapshot.memoryMiB !== null && (
-                <Badge variant="outline" className="font-mono text-[10px]">
+                <Badge data-testid="env-memory" variant="outline" className="font-mono text-[10px]">
                   {snapshot.memoryMiB} MiB
                 </Badge>
               )}
