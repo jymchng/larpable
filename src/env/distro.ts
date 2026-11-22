@@ -87,7 +87,9 @@ export async function loadDistroManifest(
   if (contentType.includes("text/html")) {
     throw new DistroError(
       `${url} returned an HTML page, not the distro manifest — this deployment is missing public/distros/. ` +
-        "The images are git-ignored, so the build must run `bun run fetch:distros` before `bun run build`.",
+        "The images are git-ignored, so the build must run `bun run fetch:distros` before `bun run build`. " +
+        "If the site was deployed with the images, the browser replayed an older response: reload " +
+        "bypassing the cache.",
     );
   }
 

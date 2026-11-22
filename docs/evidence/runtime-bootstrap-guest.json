@@ -1,0 +1,49 @@
+{
+  "measuredAt": "2026-11-22T10:56:02.926Z",
+  "distro": "/root/typescript_projects/larpable/public/distros/alpine.erofs",
+  "dataDisk": "kwdata template via createImageFromKwsparse",
+  "cold": {
+    "label": "first boot with an empty data disk",
+    "state": "ready",
+    "nodeVersion": "v26.13.1",
+    "npmVersion": "11.20.0",
+    "cache": "persisted",
+    "cacheDir": "/home/user/.local",
+    "reused": false,
+    "downloaded": true,
+    "network": "online",
+    "durationMs": 55104,
+    "attempts": [
+      {
+        "index": 1,
+        "command": "node --version && npm --version",
+        "exitCode": 0,
+        "durationMs": 54992,
+        "installed": true
+      }
+    ],
+    "warnings": []
+  },
+  "warm": {
+    "label": "second boot with the same data disk",
+    "state": "ready",
+    "nodeVersion": "v26.13.1",
+    "npmVersion": "11.20.0",
+    "cache": "persisted",
+    "cacheDir": "/home/user/.local",
+    "reused": true,
+    "downloaded": false,
+    "network": "unknown",
+    "durationMs": 13566,
+    "attempts": [
+      {
+        "index": 1,
+        "command": "node --version && npm --version",
+        "exitCode": 0,
+        "durationMs": 13533,
+        "installed": false
+      }
+    ],
+    "warnings": []
+  }
+}

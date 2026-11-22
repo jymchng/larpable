@@ -52,6 +52,17 @@
     Cross-Origin-Resource-Policy = "same-origin"
     Cache-Control = "public, max-age=86400"
 
+# A missing distro file must be a real 404, not the SPA entry point. The catch-all at
+# the bottom answers *every* unknown path with index.html and a 200 — and under the
+# `/distros/*` cache rule above, that HTML was itself cacheable for a day, so a browser
+# that asked before the images were deployed kept replaying "this deployment is missing
+# public/distros/" long after the images were there. Real files still win this rule
+# because it is not forced.
+[[redirects]]
+  from = "/distros/*"
+  to = "/index.html"
+  status = 404
+
 # Single-page app: real files win, everything else falls back to the entry point.
 [[redirects]]
   from = "/*"
