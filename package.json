@@ -1,0 +1,35 @@
+{
+  "name": "larpable",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-native AI website development environment: Linux in WebAssembly, an autonomous coding agent, and a live preview of the real production build.",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "fetch:distros": "bun scripts/fetch-distros.ts",
+    "fetch:node": "bun scripts/fetch-node.ts",
+    "feasibility": "bun scripts/feasibility.ts"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

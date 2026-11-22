@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+dist-ssr/
+*.local
+
+# Repo-managed tooling and caches (downloaded, never committed)
+.tooling/
+.cache/
+public/distros/
+coverage/
+
+# Test/agent artifacts
+tests/.cassette/
+.agenthicc/
+*.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
