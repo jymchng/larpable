@@ -12,7 +12,9 @@ import { describe, expect, it } from "vitest";
 
 import { ExecutionCancelledError, ExecutionTimeoutError } from "@/env/environment-errors";
 import { FakeEnvironment, type FakeCommandHandler } from "@/env/fake-environment";
+import type { ExecutionResult } from "@/env/execution";
 import {
+  DEFAULT_PROBE_TIMEOUT_MS,
   LOCKFILES,
   RuntimeDetectionError,
   describeRuntime,
@@ -225,6 +227,7 @@ describe("describeRuntime", () => {
         packageManager: "npm",
         packageManagerVersion: null,
         fallbackReason: null,
+        warnings: [],
         probes: [],
       }),
     ).toBe("Runtime: node (version unknown), npm.");
@@ -257,5 +260,80 @@ describe("a cancelled probe", () => {
 
     expect(error).toBeInstanceOf(RuntimeDetectionError);
     expect((error as RuntimeDetectionError).probes[1]?.detail).toMatch(/cancelled/);
+  });
+});
+describe("the probe budget", () => {
+  const execResult = (command: string): ExecutionResult => ({
+    command,
+    argv: ["/bin/sh", "-lc", command],
+    stdout: "",
+    stderr: "",
+    exitCode: null,
+    signal: 9,
+    durationMs: 120_000,
+    truncated: false,
+  });
+
+  it("is measured against this guest, not picked on a laptop", () => {
+    // `npm --version` answered in 12.2 s and 17.2 s in the real guest; a 20 s budget
+    // killed it and produced a null version that read like "npm is missing".
+    expect(DEFAULT_PROBE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
+    expect(DEFAULT_PROBE_TIMEOUT_MS).toBeLessThanOrEqual(300_000);
+  });
+
+  it("says the npm probe ran out of budget instead of reporting an unknown version", async () => {
+    const { environment } = await harness({
+      ...answers.bunRejected,
+      ...answers.nodeOk,
+      [NPM]: () => {
+        throw new ExecutionTimeoutError(DEFAULT_PROBE_TIMEOUT_MS, execResult(NPM));
+      },
+    });
+
+    const info = await detectRuntime(environment);
+
+    expect(info.probes[2]).toMatchObject({ ok: false, timedOut: true });
+    expect(info.warnings.join(" ")).toMatch(/did not answer within 120000 ms/);
+    expect(info.warnings.join(" ")).toMatch(/installing dependencies with npm will not work/);
+    // The status sentence carries the warning, so the UI cannot show a bare "npm".
+    expect(describeRuntime(info)).toContain("did not answer within");
+  });
+
+  it("distinguishes a missing npm from a slow one", async () => {
+    const { environment } = await harness({
+      ...answers.bunRejected,
+      ...answers.nodeOk,
+      [NPM]: () => ({ exitCode: 127, stderr: "npm: not found\n" }),
+    });
+
+    const info = await detectRuntime(environment);
+
+    expect(info.probes[2]).toMatchObject({ timedOut: false, exitCode: 127 });
+    expect(info.warnings.join(" ")).toMatch(/exited 127/);
+    expect(info.warnings.join(" ")).not.toContain("did not answer within");
+  });
+
+  it("names a timed-out Bun probe as a budget problem, not a missing binary", async () => {
+    const { environment } = await harness({
+      [BUN]: () => {
+        throw new ExecutionTimeoutError(DEFAULT_PROBE_TIMEOUT_MS, execResult(BUN));
+      },
+      ...answers.nodeOk,
+      ...answers.npmOk,
+    });
+
+    const info = await detectRuntime(environment);
+
+    expect(info.fallbackReason).toMatch(/did not answer within 120000 ms/);
+    expect(info.fallbackReason).toContain("installs Bun");
+    expect(info.warnings).toEqual([]);
+  });
+
+  it("marks a probe that answered as not timed out", async () => {
+    const { environment } = await harness({ ...answers.bunRejected, ...answers.nodeOk, ...answers.npmOk });
+
+    const info = await detectRuntime(environment);
+
+    expect(info.probes.map((probe) => probe.timedOut)).toEqual([false, false, false]);
   });
 });
