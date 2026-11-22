@@ -334,6 +334,7 @@ export class BuildManager {
       });
     }
 
+    const finishedAt = this.#now();
     const build: BuildResult = {
       id,
       ok: true,
@@ -347,8 +348,11 @@ export class BuildManager {
       failure: null,
       log: logOf(result),
       startedAt,
-      finishedAt: this.#now(),
-      durationMs: this.#now() - startedAt,
+      finishedAt,
+      // Read from the same clock value as `finishedAt`: a record whose duration
+      // disagrees with its own timestamps cannot be used to answer "how long did the
+      // build take" without a second, contradictory answer.
+      durationMs: finishedAt - startedAt,
     };
     this.#history.push(build);
     // The preview only ever refreshes to output that exists and parsed as HTML.

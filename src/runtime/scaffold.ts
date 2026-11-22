@@ -51,7 +51,9 @@ function safeName(name: string): string {
   const cleaned = name
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    // A leading dot would make a hidden directory, and a name of `..` would point at the
+    // parent of whatever the project is written into. Neither is a name; both are paths.
+    .replace(/^[.-]+|[.-]+$/g, "");
   return cleaned.length > 0 ? cleaned : "my-site";
 }
 

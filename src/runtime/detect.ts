@@ -56,8 +56,10 @@ export interface DetectRuntimeOptions {
   timeoutMs?: number;
 }
 
-/** Node answers `v26.13.1`; a shim may prefix it with its own progress lines. */
-const NODE_VERSION = /\bv(\d+\.\d+\.\d+)\b/;
+/** Node answers `v26.13.1`; a shim may prefix it with its own progress lines. The `v`
+ * is part of what the guest printed, so it is part of what this module reports: the
+ * status bar should read the same as `node --version` in the user's own terminal. */
+const NODE_VERSION = /\b(v\d+\.\d+\.\d+)\b/;
 /** Bun answers a bare `1.3.13`. */
 const BARE_VERSION = /^\s*(\d+\.\d+\.\d+)\s*$/m;
 
