@@ -80,7 +80,25 @@ export async function loadDistroManifest(
     );
   }
 
-  const parsed: unknown = await response.json();
+  // A 200 is not proof of JSON. Static hosts with a single-page-app fallback answer a
+  // missing `/distros/distros.json` with index.html and a 200, and the browser's own
+  // error ("Unexpected token '<'") says nothing about the cause. Name the cause.
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) {
+    throw new DistroError(
+      `${url} returned an HTML page, not the distro manifest — this deployment is missing public/distros/. ` +
+        "The images are git-ignored, so the build must run `bun run fetch:distros` before `bun run build`.",
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch (cause) {
+    throw new DistroError(`${url} is not valid JSON. Run \`bun run fetch:distros\` to regenerate it.`, {
+      cause,
+    });
+  }
   if (
     typeof parsed !== "object" ||
     parsed === null ||
@@ -119,6 +137,14 @@ export async function probeDistroAsset(
 
   if (!response.ok) {
     throw new DistroError(`${url} returned HTTP ${response.status}`);
+  }
+
+  // The same trap as the manifest: an SPA fallback answers a missing image with
+  // index.html and a 200. A 1 KB "image" would fail deep inside the kernel boot; report
+  // it here as "not deployed" instead.
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) {
+    return { entry, url, present: false, bytes: null };
   }
 
   const length = Number(response.headers.get("content-length"));

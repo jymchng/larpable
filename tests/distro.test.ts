@@ -55,6 +55,22 @@ describe("loadDistroManifest", () => {
     await expect(loadDistroManifest(fetched)).rejects.toThrow(/not a distro manifest/);
   });
 
+  it("names the deployment cause when the host answers with its SPA fallback", async () => {
+    // Netlify (and any SPA host) serves index.html with a 200 for a file it does not
+    // have. The browser's own parse error says nothing about what to fix.
+    const fetched = vi.fn(
+      async () =>
+        new Response("<!doctype html><title>Larpable</title>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=UTF-8" },
+        }),
+    );
+
+    await expect(loadDistroManifest(fetched)).rejects.toThrow(/returned an HTML page/);
+    await expect(loadDistroManifest(fetched)).rejects.toThrow(/public\/distros\//);
+    await expect(loadDistroManifest(fetched)).rejects.toThrow(/fetch:distros/);
+  });
+
   it("rejects a network failure with an actionable message", async () => {
     const fetched = vi.fn(async () => {
       throw new TypeError("Failed to fetch");
@@ -85,6 +101,21 @@ describe("probeDistroAsset", () => {
     const fetched = vi.fn(async () => new Response(null, { status: 200 }));
     const status = await probeDistroAsset(entry, fetched);
     expect(status.bytes).toBeNull();
+  });
+
+  it("does not call an SPA fallback page a present image", async () => {
+    const fetched = vi.fn(
+      async () =>
+        new Response("<!doctype html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=UTF-8", "content-length": "1116" },
+        }),
+    );
+
+    await expect(probeDistroAsset(entry, fetched)).resolves.toMatchObject({
+      present: false,
+      bytes: null,
+    });
   });
 
   it("fails loudly on a server error instead of pretending the image is fine", async () => {

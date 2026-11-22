@@ -9,6 +9,11 @@
 # the guest uses Bun too, so one package manager is used end to end.
 
 [build]
+  # `prebuild` in package.json runs `bun run fetch:distros` first: the Linux image is
+  # git-ignored, so a fresh checkout (this is how Netlify builds) has no
+  # `public/distros/` and the app would load but refuse to boot. The fetch verifies the
+  # image's SHA-256 against the release pinned to the installed unkernel version, and is
+  # a no-op when the file is already valid.
   command = "bun run build"
   publish = "dist"
 
