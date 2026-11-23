@@ -67,6 +67,19 @@ All notable changes to Larpable are documented here. The format follows
 
 ### Changed
 
+- **The machine boots with the page.** Opening Larpable no longer leaves an idle guest behind an
+  instruction: `useAutoBoot` (`src/ui/use-autoboot.ts`) calls the environment's boot action once
+  per mount, and a spinner appears beside the wordmark while it runs, driven by the
+  environment's own status and stage rather than a timer. The rules are pure functions
+  (`src/ui/autoboot.ts`): never on a browser the support probe rejected, never a second attempt
+  (React 18 `StrictMode` mounts twice), never a restart of a machine that failed or was shut
+  down, and no spinner left turning over a failure — an `error` shows the machine's own message
+  and a retry. `boot()` also had to learn to tear a half-built machine down: it used to return
+  early while the failed adapter was still in its ref, which made that retry a no-op. Measured in
+  Chromium at 390 × 844 with no click: 11/11 checks, spinner named `Starting Linux` and animating,
+  page load to `Ready` in 15.2 s (the app's own boot: 9.8 s), one image read with no range
+  requested twice, `scrollWidth - clientWidth` 0, and `?simulateSupport=no-jspi` boots nothing —
+  see `docs/autoboot.md` and `docs/evidence/autoboot-*.png`.
 - **The provider settings are a popover, not a band.** The cog beside the Agent heading now
   opens a labelled dialog anchored to itself (`src/ui/components/popover.tsx`), carrying the
   same provider buttons, model field, key field and reset — so configuring the provider no
