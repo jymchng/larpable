@@ -440,6 +440,17 @@ function renderReport(measurements: Measurements, failure: Error | null): string
       `![Unsupported browser explanation](evidence/${unsupportedShot})`,
       "",
     );
+  } else {
+    // Said out loud rather than left as a missing section: a reader must be able to tell "this run
+    // did not measure it" from "this run measured it and it passed".
+    lines.push(
+      "## Unsupported browser path — not measured",
+      "",
+      "`?simulateSupport=no-jspi` is a dev-only probe simulation, so a run against a deployment",
+      "measures the boot path only. Run `bun run acceptance:browser` against a dev server for",
+      "this path; `bun run acceptance:autoboot` covers it on every run.",
+      "",
+    );
   }
 
   lines.push(

@@ -239,19 +239,14 @@ export function Dashboard({
           <div className="space-y-1.5">
             <DebugSection label="Status">
               {/*
-               * The sentence that used to sit in the footer, in full: `Linux: Ready | Distro:
-               * debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB`. It stays one
-               * line because `describeEnvironment` already decided what is worth saying, and it
-               * sits *above* the six facts rather than replacing them — the facts name the
-               * project and the build, which the sentence does not.
+               * The facts list, and *only* the facts list. A one-line `Linux: Ready | Distro:
+               * debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB` used to sit
+               * above it, and every clause of it was already on this surface: the facts row
+               * below names Linux and the runtime, the Machine section badges the distro, the
+               * CPUs and the memory. The sentence is not gone from the app — it is the shell's
+               * `sr-only` live region (`environment-summary`), because a screen reader needs the
+               * whole status in one announcement even though an eye can read a list.
                */}
-              <p
-                data-testid="environment-sentence"
-                title={describeEnvironment(environment)}
-                className="text-foreground min-w-0 font-mono text-[11px] leading-snug break-words"
-              >
-                {describeEnvironment(environment)}
-              </p>
               {statusFacts}
             </DebugSection>
             <DebugSection label="Requirements">
@@ -280,21 +275,16 @@ export function Dashboard({
               <DebugSection label="Machine">{environmentPanel}</DebugSection>
             ) : null}
             {/*
-             * The two things the header and the footer used to carry in plain sight. Neither is
-             * an action, and both are answers to questions asked while debugging — "can this
-             * browser boot Linux at all?" and "which build am I looking at?" — so they belong at
-             * the bottom of the report rather than spending the window's scarcest rows.
+             * Which build this is — the one thing the header used to carry that nothing else on
+             * the surface says. The support verdict used to sit beside it, in words ("Kernel can
+             * boot"), and that was the same statement as the requirements count two sections
+             * above with a green dot beside it: one fact, two places. The verdict is now the
+             * count's own title and its failure wording, where the probe's problems are listed.
              */}
             <div
               data-testid="debug-footer"
-              className="text-muted-foreground flex items-center justify-between gap-2 border-t pt-1.5 font-mono text-[11px]"
+              className="text-muted-foreground flex items-center justify-end border-t pt-1 font-mono text-[10.5px]"
             >
-              <span
-                data-testid="support-verdict"
-                className={support.ok ? "text-success" : "text-destructive"}
-              >
-                {support.ok ? "Kernel can boot" : "Kernel cannot boot here"}
-              </span>
               <span data-testid="app-version">v{version}</span>
             </div>
           </div>
@@ -568,6 +558,15 @@ function RequirementsLine({ support, passed }: { support: SupportReport; passed:
         label={`Requirements: ${String(passed)}/3 met`}
       />
       <span className="font-mono">{passed}/3 met</span>
+      {/*
+       * The words the footer used to carry ("Kernel can boot" / "Kernel cannot boot here"),
+       * moved to the count they describe. Only the failing half is painted: with everything met,
+       * `3/3 met` beside a green dot already says it, and a second sentence repeating the same
+       * verdict in a popover whose whole complaint was duplication is exactly what not to do.
+       */}
+      {support.ok ? null : (
+        <span className="text-destructive">— this browser cannot boot the kernel</span>
+      )}
       {support.simulated && (
         <span className="text-muted-foreground italic">(simulated probe)</span>
       )}
