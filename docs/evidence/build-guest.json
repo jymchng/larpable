@@ -1,0 +1,85 @@
+{
+  "measuredAt": "2026-11-23T01:31:36.797Z",
+  "distro": "/root/typescript_projects/larpable/public/distros/debian.erofs",
+  "runtime": {
+    "summary": "Runtime: bun 1.4.5, bun 1.4.5.",
+    "nodeVersion": "1.4.5",
+    "npmVersion": "1.4.5",
+    "reused": false,
+    "downloaded": true,
+    "warmupDurationMs": 65273,
+    "probes": [
+      {
+        "command": "bun --version",
+        "ok": true,
+        "exitCode": 0,
+        "version": "1.4.5"
+      }
+    ]
+  },
+  "project": {
+    "framework": "react-ts",
+    "name": "guest-build",
+    "files": [
+      "/workspace/README.md",
+      "/workspace/index.html",
+      "/workspace/package.json",
+      "/workspace/src/App.tsx",
+      "/workspace/src/main.tsx",
+      "/workspace/src/style.css",
+      "/workspace/tsconfig.json",
+      "/workspace/vite.config.ts"
+    ],
+    "buildCommand": "npm run build",
+    "installCommand": "npm install --no-audit --no-fund"
+  },
+  "install": {
+    "command": "bun install",
+    "ok": true,
+    "exitCode": 0,
+    "durationMs": 51693,
+    "lockfile": null,
+    "tail": [
+      "+ typescript@5.9.3 (v7.0.2 available)",
+      "+ vite@5.4.21 (v8.3.8 available)",
+      "+ react@18.3.1 (v19.3.1 available)",
+      "+ react-dom@18.3.1 (v19.3.1 available)",
+      "",
+      "67 packages installed [51.63s]"
+    ]
+  },
+  "build": {
+    "id": "build-mwsl7p5g-1",
+    "ok": true,
+    "command": "bun run build",
+    "commandSource": "scripts.build",
+    "reason": "package.json defines `build`: `vite build`. No output directory is configured; using the default `dist/`.",
+    "exitCode": 0,
+    "durationMs": 167877,
+    "outputDir": "dist",
+    "outputSource": "framework-default",
+    "entryPoint": "/workspace/dist/index.html",
+    "entryBytes": 393,
+    "tail": [
+      "transforming...",
+      "✓ 31 modules transformed.",
+      "rendering chunks...",
+      "computing gzip size...",
+      "dist/index.html                   0.39 kB │ gzip:  0.26 kB",
+      "dist/assets/index-DIPHRhGt.css    0.32 kB │ gzip:  0.24 kB",
+      "dist/assets/index-COnny-WS.js   142.70 kB │ gzip: 45.87 kB",
+      "✓ built in 2m 13s"
+    ]
+  },
+  "outputFiles": {
+    "dist": [
+      "assets",
+      "index.html"
+    ],
+    "assets": [
+      "index-DIPHRhGt.css",
+      "index-COnny-WS.js"
+    ]
+  },
+  "htmlHead": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>guest-build</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-COnny-WS.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DIPHRhGt.css\">\n  </head>\n  <body>\n    <div id=\"app\"></div>\n  </body>\n</html>\n"
+}

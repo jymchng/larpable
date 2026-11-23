@@ -145,13 +145,18 @@ export const APK_RESTRICTION =
   "runtime has to come from the image's own first-use shim (see docs/feasibility-report.md).";
 
 /**
- * Why Bun is excluded, with the measurement rather than an opinion.
+ * Why Bun was excluded on the **Alpine** image, kept as history.
  *
- * Kept as data so a test can assert it and the docs can quote it, and so a future guest
- * image that fixes the C++ runtime has one place to change.
+ * This is no longer a rule, it is a measurement with a date and an image attached: on
+ * Alpine the aarch64-musl build exited 127 (`libstdc++.so.6`). On Debian 13.7 the same
+ * shim answers `1.4.5`, `bun install` completes in 33 s and `bun run build` produces
+ * `dist/` in 203 s. So nothing refuses `bun` any more — `detectRuntime` measures the
+ * guest it is actually on — and this constant survives only so the docs and the
+ * feasibility report can quote where the old claim came from.
  */
 export const BUN_EXCLUSION = {
   runtime: "bun",
+  image: "alpine",
   target: "bun-linux-aarch64-musl",
   exitCode: 127,
   reason:
@@ -160,12 +165,19 @@ export const BUN_EXCLUSION = {
   measuredMs: 52_210,
 } as const;
 
-/** The runtime path the product actually supports, in one place. */
+/**
+ * The runtime path this product documents, in one place.
+ *
+ * `bun` says "Bun can install and build in the supported guest", which is now true on
+ * Debian and was false on Alpine. The *default* is still Node + npm: Bun arrives through
+ * the same first-use shim (29 s) and `vite build` runs Node tooling anyway, so Bun is the
+ * preferred package manager when it answers, not a replacement for the Node shim.
+ */
 export const SUPPORTED_RUNTIME = {
   runtime: "node",
   packageManager: "npm",
   bundler: "vite/esbuild",
-  bun: false,
+  bun: true,
 } as const;
 
 /** A failure of the runtime bootstrap itself, not of the program it ran. */
@@ -190,24 +202,43 @@ export class RuntimeBootstrapError extends Error {
 const DEFAULT_HOME = "/home/user";
 const DEFAULT_WARMUP = "node --version && npm --version";
 /**
- * The offline check. `wget` is busybox's, which is in the image before anything is
- * downloaded — the point is to test the *network*, not a package manager.
+ * The offline check the class uses when the caller supplies no command.
+ *
+ * It must not assume a downloader. On Alpine `wget` was busybox's and always present; the
+ * Debian image ships **no `wget` at all** (`/bin/sh: wget: not found`, exit 127) and does
+ * ship a real `/usr/bin/curl`. The old probe was `wget … && echo ONLINE || echo OFFLINE`,
+ * so "command not found" was reported as "no internet" — a false offline that aborted the
+ * warm-up in 5 s and told the reader to fix a network that was working (measured: `curl`
+ * got HTTP 200 for example.com and registry.npmjs.org).
+ *
+ * So: use whichever downloader exists, and when neither does, say `NO_PROBE` rather than
+ * lying. `#probeNetwork` treats that as `unknown` and lets the shim itself be the judge.
+ * Exported so a test can prove the "no single downloader" property rather than trust it.
  */
-const DEFAULT_NETWORK_PROBE = "wget -q -O /dev/null http://example.com/ && echo ONLINE || echo OFFLINE";
+export const DEFAULT_NETWORK_PROBE =
+  "if command -v curl >/dev/null 2>&1; then " +
+  "curl -fsS -m 20 -o /dev/null http://example.com/ && echo ONLINE || echo OFFLINE; " +
+  "elif command -v wget >/dev/null 2>&1; then " +
+  "wget -q -T 20 -O /dev/null http://example.com/ && echo ONLINE || echo OFFLINE; " +
+  "else echo NO_PROBE; fi";
 
 /** The one sentence a person needs when the guest has no network. */
 export const OFFLINE_MESSAGE =
-  "The guest has no internet, so nothing can be downloaded (this is why `curl`, `apk` " +
-  "and the Node shim fail). A browser has no raw sockets: the guest's traffic goes " +
-  "through a Wisp proxy, and unkernel's default proxy accepts only known origins. " +
+  "The guest has no internet, so nothing can be downloaded: the Node shim cannot fetch " +
+  "Node and `npm install` cannot reach the registry. A browser has no raw sockets, so the " +
+  "guest's traffic goes through a Wisp proxy, and unkernel's default proxy accepts only " +
+  "known origins. " +
   "Point this page at a proxy that accepts it — `?wisp=wss://your-proxy/` for one " +
   "session, or `VITE_WISP_SERVERS=wss://a/,wss://b/` at build time.";
 
 /** Commands that cannot work in this guest, with the measured reason to say instead. */
 const REFUSED: ReadonlyArray<{ token: string; message: string }> = [
+  // Package managers only: the guest runs as uid 1000, so `apk` and `apt` both refuse.
+  // `bun` is *not* here: on Debian it installs and builds (measured), so refusing it would
+  // make the product contradict its own runtime detection.
   { token: "apk", message: APK_RESTRICTION },
-  { token: "bun", message: `${BUN_EXCLUSION.reason} Use ${SUPPORTED_RUNTIME.runtime} + npm instead.` },
-  { token: "bunx", message: `${BUN_EXCLUSION.reason} Use npx instead.` },
+  { token: "apt", message: APK_RESTRICTION },
+  { token: "apt-get", message: APK_RESTRICTION },
 ];
 
 /** The `node` version the guest reports, e.g. `v26.13.1`. */
@@ -470,8 +501,20 @@ export class RuntimeBootstrap {
       const result = await this.#environment.execute(this.#networkCommand, {
         timeoutMs: this.#networkTimeoutMs,
       });
-      const online = result.exitCode === 0 && /\bONLINE\b/.test(result.stdout);
-      const network: GuestNetworkState = online ? "online" : "offline";
+      // Three answers, not two. `OFFLINE` is the probe saying the request failed;
+      // `NO_PROBE` is the probe saying it could not try (no curl, no wget). Treating the
+      // second as offline is the bug this replaced: Debian has curl but no wget, and the
+      // old `wget … || echo OFFLINE` reported "no internet" for a guest that had one and
+      // aborted the warm-up before the shim could answer. Only a probe that reports a
+      // failure is allowed to block the download; when it cannot tell, the shim decides.
+      //
+      // The decision reads the token, not the exit code: the probe is a shell `if`, and
+      // the `||`/`else` arms echo a word either way, so the exit status says nothing.
+      const network: GuestNetworkState = /\bONLINE\b/.test(result.stdout)
+        ? "online"
+        : /\bOFFLINE\b/.test(result.stdout)
+          ? "offline"
+          : "unknown";
       this.#set({ ...this.#snapshot, network });
       return network;
     } catch {
@@ -601,8 +644,9 @@ function tail(text: string, lines = 4): string {
 /** A sentence for the docs and the UI that states the supported runtime and the bans. */
 export function describeRuntimeSupport(): string {
   return (
-    `Guest runtime: ${SUPPORTED_RUNTIME.runtime} (npm, ${SUPPORTED_RUNTIME.bundler}). ` +
-    `Bun is excluded — ${BUN_EXCLUSION.reason} ` +
-    `apk is not usable in this guest, so the runtime comes from the shim's own download.`
+    `Guest runtime: ${SUPPORTED_RUNTIME.runtime} (npm, ${SUPPORTED_RUNTIME.bundler}), with ` +
+    `Bun ${SUPPORTED_RUNTIME.bun ? "usable" : "excluded"} when the guest answers for it. ` +
+    `No package manager can install anything — the guest is uid 1000, so apk and apt ` +
+    `refuse — and the runtime comes from the image's own first-use shim.`
   );
 }

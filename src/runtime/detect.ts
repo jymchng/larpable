@@ -2,12 +2,16 @@
  * Which JavaScript runtime the guest will actually use, measured rather than assumed.
  *
  * PRD §7.1 says Bun is preferred *if it works in this Linux environment*, and the
- * feasibility report (`docs/feasibility-report.md`) settled that: `bun --version` and
- * every other Bun entry point die with exit 127 because the aarch64-musl build needs
- * `libstdc++.so.6`, which this guest does not have. So the honest shape of this module
- * is "prefer Bun, probe it, record why it was rejected, use Node" — and the rejection
- * is data (`fallbackReason`) rather than a comment, because the UI has to show it and
- * the agent must not be told to run `bun install` in a guest where that cannot work.
+ * answer depends on the image, so this module measures instead of remembering. On the
+ * Alpine image every Bun entry point died with exit 127 (aarch64-musl, `libstdc++.so.6`)
+ * and goals #2-#7 recorded that; on the Debian image the same shim answers `1.4.5`,
+ * `bun install` completes in 33 s and `bun run build` writes `dist/` in 203 s. Both are
+ * true statements about one guest each, which is exactly why the decision is a probe.
+ *
+ * So the honest shape of this module is "prefer Bun, probe it, record what happened, fall
+ * back to Node" — and the outcome is data (`probes`, `fallbackReason`, `warnings`) rather
+ * than a constant, because the UI has to show it and the agent must not be told to run
+ * `bun install` in a guest where that cannot work.
  *
  * Three rules this module keeps:
  *
@@ -25,7 +29,6 @@
 import { ExecutionTimeoutError } from "../env/environment-errors";
 import type { ExecutionEnvironment } from "../env/execution";
 
-import { BUN_EXCLUSION } from "./bootstrap";
 
 export type GuestRuntime = "node" | "bun";
 export type PackageManager = "npm" | "bun";
@@ -178,8 +181,11 @@ export async function detectRuntime(
         `installs Bun), so Bun was not selected. Using Node + npm instead.`;
     } else {
       const outcome = bun.exitCode === null ? "could not run" : `exited ${String(bun.exitCode)}`;
+      // Only what *this* guest did. The old text quoted `BUN_EXCLUSION` ("aarch64-musl
+      // fails, exit 127, libstdc++.so.6"), which was measured on Alpine and is simply
+      // false on Debian, where the same shim answers `1.4.5` and builds a project.
       fallbackReason =
-        `${BUN_EXCLUSION.reason} The probe \`bun --version\` ${outcome}` +
+        `The probe \`bun --version\` ${outcome}` +
         `${bun.detail ? `: ${bun.detail}` : "."} Using Node + npm instead.`;
     }
   }

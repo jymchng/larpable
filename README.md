@@ -78,9 +78,12 @@ Three design decisions are worth knowing up front:
   guest tests now boot `/distros/debian.erofs`.
 - **The toolchain is Node + npm**, from the image's own first-use shim (`node --version`
   downloads Node once, then it is cached in `~/.local` on the persistent data disk). Bun
-  is probed rather than assumed: on Alpine it exited 127 (`libstdc++.so.6`), on the
-  Debian image it has answered `1.4.5`, so `src/runtime/detect.ts` measures it at boot and
-  records the reason it was or was not selected.
+  is probed rather than assumed, because the answer depends on the image: on Alpine it
+  exited 127 (`libstdc++.so.6`), on Debian it answers `1.4.5`, installs 67 packages in
+  33 s and builds a scaffolded React project in 203 s. `src/runtime/detect.ts` measures it
+  at boot and records the reason it was or was not selected; `vite build` runs Node
+  tooling either way, so Bun is the preferred *package manager*, not a replacement for the
+  Node shim.
 - **Filesystem access goes through one bridge.** The guest `/workspace` is a 9p
   host mount backed by `MemoryFs`, so writes propagate in both directions and the
   agent, the build manager and the UI all see the same files.

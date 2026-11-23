@@ -12,9 +12,9 @@ WebAssembly (unkernel), an autonomous coding agent, and a live preview of the re
 production build. Built from `prds/01-whole-prd.md`.
 
 **Workflow position:** `implement_goal`, goal **#8 of 26** (runtime detection → scaffold →
-install/build). Goals #1–#7 are verified and closed. #8 is implemented, typechecked and
-unit-tested (82 tests); its gated guest build run is the one item still open. The guest
-image is now **Debian 13.7** rather than Alpine — see §3a.
+install/build). Goals #1–#7 are verified and closed. #8 is complete: 82 unit tests plus a
+gated guest run that scaffolds, installs and builds for real (see §3). The guest image is
+now **Debian 13.7** rather than Alpine — see §3a.
 
 | Goal | State | Evidence |
 | --- | --- | --- |
@@ -70,10 +70,25 @@ Design decisions worth remembering:
 
 ```
 bun run typecheck                   → exit 0 (both tsconfigs)
-bun run test                        → 204 passed | 3 skipped (207) in 7.13 s
+bun run test                        → 207 passed | 3 skipped (210) in 2.2 s
 LARPABLE_GUEST_TESTS=1 … tests/guest/environment.guest.test.ts
                                     → 1 passed in 5.09 s (Debian 13.7 image)
+LARPABLE_GUEST_TESTS=1 … tests/guest/build.guest.test.ts
+                                    → 1 passed in 325.62 s ← goal 8 acceptance
 ```
+
+The build run measured, in the guest and with nothing simulated:
+
+| Step | Command | Result |
+| --- | --- | --- |
+| runtime | `bun --version` | `1.4.5`, selected; Node never probed |
+| warm-up | `node --version && npm --version` | downloaded, 65.3 s |
+| install | `bun install` | exit 0, 51.7 s, no lockfile |
+| build | `bun run build` | exit 0, 167.9 s, id `build-mwsl7p5g-1` |
+| output | `/workspace/dist/index.html` | 393 B, plus `assets/index-*.css` and `assets/index-*.js` |
+
+`docs/evidence/build-guest.json` holds that record verbatim, including the entry HTML's
+hashed asset tag.
 
 The unit suite covers goal 8 directly: `tests/build-plan.test.ts` (26),
 `tests/runtime-detect.test.ts` (18), `tests/scaffold.test.ts` (20),
@@ -81,9 +96,8 @@ The unit suite covers goal 8 directly: `tests/build-plan.test.ts` (26),
 (`scripts.build` vs `framework-default`; `vite-config` vs `netlify-toml` vs
 `react-scripts`), so a plan that guessed the right answer for the wrong reason fails.
 
-The gated guest build test (`tests/guest/build.guest.test.ts`, scaffold → `npm install`
-→ `vite build` → `dist/index.html`) has **not passed yet**; it is the one acceptance item
-still open on goal 8.
+The gated guest build test is the acceptance item for goal 8, and it passes: scaffold →
+`bun install` → `bun run build` → `dist/index.html` with a build id, on the Debian image.
 
 ---
 
@@ -110,11 +124,28 @@ LARPABLE_GUEST_TESTS=1 …/environment.guest.test.ts → passed, 5.09 s
                                (uname, file round-trip, exit codes, shutdown)
 ```
 
-**Known inconsistency, owned by goal 26:** `RuntimeBootstrap.#assertSupported` still
-refuses any command containing `bun`/`bunx`, while `detectRuntime` can *select* Bun when
-`bun --version` answers (it does: `1.4.5`). Nothing on the supported path hits that
-combination yet because `SUPPORTED_RUNTIME.bun` is `false` and `BuildManager` is told
-`npm`, but the two must be reconciled when goal 26 proves or disproves `bun install`.
+### The two bugs the Debian switch exposed
+
+Both were found by running the guest, not by reading the code.
+
+1. **A false "no internet".** `DEFAULT_NETWORK_PROBE` was `wget … || echo OFFLINE`,
+   inherited from Alpine's busybox. Debian has **no `wget` at all** (`/bin/sh: wget: not
+   found`, exit 127) and a real `/usr/bin/curl` that fetched `example.com` and
+   `registry.npmjs.org` with HTTP 200. The probe now tries `curl`, then `wget`, and prints
+   `NO_PROBE` when it has neither; `#probeNetwork` reads three answers, so "could not ask"
+   no longer means "offline" and no longer blocks the warm-up. Tests cover both directions.
+2. **A refusal that contradicted detection.** `RuntimeBootstrap` refused every command
+   containing `bun`/`bunx` (Alpine's exit 127), while `detectRuntime` selected Bun when it
+   answered. Measured on Debian: `bun --version` 29.2 s, `bun install` exit 0 in 33.1 s
+   (67 packages), `bun run build` exit 0 in 203.2 s (vite 5.4.21, `dist/index.html` +
+   hashed assets). So the refusal list now holds only package managers (`apk`, `apt`),
+   `BUN_EXCLUSION` is labelled as the Alpine measurement it is, and `SUPPORTED_RUNTIME.bun`
+   is `true`.
+
+Goal 26 is therefore answered for Debian: Bun installs and builds. It is *not* a
+replacement for Node — `vite build` still runs Node tooling through the same shim — so
+Node + npm remains the documented default and Bun is the preferred package manager when the
+guest answers for it.
 
 ---
 
@@ -161,7 +192,7 @@ app to `wss://wisp.mercurywork.shop/` (still overridable with `VITE_WISP_SERVERS
 
 ## 6. Repo state
 
-- Branch `main`; last commit `7dd5b18` before this change.
+- Branch `main`; last commits: `cd5e4ed` (Debian image), plus this change.
 - This change touches: `src/env/distro.ts` (one `DEFAULT_DISTRO_NAME`, manifest check no
   longer hard-codes Alpine), `src/env/boot.ts`, `scripts/fetch-distros.ts`,
   `src/runtime/bootstrap.ts` (exclusion text now says which image it was measured on),

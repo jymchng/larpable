@@ -4,6 +4,7 @@ import { FakeEnvironment, type FakeCommandHandler } from "@/env/fake-environment
 import {
   APK_RESTRICTION,
   BUN_EXCLUSION,
+  DEFAULT_NETWORK_PROBE,
   OFFLINE_MESSAGE,
   RuntimeBootstrap,
   RuntimeBootstrapError,
@@ -33,6 +34,10 @@ async function harness(
     persistentDataDisk?: boolean;
     /** Known up front instead of probed. */
     knownNetwork?: "online" | "offline" | "unknown";
+    /** Answer of the real default probe, when the harness is told to use it. */
+    defaultProbeAnswer?: { exitCode?: number; stdout?: string; stderr?: string };
+    /** Use the shipped probe instead of the simple test one. */
+    realProbe?: boolean;
     warmupError?: Error;
   } = {},
 ): Promise<Harness> {
@@ -48,6 +53,7 @@ async function harness(
       options.network === "offline"
         ? { stdout: "OFFLINE\n", exitCode: 1 }
         : { stdout: "ONLINE\n" },
+    [DEFAULT_NETWORK_PROBE]: () => options.defaultProbeAnswer ?? { stdout: "ONLINE\n" },
     [WARMUP]: () => {
       if (options.warmupError) throw options.warmupError;
       const answer = warmups[Math.min(warmupIndex, warmups.length - 1)] as {
@@ -69,6 +75,7 @@ async function harness(
     retryDelayMs: 0,
     sleep: async () => undefined,
     now: () => 1_000,
+    ...(options.realProbe ? {} : { networkCommand: NETWORK }),
     ...(options.knownNetwork ? { network: options.knownNetwork } : {}),
   });
 
@@ -202,12 +209,17 @@ describe("commands this guest cannot run", () => {
     expect(APK_RESTRICTION).toMatch(/package manager/);
   });
 
-  it("refuses bun, quoting the aarch64-musl failure", async () => {
-    const { runtime } = await harness();
+  it("does not refuse bun, because on Debian it installs and builds", async () => {
+    // Measured in the guest: `bun --version` = 1.4.5, `bun install` exit 0 in 33 s,
+    // `bun run build` exit 0 in 203 s with dist/ written. Refusing it here would make the
+    // bootstrap contradict `detectRuntime`, which selects Bun when it answers.
+    const { runtime, commands } = await harness();
 
-    await expect(runtime.exec("bun install")).rejects.toThrow(/libstdc\+\+\.so\.6/);
+    await expect(runtime.exec("bun install")).resolves.toBeDefined();
+    expect(commands()).toContain("bun install");
+    // The Alpine measurement is history, not a rule.
+    expect(BUN_EXCLUSION.image).toBe("alpine");
     expect(BUN_EXCLUSION.exitCode).toBe(127);
-    expect(BUN_EXCLUSION.target).toBe("bun-linux-aarch64-musl");
   });
 
   it("states the Node-only runtime path for the docs", () => {
@@ -215,12 +227,13 @@ describe("commands this guest cannot run", () => {
       runtime: "node",
       packageManager: "npm",
       bundler: "vite/esbuild",
-      bun: false,
+      bun: true,
     });
     const sentence = describeRuntimeSupport();
     expect(sentence).toContain("node");
     expect(sentence).toContain("vite/esbuild");
-    expect(sentence).toMatch(/apk is not usable/);
+    expect(sentence).toContain("Bun usable");
+    expect(sentence).toMatch(/apk and apt refuse/);
   });
 });
 
@@ -244,6 +257,36 @@ describe("the guest's network", () => {
     const { runtime } = await harness({ network: "online" });
 
     expect((await runtime.ensureReady()).network).toBe("online");
+  });
+
+  it("does not depend on one downloader to answer at all", () => {
+    // The Debian image has no `wget` (exit 127) and a real `/usr/bin/curl`; the Alpine
+    // image is the other way round. A probe that names only one of them reported
+    // "offline" for a guest whose network was fine, and stopped the warm-up in 5 s.
+    expect(DEFAULT_NETWORK_PROBE).toContain("command -v curl");
+    expect(DEFAULT_NETWORK_PROBE).toContain("command -v wget");
+    // And when it has neither, it must say so rather than claim the guest is offline.
+    expect(DEFAULT_NETWORK_PROBE).toContain("NO_PROBE");
+  });
+
+  it("warms up when the probe could not run, instead of calling that offline", async () => {
+    const { runtime, commands } = await harness({
+      realProbe: true,
+      defaultProbeAnswer: { stdout: "NO_PROBE\n" },
+    });
+
+    expect(await runtime.ensureReady()).toMatchObject({ state: "ready", network: "unknown" });
+    expect(commands()).toContain(WARMUP);
+  });
+
+  it("still stops when the probe reports a real failure", async () => {
+    const { runtime, commands } = await harness({
+      realProbe: true,
+      defaultProbeAnswer: { stdout: "OFFLINE\n", exitCode: 1 },
+    });
+
+    await expect(runtime.ensureReady()).rejects.toThrow(OFFLINE_MESSAGE);
+    expect(commands()).not.toContain(WARMUP);
   });
 });
 
