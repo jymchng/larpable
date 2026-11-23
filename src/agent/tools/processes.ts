@@ -47,6 +47,8 @@ export class ProcessRegistry {
   readonly #entries = new Map<string, ProcessInfo>();
   readonly #controllers = new Map<string, AbortController>();
   readonly #pending = new Set<Promise<unknown>>();
+  /** Per-process completion, so a reader can wait for one instead of polling. */
+  readonly #done = new Map<string, Promise<ProcessInfo>>();
   readonly #now: () => number;
   #sequence = 0;
   /** Insertion order, so "the last process" means what a reader expects. */
@@ -121,7 +123,13 @@ export class ProcessRegistry {
     })
       .then((result) => {
         info.exitCode = result.exitCode;
-        info.state = result.exitCode === 0 ? "exited" : "failed";
+        // A command killed by its own signal must read as cancelled, not as a failure of
+        // the command: the difference is what the agent is told to do next.
+        info.state = controller.signal.aborted
+          ? "cancelled"
+          : result.exitCode === 0
+            ? "exited"
+            : "failed";
         if (result.truncated) info.truncated = true;
         // The runner already streamed the output; keep the final text in case a runner
         // reports output without streaming it.
@@ -142,6 +150,7 @@ export class ProcessRegistry {
       });
 
     this.#pending.add(done);
+    this.#done.set(id, done);
     void done.finally(() => this.#pending.delete(done));
     return { info, done };
   }
@@ -156,6 +165,33 @@ export class ProcessRegistry {
     if (id !== undefined) return this.#entries.get(id);
     const last = this.#order[this.#order.length - 1];
     return last === undefined ? undefined : this.#entries.get(last);
+  }
+
+  /**
+   * Wait up to `timeoutMs` for a process to finish, then report its record.
+   *
+   * Waiting beats polling here: `get_process_output` wants "the output so far", and a
+   * poll loop would either spin or need a timer the caller has to fake in tests. The
+   * record is returned even on timeout, because a build still running has a useful tail.
+   */
+  async wait(id: string, timeoutMs: number): Promise<ProcessInfo | undefined> {
+    const info = this.#entries.get(id);
+    if (info === undefined) return undefined;
+    const done = this.#done.get(id);
+    if (done === undefined || timeoutMs <= 0) return info;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expiry = new Promise<null>((resolve) => {
+      timer = setTimeout(() => {
+        resolve(null);
+      }, timeoutMs);
+    });
+    try {
+      const settled = await Promise.race([done, expiry]);
+      return settled ?? info;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /** Kill a running command. Returns false when there was nothing to kill. */

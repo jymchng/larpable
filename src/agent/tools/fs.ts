@@ -109,8 +109,8 @@ export const readFileTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, String(args.path));
     try {
+      const path = guestPath(context, String(args.path));
       const bytes = await context.environment.readFile(path);
       if (!isText(bytes)) {
         return failure(
@@ -156,9 +156,9 @@ export const writeFileTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, String(args.path));
-    const content = String(args.content);
     try {
+      const path = guestPath(context, String(args.path));
+      const content = String(args.content);
       await ensureParent(context, path);
       await context.environment.writeFile(path, content);
       const bytes = new TextEncoder().encode(content).byteLength;
@@ -195,12 +195,12 @@ export const editFileTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, String(args.path));
     const find = String(args.find);
     const replace = String(args.replace);
     const all = args.all === true;
 
     try {
+      const path = guestPath(context, String(args.path));
       const bytes = await context.environment.readFile(path);
       if (!isText(bytes)) {
         return failure(`${relative(context, path)} is a binary file and cannot be edited as text.`);
@@ -251,8 +251,8 @@ export const listFilesTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, typeof args.path === "string" ? args.path : ".");
     try {
+      const path = guestPath(context, typeof args.path === "string" ? args.path : ".");
       const lines: string[] = [];
       let count = 0;
       let cut = false;
@@ -328,7 +328,6 @@ export const searchFilesTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const root = guestPath(context, typeof args.path === "string" ? args.path : ".");
     const query = String(args.query);
     const limit = typeof args.maxResults === "number" ? args.maxResults : 100;
 
@@ -345,6 +344,13 @@ export const searchFilesTool: AgentTool = defineTool(
     const matches: string[] = [];
     let stopped = false;
     let scanned = 0;
+
+    let root: string;
+    try {
+      root = guestPath(context, typeof args.path === "string" ? args.path : ".");
+    } catch (cause) {
+      return failure(`Could not search: ${messageOf(cause)}`);
+    }
 
     try {
       // The walk only *collects* candidate paths; reading happens below so a large tree
@@ -404,8 +410,8 @@ export const deleteFileTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, String(args.path));
     try {
+      const path = guestPath(context, String(args.path));
       await context.environment.removeFile(path);
       return success(`Deleted ${relative(context, path)}.`, { path: relative(context, path) });
     } catch (cause) {
@@ -429,8 +435,8 @@ export const createDirectoryTool: AgentTool = defineTool(
     },
   },
   async (args, context) => {
-    const path = guestPath(context, String(args.path));
     try {
+      const path = guestPath(context, String(args.path));
       await context.environment.createDirectory(path);
       return success(`Created ${relative(context, path)}.`, { path: relative(context, path) });
     } catch (cause) {
