@@ -240,6 +240,11 @@ export interface PreviewPanelProps {
   /** The preset that sizes the frame. Default desktop, so a bare panel still shows chrome. */
   viewport?: ViewportPreset;
   onViewport?: (name: ViewportName) => void;
+  /**
+   * Controls that belong in the device row — install & build, cancel, fullscreen. Passed as a node
+   * rather than as booleans because the pane owns their state and their handlers.
+   */
+  deviceActions?: ReactNode;
   frameRef?: RefObject<HTMLIFrameElement>;
   onFrameLoad?: () => void;
   className?: string;
@@ -272,6 +277,7 @@ export function PreviewPanel({
   onForward,
   viewport = viewportFor("desktop"),
   onViewport,
+  deviceActions,
   frameRef,
   onFrameLoad,
   className,
@@ -306,7 +312,12 @@ export function PreviewPanel({
         reloadDisabled={reloadDisabled ?? !ready}
       />
 
-      <PreviewDeviceToolbar viewport={viewport} onChange={onViewport} zoom={zoom} />
+      <PreviewDeviceToolbar
+        viewport={viewport}
+        onChange={onViewport}
+        zoom={zoom}
+        actions={deviceActions}
+      />
 
       {toolbar}
       {strip}

@@ -255,6 +255,12 @@ export interface PreviewDeviceToolbarProps {
    * means "not scaled", and the readout says nothing extra.
    */
   zoom?: number;
+  /**
+   * Extra controls for this row, when the pane has them: install & build, cancel, fullscreen.
+   * They sit beside the three width buttons on request, so the row that decides what the frame
+   * shows is also the row that makes a build to show.
+   */
+  actions?: ReactNode;
 }
 
 /**
@@ -269,6 +275,7 @@ export function PreviewDeviceToolbar({
   viewport,
   onChange,
   zoom = 1,
+  actions,
 }: PreviewDeviceToolbarProps): ReactNode {
   const ICONS: Readonly<Record<ViewportName, ReactNode>> = {
     desktop: <Monitor aria-hidden="true" className="size-3.5" />,
@@ -326,6 +333,8 @@ export function PreviewDeviceToolbar({
        * preset is the one with `aria-pressed="true"`. The note survives where it is still the only
        * way to know something: the `title` on each button, which no layout has to pay for.
        */}
+      {actions}
+
       {viewport.width === null || viewport.height === null ? null : (
         <span
           data-testid="preview-device-size"

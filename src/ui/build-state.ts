@@ -91,7 +91,9 @@ export function buildStatusFromHistory(history: readonly BuildResult[]): BuildSt
 export function describeBuildProgress(status: BuildStatus): string {
   switch (status.kind) {
     case "none":
-      return "No build has run yet.";
+      // Silent when nothing has happened: the strip's own controls say what they would do, and a
+      // sentence announcing that no build exists is noise on a fresh pane (removed on request).
+      return "";
     case "running":
       return status.stage === "installing"
         ? "Installing dependencies in the guest…"

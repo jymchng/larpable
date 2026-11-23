@@ -34,9 +34,9 @@
  *
  * There are two ways to fill this pane, and they are different questions:
  *
- * - **"Preview build"** publishes a *finished* `dist/` (a static site, a Vite app). The bytes
- *   exist before the click, and the worker holds them afterwards.
- * - **"Run the app"** starts the project's own `scripts.start` and forwards each request to
+ * - **Publishing** (the browser bar's reload arrow) publishes a *finished* `dist/` — a static
+ *   site, a Vite app. The bytes exist before the click, and the worker holds them afterwards.
+ * - **The app server** starts the project's own `scripts.start` and forwards each request to
  *   the guest (`src/ui/use-app-preview.ts`). It exists because a Next.js project has no
  *   `dist/` at all — `next start` renders per request — and no amount of publishing will make
  *   one appear. The second button is therefore not a convenience: without it the Next.js path
@@ -180,7 +180,9 @@ export function describePreviewPhase(phase: PreviewPhase): string {
       // word instead of a sentence). Removed on request.
       return "";
     case "failed":
-      return "The preview could not be published.";
+      // The failure's own words are shown where the frame would be (`preview-frame.tsx`), so this
+      // line adds nothing — removed on request with "The preview could not be published.".
+      return "";
   }
 }
 
@@ -288,6 +290,21 @@ export function PreviewPane({
           />
         }
         strip={build !== undefined ? <BuildStrip build={build} /> : null}
+        deviceActions={
+          <>
+            {build !== undefined ? <BuildActions build={build} /> : null}
+            <IconButton
+              testId="preview-fullscreen"
+              label="Fullscreen"
+              hint={ready ? "Fullscreen preview" : "Publish a build before going fullscreen"}
+              tone="muted"
+              onClick={toggleFullscreen}
+              disabled={!ready}
+            >
+              <Maximize2 aria-hidden="true" />
+            </IconButton>
+          </>
+        }
         frameStyle={viewportStyle(preset)}
         path={path}
         framePath={browser.navigation.path}
@@ -324,8 +341,6 @@ export function PreviewPane({
  */
 function BuildStrip({ build }: { build: BuildControl }): ReactNode {
   const { status } = build;
-  const running = status.kind === "running";
-  const disabled = build.busy || build.problem !== null;
 
   return (
     <div
@@ -333,6 +348,44 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
       data-kind={status.kind}
       className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 py-1"
     >
+      {/*
+       * The Hammer and its Cancel button live in the device row now (user request: "Put the full
+       * screen button and the Hammer button on the same div as the 3 adjust width buttons"), so
+       * this line is only the build's sentence. It is not rendered when the sentence is empty.
+       */}
+      {describeBuildProgress(status).length > 0 ? (
+        <p
+          data-testid="preview-build-status"
+          aria-live="polite"
+          className={cn(
+            "min-w-0 flex-1 truncate font-mono text-[11.5px]",
+            status.kind === "failed" ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {describeBuildProgress(status)}
+        </p>
+      ) : null}
+
+      {build.problem !== null ? (
+        <span data-testid="preview-build-problem" className="text-muted-foreground text-[11.5px]">
+          {build.problem}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Install & build, and its Cancel while one is running: the two buttons that used to lead the
+ * build strip. They are rendered into the device row, beside the three width buttons, so the row
+ * that decides what the frame shows is also the row that makes a build to show.
+ */
+function BuildActions({ build }: { build: BuildControl }): ReactNode {
+  const { status } = build;
+  const running = status.kind === "running";
+
+  return (
+    <>
       <IconButton
         testId="preview-install-build"
         label={status.kind === "ok" ? "Rebuild" : "Install & build"}
@@ -342,7 +395,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
         }
         tone="run"
         onClick={build.run}
-        disabled={disabled}
+        disabled={build.busy || build.problem !== null}
       >
         {running ? (
           <Loader2 aria-hidden="true" className="animate-spin" />
@@ -362,24 +415,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
           <CircleStop aria-hidden="true" />
         </IconButton>
       ) : null}
-
-      <p
-        data-testid="preview-build-status"
-        aria-live="polite"
-        className={cn(
-          "min-w-0 flex-1 truncate font-mono text-[11.5px]",
-          status.kind === "failed" ? "text-destructive" : "text-muted-foreground",
-        )}
-      >
-        {describeBuildProgress(status)}
-      </p>
-
-      {build.problem !== null ? (
-        <span data-testid="preview-build-problem" className="text-muted-foreground text-[11.5px]">
-          {build.problem}
-        </span>
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -439,19 +475,6 @@ export function PreviewToolbar({
               <ExternalLink aria-hidden="true" className="size-4" />
             </a>
           </Button>
-        ) : null}
-
-        {onFullscreen !== undefined ? (
-          <IconButton
-            testId="preview-fullscreen"
-            label="Fullscreen"
-            hint={ready ? "Fullscreen preview" : "Publish a build before going fullscreen"}
-            tone="muted"
-            onClick={onFullscreen}
-            disabled={!ready}
-          >
-            <Maximize2 aria-hidden="true" />
-          </IconButton>
         ) : null}
       </div>
 

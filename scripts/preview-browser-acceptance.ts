@@ -467,7 +467,7 @@ async function main(): Promise<void> {
 
     // ------------------------------------------------------------- publish
     const publishStartedAt = Date.now();
-    await page.locator("[data-testid=preview-build]").click();
+    await page.locator("[data-testid=preview-reload]").click();
     await page.locator("[data-testid=preview-iframe]").waitFor({ timeout: PUBLISH_TIMEOUT_MS });
 
     const buildId = await page

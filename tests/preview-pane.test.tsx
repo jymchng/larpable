@@ -88,11 +88,13 @@ describe("PreviewPane", () => {
     expect(html).toContain('data-testid="preview-iframe"');
   });
 
-  it("offers a preview control and a status line before anything is published", () => {
+  it("offers publishing through the bar's reload arrow before anything is published", () => {
     const html = render({ kind: "idle" });
 
-    expect(html).toContain('data-testid="preview-build"');
-    expect(html).toContain("Preview build");
+    // The toolbar's own publish button was removed on request; the circling arrow beside the
+    // address bar is the publish control now, so it must be live before the first build lands.
+    expect(html).not.toContain('data-testid="preview-build"');
+    expect(html).toMatch(/data-testid="preview-reload"(?![^>]*disabled)/);
     expect(html).toContain('data-testid="preview-status"');
     expect(html).toContain("No preview published yet.");
     // No iframe: there is no URL to point one at, and a blank frame is indistinguishable
@@ -100,19 +102,19 @@ describe("PreviewPane", () => {
     expect(html).not.toContain("<iframe");
   });
 
-  it("disables the control while there is no machine to ask", () => {
+  it("disables publishing while there is no machine to ask", () => {
     const html = render({ kind: "idle" }, false);
 
-    expect(html).toMatch(/data-testid="preview-build"[^>]*disabled/);
+    expect(html).toMatch(/data-testid="preview-reload"[^>]*disabled/);
   });
 
-  it("disables the control while a publish is already running", () => {
+  it("disables publishing while one is already running", () => {
     for (const phase of [
       { kind: "starting", detail: "Starting the guest's server…" } as const,
       { kind: "publishing", buildId: "b-1", detail: "Reading 3 files out of the guest…" } as const,
     ]) {
       const html = render(phase);
-      expect(html).toMatch(/data-testid="preview-build"[^>]*disabled/);
+      expect(html).toMatch(/data-testid="preview-reload"[^>]*disabled/);
       expect(html).toContain('data-testid="preview-status"');
     }
   });
@@ -138,22 +140,21 @@ describe("PreviewPane", () => {
 });
 
 describe("PreviewToolbar", () => {
-  it("offers a rebuild once a build is published", () => {
-    const html = renderToStaticMarkup(
-      <PreviewToolbar phase={ready} onRefresh={() => undefined} available />,
-    );
+  it("has no publish button of its own any more", () => {
+    // Removed on request: the circling arrow in the browser bar publishes, and a second green
+    // button in this row was the same job in a different place.
+    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
 
-    expect(html).toContain("Rebuild preview");
-    expect(html).not.toMatch(/data-testid="preview-build"[^>]*disabled/);
+    expect(html).not.toContain('data-testid="preview-build"');
+    expect(html).not.toContain("Rebuild preview");
+    expect(html).toContain('data-testid="preview-served-by"');
   });
 
   it("has handed the device control to the browser chrome", () => {
     // The three presets used to live here, in the same row as "Preview build". They are a
     // browser's device toolbar now (`preview-chrome.tsx`), so the pane has one place that
     // sizes the frame and states the size, not two.
-    const html = renderToStaticMarkup(
-      <PreviewToolbar phase={ready} onRefresh={() => undefined} available />,
-    );
+    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
 
     expect(html).not.toContain('data-testid="preview-viewports"');
     expect(html).toContain('data-testid="preview-served-by"');
@@ -191,9 +192,9 @@ describe("PreviewPane with a running app", () => {
 
     expect(html).toContain(`src="${PREVIEW_PREFIX}/app-mf3k2/"`);
     expect(html).toContain('data-testid="preview-stop-app"');
+    // No "Run the app" control exists any more (removed on request), so nothing can spawn a
+    // second server on the port this one holds.
     expect(html).not.toContain('data-testid="preview-run-app"');
-    // The only way out is to stop it: offering "Run the app" while one is running would
-    // spawn a second server on the same port.
     expect(html).toContain("Stop app");
   });
 
@@ -210,16 +211,15 @@ describe("PreviewPane with a running app", () => {
 
     expect(html).not.toContain("<iframe");
     expect(html).toContain("Building the site…");
-    expect(html).toMatch(/data-testid="preview-run-app"[^>]*disabled/);
+    // The button that used to carry this state's disabled attribute is gone (removed on request).
+    expect(html).not.toContain('data-testid="preview-run-app"');
   });
 
-  it("offers to run it again after a failure and keeps the reason", () => {
-    const html = renderApp(
-      appControl({ kind: "failed", message: "package.json has no `start` script, so there is no app to run." }),
-    );
+  it("keeps the failure's own reason on the status line", () => {
+    const html = renderApp(appControl({ kind: "failed", message: "No `start` script in package.json." }));
 
-    expect(html).toContain("Run the app again");
-    expect(html).toContain("package.json has no `start` script");
+    expect(html).not.toContain('data-testid="preview-run-app"');
+    expect(html).toContain("No `start` script in package.json.");
     expect(html).not.toContain("<iframe");
   });
 
@@ -258,9 +258,7 @@ describe("PreviewPane with a running app", () => {
   });
 
   it("describes an idle app without pretending one is running", () => {
-    expect(describeAppPreview({ kind: "idle" })).toBe(
-      "No app running: “Run the app” starts the project’s own start script.",
-    );
+    expect(describeAppPreview({ kind: "idle" })).toBe("No app running.");
     expect(describeAppPreview(undefined)).toBeNull();
   });
 

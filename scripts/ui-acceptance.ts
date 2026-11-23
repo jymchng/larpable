@@ -422,7 +422,7 @@ async function main(): Promise<void> {
       await page.locator("[data-testid=preview-iframe]").first().waitFor({ timeout: 120_000 });
     } catch {
       autoPublished = false;
-      await page.locator("[data-testid=preview-build]").click();
+      await page.locator("[data-testid=preview-reload]").click();
       await page.locator("[data-testid=preview-iframe]").first().waitFor({ timeout: PUBLISH_TIMEOUT_MS });
     }
     const publishMs = Date.now() - publishStartedAt;
