@@ -167,9 +167,13 @@ export function Dashboard({
       // `h-dvh` is the stylesheet's answer; a measured visual viewport (which on iOS shrinks
       // when the keyboard opens, and `dvh` often does not) replaces it once there is one.
       style={{ height: visibleHeight === null ? "100dvh" : `${String(visibleHeight)}px` }}
+      // The shell's own box, named so the spacing audit (`scripts/spacing-evidence.ts`) can
+      // measure the inset between the window edge and the first pane without guessing at a CSS
+      // path. It is the one element whose padding *is* the app's outer margin.
+      data-testid="app-shell"
       className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip pb-[max(0.35rem,var(--safe-bottom))]"
     >
-      <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-1.5 pt-[max(0.35rem,var(--safe-top))] pb-1 sm:px-2.5 sm:py-1">
+      <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-1.5 pt-[max(0.35rem,var(--safe-top))] pb-1 sm:px-2 sm:py-1">
         <div className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
@@ -369,7 +373,7 @@ export function Dashboard({
             {terminal ? (
               <div className="flex min-h-0 flex-1 flex-col p-1 sm:p-1.5">{terminal}</div>
             ) : (
-              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-2 text-center">
+              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-1.5 py-1.5 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
                 <p className="text-muted-foreground max-w-[42ch] text-[12px]">
@@ -410,7 +414,7 @@ export function Dashboard({
         >
           <h2
             id="preview-heading"
-            className="text-muted-foreground hidden border-b px-2 py-0.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-4 lg:block"
+            className="text-muted-foreground hidden border-b px-1.5 py-0.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-2 lg:block"
           >
             Preview
           </h2>

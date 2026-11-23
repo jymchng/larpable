@@ -27,7 +27,8 @@
     "acceptance:popover": "bun scripts/popover-acceptance.ts",
     "acceptance:autoboot": "bun scripts/autoboot-acceptance.ts",
     "acceptance:debug": "bun scripts/debug-popover-acceptance.ts",
-    "evidence:icons": "bun scripts/icon-buttons-evidence.ts"
+    "evidence:icons": "bun scripts/icon-buttons-evidence.ts",
+    "evidence:spacing": "bun scripts/spacing-evidence.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",

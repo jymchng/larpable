@@ -288,7 +288,7 @@ function ViewportHint({ preset, zoom }: { preset: ViewportPreset; zoom: number }
 
   return (
     <>
-      <span className="flex items-baseline justify-between gap-3">
+      <span className="flex items-baseline justify-between gap-2">
         <span className="text-muted-foreground text-[9.5px] font-semibold tracking-[0.14em] uppercase">
           {preset.label}
         </span>

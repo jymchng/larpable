@@ -92,8 +92,8 @@ export function EnvironmentPanel({
                 data-tone={note.tone}
                 className={
                   note.tone === "warn"
-                    ? "flex gap-2 rounded-md border border-warning/30 bg-warning/10 p-2"
-                    : "text-muted-foreground flex gap-2 p-2"
+                    ? "flex gap-1.5 rounded-md border border-warning/30 bg-warning/10 p-1.5"
+                    : "text-muted-foreground flex gap-1.5 p-1.5"
                 }
               >
                 <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />

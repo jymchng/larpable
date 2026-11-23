@@ -296,6 +296,18 @@ describe("the handset notes in the boot card", () => {
     expect(html).toContain('data-tone="info"');
   });
 
+  it("keeps each note on the panel's own inset, not one step wider", () => {
+    // The notes live in the densest surface in the app (the debug popover), where a `p-2` row is
+    // the one gutter a size larger than every neighbour it sits among; it was tightened to the
+    // `p-1.5` the rest of the panel uses. The phone-only rows cannot be reached by the browser
+    // audit (`scripts/spacing-evidence.ts` measures a desktop page), so the class is pinned here
+    // instead: this fails if the row drifts back to a wider step.
+    const html = panel(noJspi, iphone);
+
+    expect(html).toContain("gap-1.5 rounded-md border border-warning/30 bg-warning/10 p-1.5");
+    expect(html).not.toContain("bg-warning/10 p-2");
+  });
+
   it("does not repeat the desktop advice on a phone", () => {
     // The support report's own sentence says "Chrome/Edge 137+ … Safari 27+", which on iOS is
     // the wrong instruction; the note corrects it, and both are visible together.

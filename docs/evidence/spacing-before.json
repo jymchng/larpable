@@ -1,0 +1,882 @@
+{
+  "label": "before",
+  "url": "http://127.0.0.1:5173",
+  "generatedAt": "2026-11-23T14:23:37.349Z",
+  "boot": "already ready after 7297 ms",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844,
+      "surfaces": [
+        {
+          "name": "shell",
+          "selector": "[data-testid=app-shell]",
+          "note": "window edge → every pane",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 5.6,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 390,
+            "height": 844,
+            "left": 0,
+            "top": 0
+          }
+        },
+        {
+          "name": "header",
+          "selector": "header",
+          "note": "wordmark, debug `d`, settings cog",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 5.6,
+            "right": 6,
+            "bottom": 4,
+            "left": 6
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 8
+          },
+          "rect": {
+            "width": 390,
+            "height": 46.59375,
+            "left": 0,
+            "top": 0
+          }
+        },
+        {
+          "name": "stage-switcher",
+          "selector": "[data-testid=stage-switcher]",
+          "note": "phone pane tabs",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 2,
+            "bottom": 2,
+            "left": 2
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 2
+          },
+          "rect": {
+            "width": 390,
+            "height": 41,
+            "left": 0,
+            "top": 46.59375
+          }
+        },
+        {
+          "name": "agent-pane",
+          "selector": "[data-testid=agent-pane]",
+          "note": "chat + terminal column",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 390,
+            "height": 750.8125,
+            "left": 0,
+            "top": 87.59375
+          }
+        },
+        {
+          "name": "chat-panel",
+          "selector": "[data-testid=chat-panel]",
+          "note": "whole chat surface",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 390,
+            "height": 371.40625,
+            "left": 0,
+            "top": 87.59375
+          }
+        },
+        {
+          "name": "chat-transcript",
+          "selector": "[data-testid=chat-transcript]",
+          "note": "message list",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 390,
+            "height": 324.40625,
+            "left": 0,
+            "top": 87.59375
+          }
+        },
+        {
+          "name": "chat-form",
+          "selector": "[data-testid=chat-form]",
+          "note": "prompt box",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 4,
+            "right": 6,
+            "bottom": 4,
+            "left": 6
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 390,
+            "height": 47,
+            "left": 0,
+            "top": 412
+          }
+        },
+        {
+          "name": "terminal-panel",
+          "selector": "[data-testid=terminal-panel]",
+          "note": "shell surface",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 382,
+            "height": 371.40625,
+            "left": 4,
+            "top": 463
+          }
+        },
+        {
+          "name": "terminal-tabs",
+          "selector": "[data-testid=terminal-tabs]",
+          "note": "shell tabs",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 6,
+            "bottom": 2,
+            "left": 6
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 2
+          },
+          "rect": {
+            "width": 380,
+            "height": 41,
+            "left": 5,
+            "top": 464
+          }
+        },
+        {
+          "name": "preview-pane",
+          "selector": "[data-testid=preview-pane]",
+          "note": "browser column",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": null
+        },
+        {
+          "name": "preview-toolbar",
+          "selector": "[data-testid=preview-toolbar]",
+          "note": "build strip (only while a build is served)",
+          "found": false,
+          "optional": true,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": null
+        },
+        {
+          "name": "preview-tab-strip",
+          "selector": "[data-testid=preview-tab-strip]",
+          "note": "browser tab",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 4,
+            "bottom": 0,
+            "left": 4
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 2
+          },
+          "rect": null
+        },
+        {
+          "name": "preview-browser-bar",
+          "selector": "[data-testid=preview-browser-bar]",
+          "note": "address bar",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 4,
+            "bottom": 2,
+            "left": 4
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 4,
+            "column": 4
+          },
+          "rect": null
+        },
+        {
+          "name": "preview-heading",
+          "selector": "#preview-heading",
+          "note": "column caption (desktop only)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 8,
+            "bottom": 2,
+            "left": 8
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": null
+        },
+        {
+          "name": "debug-popover",
+          "selector": "#diagnostics-popover",
+          "note": "the densest surface (measured open)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 6,
+            "right": 8,
+            "bottom": 6,
+            "left": 8
+          },
+          "margin": {
+            "top": 4,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 352,
+            "height": 416,
+            "left": 38,
+            "top": 49.6
+          },
+          "openState": "open"
+        },
+        {
+          "name": "settings-panel",
+          "selector": "[data-testid=settings-panel]",
+          "note": "provider settings (measured open)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 352,
+            "height": 416,
+            "left": 32,
+            "top": 45.6
+          },
+          "openState": "open"
+        }
+      ],
+      "pageOverflowPx": 0,
+      "worstRightOverflow": null
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "surfaces": [
+        {
+          "name": "shell",
+          "selector": "[data-testid=app-shell]",
+          "note": "window edge → every pane",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 5.6,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 1440,
+            "height": 900,
+            "left": 0,
+            "top": 0
+          }
+        },
+        {
+          "name": "header",
+          "selector": "header",
+          "note": "wordmark, debug `d`, settings cog",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 4,
+            "right": 10,
+            "bottom": 4,
+            "left": 10
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 8
+          },
+          "rect": {
+            "width": 1440,
+            "height": 41,
+            "left": 0,
+            "top": 0
+          }
+        },
+        {
+          "name": "stage-switcher",
+          "selector": "[data-testid=stage-switcher]",
+          "note": "phone pane tabs",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 2,
+            "bottom": 2,
+            "left": 2
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": null
+        },
+        {
+          "name": "agent-pane",
+          "selector": "[data-testid=agent-pane]",
+          "note": "chat + terminal column",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 720,
+            "height": 853.40625,
+            "left": 0,
+            "top": 41
+          }
+        },
+        {
+          "name": "chat-panel",
+          "selector": "[data-testid=chat-panel]",
+          "note": "whole chat surface",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 720,
+            "height": 409.953125,
+            "left": 0,
+            "top": 62.5
+          }
+        },
+        {
+          "name": "chat-transcript",
+          "selector": "[data-testid=chat-transcript]",
+          "note": "message list",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 720,
+            "height": 362.953125,
+            "left": 0,
+            "top": 62.5
+          }
+        },
+        {
+          "name": "chat-form",
+          "selector": "[data-testid=chat-form]",
+          "note": "prompt box",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 4,
+            "right": 6,
+            "bottom": 4,
+            "left": 6
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 720,
+            "height": 47,
+            "left": 0,
+            "top": 425.453125
+          }
+        },
+        {
+          "name": "terminal-panel",
+          "selector": "[data-testid=terminal-panel]",
+          "note": "shell surface",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 708,
+            "height": 409.953125,
+            "left": 6,
+            "top": 478.453125
+          }
+        },
+        {
+          "name": "terminal-tabs",
+          "selector": "[data-testid=terminal-tabs]",
+          "note": "shell tabs",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 6,
+            "bottom": 2,
+            "left": 6
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 2
+          },
+          "rect": {
+            "width": 706,
+            "height": 29,
+            "left": 7,
+            "top": 479.453125
+          }
+        },
+        {
+          "name": "preview-pane",
+          "selector": "[data-testid=preview-pane]",
+          "note": "browser column",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 0,
+            "column": 0
+          },
+          "rect": {
+            "width": 714,
+            "height": 831.90625,
+            "left": 726,
+            "top": 62.5
+          }
+        },
+        {
+          "name": "preview-toolbar",
+          "selector": "[data-testid=preview-toolbar]",
+          "note": "build strip (only while a build is served)",
+          "found": false,
+          "optional": true,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": null
+        },
+        {
+          "name": "preview-tab-strip",
+          "selector": "[data-testid=preview-tab-strip]",
+          "note": "browser tab",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 4,
+            "bottom": 0,
+            "left": 4
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 2,
+            "column": 2
+          },
+          "rect": {
+            "width": 714,
+            "height": 28,
+            "left": 726,
+            "top": 62.5
+          }
+        },
+        {
+          "name": "preview-browser-bar",
+          "selector": "[data-testid=preview-browser-bar]",
+          "note": "address bar",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 4,
+            "bottom": 2,
+            "left": 4
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": {
+            "row": 4,
+            "column": 4
+          },
+          "rect": {
+            "width": 714,
+            "height": 37,
+            "left": 726,
+            "top": 90.5
+          }
+        },
+        {
+          "name": "preview-heading",
+          "selector": "#preview-heading",
+          "note": "column caption (desktop only)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 2,
+            "right": 16,
+            "bottom": 2,
+            "left": 16
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 714,
+            "height": 21.5,
+            "left": 726,
+            "top": 41
+          }
+        },
+        {
+          "name": "debug-popover",
+          "selector": "#diagnostics-popover",
+          "note": "the densest surface (measured open)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 6,
+            "right": 8,
+            "bottom": 6,
+            "left": 8
+          },
+          "margin": {
+            "top": 4,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 352,
+            "height": 416,
+            "left": 1088,
+            "top": 44
+          },
+          "openState": "open"
+        },
+        {
+          "name": "settings-panel",
+          "selector": "[data-testid=settings-panel]",
+          "note": "provider settings (measured open)",
+          "found": true,
+          "optional": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "gap": null,
+          "rect": {
+            "width": 352,
+            "height": 409,
+            "left": 1078,
+            "top": 40
+          },
+          "openState": "open"
+        }
+      ],
+      "pageOverflowPx": 0,
+      "worstRightOverflow": null
+    }
+  ]
+}

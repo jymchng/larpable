@@ -116,7 +116,7 @@ export function ChatPanel({
       <ol
         data-testid="chat-transcript"
         aria-label="Transcript"
-        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-1"
+        className="min-h-0 flex-1 space-y-1 overflow-y-auto px-1.5 py-1"
       >
         {state.entries.length === 0 ? (
           // Smaller than a message on purpose (user request: "the placeholder text in the agent tab

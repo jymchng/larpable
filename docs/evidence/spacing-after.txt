@@ -1,0 +1,58 @@
+# spacing audit (after) at http://127.0.0.1:5173
+2026-11-23T14:24:11.789Z
+
+boot: already ready after 6331 ms
+
+## 390x844
+page overflow: 0 px
+worst right edge: none
+  shell                padding 0/0/5.6/0       margin 0/0/0/0         gap 0      390x844
+  header               padding 5.6/6/4/6       margin 0/0/0/0         gap 2x8    390x47
+  stage-switcher       padding 2/2/2/2         margin 0/0/0/0         gap 2      390x41
+  agent-pane           padding 0/0/0/0         margin 0/0/0/0         gap 0      390x751
+  chat-panel           padding 0/0/0/0         margin 0/0/0/0         gap 0      390x371
+  chat-transcript      padding 4/6/4/6         margin 0/0/0/0         gap -      390x324
+  chat-form            padding 4/6/4/6         margin 0/0/0/0         gap -      390x47
+  terminal-panel       padding 0/0/0/0         margin 0/0/0/0         gap 0      382x371
+  terminal-tabs        padding 2/6/2/6         margin 0/0/0/0         gap 2      380x41
+  preview-pane         padding 0/0/0/0         margin 0/0/0/0         gap 0      hidden
+  preview-toolbar      padding 0/0/0/0         margin 0/0/0/0         gap -      hidden
+  preview-tab-strip    padding 0/4/0/4         margin 0/0/0/0         gap 2      hidden
+  preview-browser-bar  padding 2/4/2/4         margin 0/0/0/0         gap 4      hidden
+  preview-heading      padding 2/6/2/6         margin 0/0/0/0         gap -      hidden
+  debug-popover        padding 6/8/6/8         margin 4/0/0/0         gap -      352x416
+  settings-panel       padding 0/0/0/0         margin 0/0/0/0         gap -      352x416
+
+## 1440x900
+page overflow: 0 px
+worst right edge: none
+  shell                padding 0/0/5.6/0       margin 0/0/0/0         gap 0      1440x900
+  header               padding 4/8/4/8         margin 0/0/0/0         gap 2x8    1440x41
+  stage-switcher       padding 2/2/2/2         margin 0/0/0/0         gap -      hidden
+  agent-pane           padding 0/0/0/0         margin 0/0/0/0         gap 0      720x853
+  chat-panel           padding 0/0/0/0         margin 0/0/0/0         gap 0      720x410
+  chat-transcript      padding 4/6/4/6         margin 0/0/0/0         gap -      720x363
+  chat-form            padding 4/6/4/6         margin 0/0/0/0         gap -      720x47
+  terminal-panel       padding 0/0/0/0         margin 0/0/0/0         gap 0      708x410
+  terminal-tabs        padding 2/6/2/6         margin 0/0/0/0         gap 2      706x29
+  preview-pane         padding 0/0/0/0         margin 0/0/0/0         gap 0      714x832
+  preview-toolbar      padding 0/0/0/0         margin 0/0/0/0         gap -      hidden
+  preview-tab-strip    padding 0/4/0/4         margin 0/0/0/0         gap 2      714x28
+  preview-browser-bar  padding 2/4/2/4         margin 0/0/0/0         gap 4      714x37
+  preview-heading      padding 2/8/2/8         margin 0/0/0/0         gap -      714x22
+  debug-popover        padding 6/8/6/8         margin 4/0/0/0         gap -      352x416
+  settings-panel       padding 0/0/0/0         margin 0/0/0/0         gap -      352x409
+
+# before → after
+
+== 390 px: before → after (px, t/r/b/l and gap)
+  chat-transcript     pad-right 8→6, pad-left 8→6
+  preview-heading     pad-right 8→6, pad-left 8→6
+  page overflow: 0 → 0 px
+
+== 1440 px: before → after (px, t/r/b/l and gap)
+  header              pad-right 10→8, pad-left 10→8
+  chat-transcript     pad-right 8→6, pad-left 8→6
+  preview-heading     pad-right 16→8, pad-left 16→8
+  page overflow: 0 → 0 px
+
