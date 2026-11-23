@@ -30,19 +30,14 @@ import { RotateCw, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { PREVIEW_PREFIX } from "@/preview/routing";
+import { PREVIEW_IFRAME_SANDBOX } from "@/preview/sandbox";
 import { Button } from "@/ui/components/button";
 import { cn } from "@/lib/utils";
 
-/**
- * The sandbox policy for a previewed site.
- *
- * `allow-scripts` is the point of a preview; `allow-forms` covers the contact form every
- * landing page has. Deliberately absent: `allow-same-origin` (storage, cookies, the
- * parent app's DOM), `allow-top-navigation` (leaving the app), `allow-popups` (a
- * `window.open` in guest code must not escape), `allow-modals` (`alert()` would freeze the
- * editor) and `allow-downloads`.
- */
-export const PREVIEW_IFRAME_SANDBOX = "allow-scripts allow-forms";
+// The sandbox string lives in `preview/sandbox.ts` so that the browser acceptance run
+// applies the product's own policy rather than a copy of it. Re-exported here because
+// callers and tests have always imported it from this module.
+export { PREVIEW_IFRAME_SANDBOX };
 
 /** The URL a build is previewed at. Always trailing-slashed: the worker's scope needs it. */
 export function previewUrlFor(buildId: string, path = ""): string {

@@ -54,6 +54,7 @@ import {
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
 import { browserKernelFactory, createMemoryWorkspace } from "./unkernel-kernel";
 import type {
+  GuestHttpFetch,
   KernelBootRequest,
   KernelEndEvent,
   KernelFactory,
@@ -227,6 +228,33 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
     return () => {
       this.#listeners.delete(listener);
     };
+  }
+
+  /**
+   * The host's door into the guest's HTTP stack.
+   *
+   * The preview needs it: the guest's static file server listens on a loopback port that
+   * exists only inside the machine, and `kernel.fetch()` is the one documented way in. This
+   * accessor exists so that the kernel handle stays private — a caller gets a function, not
+   * the kernel, and the rest of the app keeps coding against `ExecutionEnvironment` plus one
+   * narrow function type.
+   *
+   * Returns null when the booted kernel has no `fetch` at all (a test double): "this guest
+   * cannot be reached over HTTP" is a fact the caller must handle, not an exception that
+   * pretends the guest is broken.
+   *
+   * Throws `NotReadyError` before `ready`, for the same reason every other operation does:
+   * a preview request against a half-booted guest cannot succeed, and saying so beats a
+   * connection error from inside the VM.
+   */
+  guestHttp(): GuestHttpFetch | null {
+    this.#requireReady("reach the guest's HTTP stack");
+    const kernel = this.#kernel;
+    if (kernel === null) return null;
+    if (typeof kernel.fetch !== "function") return null;
+
+    const fetchFromGuest = kernel.fetch.bind(kernel);
+    return (input, init) => fetchFromGuest(input, init as RequestInit);
   }
 
   async initialize(options: InitializeOptions = {}): Promise<void> {

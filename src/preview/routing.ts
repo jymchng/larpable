@@ -283,3 +283,97 @@ export function previewFailure(options: {
       };
   }
 }
+
+/**
+ * The URL a build is previewed at, with the trailing slash a prefix needs.
+ *
+ * Exported here as well as in `preview-frame.tsx` because the *documents* need it, not just
+ * the iframe: a build's own HTML is written for the site root, and the preview serves it
+ * from a subpath.
+ */
+export function previewBasePath(buildId: string): string {
+  return `${PREVIEW_PREFIX}/${encodeURIComponent(buildId)}/`;
+}
+
+/** An absolute path inside the build, or the value unchanged (`https://`, `//cdn`, `data:`). */
+function rebaseValue(value: string, base: string): string {
+  return value.startsWith("/") && !value.startsWith("//") ? `${base}${value.slice(1)}` : value;
+}
+
+/** Attributes that hold one URL. `srcset` is handled separately: it holds a list. */
+const URL_ATTRIBUTE = /(\s(?:src|href|poster|action|formaction|data)\s*=\s*)(["'])([\s\S]*?)\2/gi;
+const SRCSET_ATTRIBUTE = /(\ssrcset\s*=\s*)(["'])([\s\S]*?)\2/gi;
+/** `url(/x.woff2)` and `@import "/x.css"` inside a stylesheet. */
+const CSS_URL = /(url\(\s*)(["']?)(?=\/(?!\/))/gi;
+const CSS_IMPORT = /(@import\s+)(["'])(?=\/(?!\/))/gi;
+
+/**
+ * Rebase a document's root-absolute references onto the build's preview URL.
+ *
+ * This is the one rewrite the preview cannot avoid. A Vite build with the default
+ * `base: "/"` emits `<script type="module" src="/assets/index-abc.js">` and
+ * `<link rel="stylesheet" href="/assets/index-def.css">`. On Netlify those are correct; here
+ * the same document is served from `/__preview__/<buildId>/`, so `/assets/…` would reach
+ * the *app's* origin and 404 — a preview that renders as unstyled HTML with no script, which
+ * looks exactly like a bug in the user's project.
+ *
+ * What is rewritten: `src`, `href`, `poster`, `action`, `formaction`, `data` and `srcset`
+ * attributes whose value starts with a single `/`. What is left alone: `//cdn.example/x`
+ * (protocol-relative, a different origin), `https://…`, `data:` and fragment-only values
+ * (`#main`), because rewriting those would break them.
+ *
+ * Known limits, documented rather than pretended: a `<base href="/">` in the document wins
+ * over the document URL, and a root-absolute URL built at runtime in JavaScript
+ * (`new URL("/api", location.origin)`, `fetch("/config.json")`) is not text this module ever
+ * sees. A site that needs either should build with a relative base (`base: "./"`), which is
+ * what the scaffold's Vite template does.
+ */
+export function rebaseDocument(text: string, base: string): string {
+  return text
+    .replace(URL_ATTRIBUTE, (_match, prefix: string, quote: string, value: string) =>
+      `${prefix}${quote}${rebaseValue(value, base)}${quote}`,
+    )
+    .replace(SRCSET_ATTRIBUTE, (_match, prefix: string, quote: string, value: string) =>
+      `${prefix}${quote}${value
+        .split(",")
+        .map((candidate) => {
+          const [url = "", ...descriptor] = candidate.trim().split(/\s+/);
+          return [rebaseValue(url, base), ...descriptor].join(" ");
+        })
+        .join(", ")}${quote}`,
+    );
+}
+
+/** The same rewrite for a stylesheet: `url(/…)` and `@import "/…"`. */
+export function rebaseStylesheet(text: string, base: string): string {
+  return text
+    .replace(CSS_URL, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(CSS_IMPORT, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`);
+}
+
+/**
+ * The bytes a preview serves for one file of a build.
+ *
+ * Documents and stylesheets are rebased; everything else — images, fonts, source maps,
+ * WebAssembly — is served byte-for-byte, because a byte changed in a `.map` breaks the
+ * mapping and a byte changed in a PNG is a corrupt image.
+ */
+export function previewBody(path: string, body: Uint8Array, buildId: string): Uint8Array {
+  const type = mimeTypeFor(path);
+  const isDocument = type.startsWith("text/html");
+  const isStylesheet = type.startsWith("text/css");
+  if (!isDocument && !isStylesheet) return body;
+
+  const base = previewBasePath(buildId);
+  // A malformed UTF-8 document is not this module's problem to fix; leave the bytes alone
+  // rather than half-rewriting them.
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(body);
+  } catch {
+    return body;
+  }
+
+  const rewritten = isDocument ? rebaseDocument(text, base) : rebaseStylesheet(text, base);
+  return new TextEncoder().encode(rewritten);
+}

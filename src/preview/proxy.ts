@@ -24,6 +24,7 @@
 import { PREVIEW_MANIFEST_PATH } from "./guest-server";
 import {
   parsePreviewUrl,
+  previewBody,
   previewFailure,
   previewHeaders,
   resolvePreviewPath,
@@ -129,11 +130,16 @@ export async function servePreviewRequest(
     return text(failure.status, failure.message, { "x-larpable-build": build.buildId });
   }
 
+  // A build's HTML is written for the site root; the preview serves it from a subpath, so
+  // its root-absolute asset URLs are rebased here (see `rebaseDocument`). Binary files are
+  // returned untouched, and the length below is the length of what is actually sent.
+  const body = previewBody(resolution.path, answer.body, build.buildId);
+
   return {
     status: 200,
-    headers: fileHeaders(resolution.path, build.buildId, answer.body.byteLength),
+    headers: fileHeaders(resolution.path, build.buildId, body.byteLength),
     // HEAD promises headers, not bytes.
-    body: method === "HEAD" ? new Uint8Array(0) : answer.body,
+    body: method === "HEAD" ? new Uint8Array(0) : body,
   };
 }
 
@@ -244,10 +250,13 @@ export async function collectPreviewSnapshot(
             "manifest; the build changed while it was being published.",
         );
       }
+      const body = previewBody(path, answer.body, options.buildId);
       files[index] = {
         path,
-        headers: fileHeaders(path, options.buildId, answer.body.byteLength),
-        body: answer.body,
+        // Rebased once, here, so the worker can stay a byte-for-byte cache with no
+        // rewriting of its own: the snapshot *is* what an iframe will receive.
+        headers: fileHeaders(path, options.buildId, body.byteLength),
+        body,
       };
     }
   }

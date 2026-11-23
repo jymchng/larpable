@@ -88,6 +88,22 @@ export interface KernelPtyOptions extends KernelSpawnOptions {
   user?: string | number;
 }
 
+/**
+ * HTTP/1.1 to a server on the guest's loopback.
+ *
+ * unkernel provides this as `kernel.fetch()` (`fetchOver()` over `connect()`): the URL's
+ * port picks the guest port, the host only goes into the `Host` header. It is the *only*
+ * way the host can reach a port inside the machine, which is why the preview's transport is
+ * built on it and why the environment — not the agent — owns it.
+ *
+ * Declared structurally, with a narrower `init` than the DOM's `RequestInit`, so callers
+ * (and tests) do not depend on unkernel's types and a fake kernel satisfies it.
+ */
+export type GuestHttpFetch = (
+  input: string,
+  init?: { method?: string; signal?: AbortSignal },
+) => Promise<Response>;
+
 /** A booted kernel: only the parts the adapter calls. */
 export interface KernelLike {
   spawn(
@@ -107,6 +123,11 @@ export interface KernelLike {
   stop?(opts?: { code?: number; reason?: string }): Promise<unknown>;
   /** Memory the instance actually allocated, in MiB (a measurement, not a request). */
   readonly memoryMiB?: number;
+  /**
+   * HTTP/1.1 to a server on the guest's loopback. Optional because a test double need not
+   * speak HTTP: `UnkernelEnvironment.guestHttp()` reports the absence instead of guessing.
+   */
+  fetch?(input: string, init?: RequestInit): Promise<Response>;
 }
 
 /**

@@ -115,7 +115,7 @@ export class PreviewTransportError extends Error {
  * tests exercise is the code the browser runs.
  */
 export function fetchTransport(
-  implementation: (url: string, init?: RequestInit) => Promise<Response>,
+  implementation: (url: string, init?: { method?: string; signal?: AbortSignal }) => Promise<Response>,
   options: { baseUrl: string; timeoutMs?: number },
 ): PreviewTransport {
   const base = options.baseUrl.replace(/\/+$/, "");
