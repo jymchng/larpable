@@ -151,6 +151,11 @@ The Netlify deploy id is **not** recorded: the API needs a token, which this ses
 not have. The two hash equalities above are what proves *which* code production is running,
 and they are stronger evidence than a deploy id for this question.
 
+> **Update, 2026-11-23T13:30Z** — the CLI's keychain token works again from this host, so
+> the deploy in the last section *is* recorded with its id (`netlify api getSite` answers
+> without a `NETLIFY_AUTH_TOKEN`). The hash comparison above is still the recipe for a
+> deploy that came from a push, where there is no CLI record to read.
+
 ### Headers, measured after the deploy
 
 | Request | Result |
@@ -213,3 +218,115 @@ the deployment of `1ee61eb`, exit 0, report `docs/preview-browser-report.md`
   just reported.
 
 ![The preview rendering a real guest build, on production](evidence/preview-pane.png)
+
+## Production boot verified on a CLI deploy (deploy `6b043fd6fe48b2729b8fbec0`)
+
+Goal `89babfc4`: "after `netlify deploy --prod`, `/distros/alpine.erofs` returns 4 046 848
+bytes of `application/octet-stream`, `distros.json` parses, COOP/COEP are present, and a
+Playwright run against the production URL boots to Ready and passes the self-test." Every
+line below was measured against https://larpable.netlify.app after that deploy, on
+2026-11-23.
+
+### The deploy itself
+
+The CLI works from this host again (`netlify status` reads the keychain token for
+`jymchng@hotmail.com`, team `asyncmove`, project `larpable`, id
+`a5203e52-f979-4761-8e2f-2d8453dda811`), so this deploy was made by hand rather than by a
+push:
+
+```
+$ LARPABLE_DISTROS=debian,alpine bun run build
+✓ built in 13.00s
+$ netlify deploy --prod --dir=dist
+✔ Deploying 18 files and 1 function
+✔ Deploy is live!
+Production URL:   <https://larpable.netlify.app>
+Unique deploy URL: <https://6b043fd6fe48b2729b8fbec0--larpable.netlify.app>
+```
+
+`LARPABLE_DISTROS` is set explicitly on purpose. A plain local `bun run build` runs
+`prebuild` → `fetch:distros` with that script's own default (`debian` only) and writes a
+**290-byte** manifest, while `netlify.toml` sets `debian,alpine` for the Git build. Measured
+on the first CLI deploy of this session: that `dist/` shipped a manifest listing only
+`debian` even though `alpine.erofs` was beside it in the deploy, and the edge kept serving
+the previous 512-byte manifest anyway because of the 24 h `/distros/*` rule (goal
+`18e0c110`). Rebuilding with the `netlify.toml` value made the origin file agree with the
+files next to it. The JavaScript bundle did not change between the two builds
+(`index-CWyIKGMb.js` both times), so this variable is a manifest concern only.
+
+### Which code production is running
+
+| Field | Value |
+| --- | --- |
+| Deploy id | `6b043fd6fe48b2729b8fbec0` |
+| Deployed at | `2026-11-23T13:29:58.880Z` |
+| Branch | `main`; no commit ref — a CLI deploy of the working tree |
+| Local `HEAD` at deploy time | `c853989` "feat(ui): terminal status into the debug popover; …" |
+| Live entry point | `/assets/index-CWyIKGMb.js` |
+| `sha256` of `GET /assets/index-CWyIKGMb.js` | `8a5643ccb65fc380157fb657e59f9ca408f705df5caa4b2469e70d813e7755a9` |
+| `sha256` of the local `dist/assets/index-CWyIKGMb.js` | same value |
+
+The hash equality is what ties the deployment to the checkout: same bytes served, same
+bytes built.
+
+### The acceptance requests, measured
+
+| Request | Result |
+| --- | --- |
+| `GET /distros/alpine.erofs` | `200`, **`application/octet-stream`**, **4 046 848 bytes** |
+| `GET /distros/distros.json` | `200`, `application/json`, 512 bytes; parses to `alpine` 4 046 848 + `debian` 72 593 408 |
+| `GET /` | `200`, `text/html; charset=UTF-8`, `cross-origin-opener-policy: same-origin`, `cross-origin-embedder-policy: require-corp`, `x-content-type-options: nosniff` |
+| `GET /distros/nope.erofs` | `404`, `text/html` — a real 404, not the SPA entry point with a 200 |
+
+So the two halves of the goal hold at the origin: the image the site boots is in the deploy
+(`prebuild` fetched it, `netlify.toml` asked for both), and a path that is *not* in the
+deploy no longer masquerades as an HTML page. The one thing still wrong is that the 404
+carries `cache-control: public,max-age=86400`, which is goal `18e0c110`/`83ad1b0`'s
+subject, not this one's.
+
+### Playwright against production: 13/13 PASS
+
+`LARPABLE_ACCEPTANCE_URL=https://larpable.netlify.app bun run acceptance:browser`, exit 0,
+run started `2026-11-23T13:30:30.140Z`, Chromium `159.0.8154.6`
+(`/root/.cache/ms-playwright/chromium-1255/chrome-linux64/chrome`). Report:
+`docs/browser-boot-report.md`; screenshot: `docs/evidence/production-boot.png`.
+
+The boot path is in the transcript, because the machine starts itself now and the helper
+must not race it (`scripts/lib/boot.ts`):
+
+```
+[acceptance] boot: the machine is not started, so it needs the Boot control inside the debug popover
+[acceptance] boot: the Boot control is disabled, so a boot is already in flight
+[acceptance] boot: the footer already says "Linux: Ready"
+```
+
+i.e. the footer was still one frame behind for the first poll, the decision said "press
+Boot", the auto-boot had already disabled that control, and the helper waited instead of
+clicking a dead button — the exact race goal `6567a7fa` fixed, observed again here and
+handled.
+
+Measured on the page:
+
+| Check | Result |
+| --- | --- |
+| Support probe | passes, no requirement problems |
+| Environment | **Ready**, distro `debian`, 2 CPUs, 1024 MiB, app-measured **booted in 9.3 s** |
+| Status sentence | `Linux: Ready \| Distro: debian \| Runtime: node (guest shim) \| CPUs: 2 \| Memory: 1024 MiB` |
+| Self-test verdict | *"The guest answered and the workspace round-trips. **914 ms**"* |
+| `uname -a` | `Linux unkernel 7.3.4+ #909a1964cecb SMP Fri Nov 20 16:38:40 UTC 2026 aarch64 GNU/Linux` |
+| Host → guest | `/workspace/.larpable/host-to-guest.txt arrived intact` |
+| Guest → host | `/workspace/.larpable/guest-to-host.txt arrived intact` |
+
+![Production boot with a passing self-test, deploy 6b043fd6](evidence/production-boot.png)
+
+The unsupported-browser path was skipped by the script on purpose (`?simulateSupport=no-jspi`
+is a dev-only probe simulation); its evidence is in `docs/browser-boot-report.md` from the
+loopback run, and this section makes no claim about it.
+
+### Reproducing
+
+```
+LARPABLE_DISTROS=debian,alpine bun run build          # match netlify.toml's distro set
+netlify deploy --prod --dir=dist                      # requires the keychain token
+LARPABLE_ACCEPTANCE_URL=https://larpable.netlify.app bun run acceptance:browser
+```

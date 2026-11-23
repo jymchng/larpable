@@ -10,7 +10,7 @@ hand. Re-run the command to replace this file with fresh measurements.
 
 | Field | Value |
 | --- | --- |
-| Started at | 2026-11-23T11:24:39.117Z |
+| Started at | 2026-11-23T13:30:30.140Z |
 | Browser | Chromium 159.0.8154.6 |
 | Chromium binary | `/root/.cache/ms-playwright/chromium-1255/chrome-linux64/chrome` |
 | Page | https://larpable.netlify.app |
@@ -33,7 +33,7 @@ hand. Re-run the command to replace this file with fresh measurements.
 | self-test: uname reports aarch64 | PASS | Linux unkernel 7.3.4+ #909a1964cecb SMP Fri Nov 20 16:38:40 UTC 2026 aarch64 GNU/Linux |
 | self-test: host -> guest round-trip | PASS | /workspace/.larpable/host-to-guest.txt arrived intact |
 | self-test: guest -> host round-trip | PASS | /workspace/.larpable/guest-to-host.txt arrived intact |
-| self-test: overall verdict | PASS | The guest answered and the workspace round-trips. 988 ms |
+| self-test: overall verdict | PASS | The guest answered and the workspace round-trips. 914 ms |
 
 ## Supported browser: boot to ready
 
@@ -43,15 +43,15 @@ hand. Re-run the command to replace this file with fresh measurements.
 | Distro | debian |
 | CPUs | 2 CPUs |
 | Memory | 1024 MiB |
-| Boot duration (app-measured) | booted in 7.7 s |
+| Boot duration (app-measured) | booted in 9.3 s |
 | Boot path (auto-boot vs pressed) | already ready |
-| Waited by the boot helper | 7983 ms |
-| Wall clock from the first observation to Ready | 7990 ms |
+| Waited by the boot helper | 9755 ms |
+| Wall clock from the first observation to Ready | 9756 ms |
 | Status bar | Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB |
 
 ## Supported browser: self-test round-trip
 
-Panel summary: “The guest answered and the workspace round-trips. 988 ms”
+Panel summary: “The guest answered and the workspace round-trips. 914 ms”
 
 | Step | Detail |
 | --- | --- |
