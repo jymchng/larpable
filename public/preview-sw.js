@@ -116,10 +116,12 @@ export function handlePreviewRequest(request, state) {
 function fileResponse(request, file, buildId) {
   const headers = new Headers(file.headers);
   headers.set("x-larpable-build", buildId);
-  // The iframe is sandboxed without `allow-same-origin`, so its document has an opaque
-  // origin and every module/stylesheet request it makes is a cross-origin request. Both
-  // headers say "these bytes may be used by any origin": they are a build's static output,
-  // already public to the page, and the worker answers nothing else.
+  // `file.headers` already carries the type, the cache policy and — for a document — the
+  // COOP/COEP pair that lets this app frame it at all (`PREVIEW_DOCUMENT_HEADERS`). What is
+  // added here is the pair that makes the build's *subresources* usable: the frame shares
+  // this app's origin (a worker cannot answer an opaque one, which is why the sandbox has
+  // `allow-same-origin`), and these bytes are a build's static output the page already
+  // holds, so saying "any origin may use these" gives nothing away.
   headers.set("access-control-allow-origin", "*");
   headers.set("cross-origin-resource-policy", "cross-origin");
   // HEAD must not carry a body, and a module worker cannot stream one it never reads.
@@ -132,6 +134,14 @@ function textResponse(status, message, extraHeaders = {}) {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "no-store",
     "x-content-type-options": "nosniff",
+    // These bodies are often what an iframe is showing, and this app is cross-origin
+    // isolated: without its own COOP the *document* is refused with
+    // ERR_BLOCKED_BY_RESPONSE and the user gets Chromium's error page instead of the
+    // sentence that explains what went wrong. Same headers as the build's HTML; see
+    // PREVIEW_DOCUMENT_HEADERS in `src/preview/routing.ts`.
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-embedder-policy": "require-corp",
+    "cross-origin-resource-policy": "cross-origin",
     ...extraHeaders,
   });
   return new Response(message, { status, headers });

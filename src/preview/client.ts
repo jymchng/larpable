@@ -39,13 +39,36 @@ export interface PublishedReply {
   files: number;
 }
 
+/**
+ * The slice of `ServiceWorker` this module uses.
+ *
+ * `statechange` is dispatched by a **`ServiceWorker`**, not by its registration: the
+ * registration dispatches only `updatefound`. That distinction is not cosmetic. This module
+ * once listened for `"statechange"` on the registration, which no browser ever sends, so on a
+ * first visit the promise below was never resolved: every cold publish waited out the whole
+ * timeout and then reported "the preview worker did not activate" while the worker was in
+ * fact activating milliseconds later. The types here say so — `PreviewWorkerRegistration`
+ * accepts only `"updatefound"`, so putting that listener back is a compile error.
+ *
+ * `state` is optional because not every engine implements `ServiceWorker.state`; when it is
+ * absent the wait still works by polling `registration.active`.
+ */
+export interface PreviewWorker {
+  /** `parsed` | `installing` | `installed` | `activating` | `activated` | `redundant`. */
+  readonly state?: string;
+  postMessage(message: unknown): void;
+  addEventListener(type: "statechange", listener: () => void): void;
+  removeEventListener(type: "statechange", listener: () => void): void;
+}
+
 /** The slice of `ServiceWorkerRegistration` this module uses. */
 export interface PreviewWorkerRegistration {
-  readonly active: { postMessage(message: unknown): void } | null;
-  readonly installing: unknown;
-  readonly waiting: unknown;
-  addEventListener(type: "statechange" | string, listener: () => void): void;
-  removeEventListener(type: "statechange" | string, listener: () => void): void;
+  readonly active: PreviewWorker | null;
+  readonly installing: PreviewWorker | null;
+  readonly waiting: PreviewWorker | null;
+  /** The only event a registration dispatches; `statechange` belongs to the worker. */
+  addEventListener(type: "updatefound", listener: () => void): void;
+  removeEventListener(type: "updatefound", listener: () => void): void;
 }
 
 /** The slice of `ServiceWorkerContainer` this module uses. */
@@ -66,6 +89,138 @@ export interface RegisterPreviewWorkerOptions {
   scope?: string;
   /** How long to wait for the worker to activate. Default 15 s. */
   timeoutMs?: number;
+  /** How often `registration.active` is re-read while waiting. Default 100 ms. */
+  pollMs?: number;
+}
+
+/** A worker state, or "none" for a slot the registration has not filled. */
+function describeWorker(worker: PreviewWorker | null): string {
+  if (worker === null) return "none";
+  return worker.state ?? "state unknown";
+}
+
+/**
+ * The error for a worker that never got there, naming the state of each slot.
+ *
+ * The sentence has to be specific: "did not activate" alone sent a previous investigation
+ * looking for a missing service worker when the real cause was a listener attached to an
+ * object that never dispatches that event, and installing/active are what distinguish
+ * "never registered" from "installed but discarded".
+ */
+function activationTimeout(
+  timeoutMs: number,
+  registration: PreviewWorkerRegistration,
+): Error {
+  return new Error(
+    `The preview worker did not activate within ${String(timeoutMs)} ms ` +
+      `(installing: ${describeWorker(registration.installing)}, ` +
+      `waiting: ${describeWorker(registration.waiting)}, ` +
+      `active: ${describeWorker(registration.active)}). ` +
+      "Preview URLs are served directly from the guest instead; a reload retries registration.",
+  );
+}
+
+/**
+ * Wait until `registration.active` holds a worker that can answer `fetch` events.
+ *
+ * Three signals, because no one of them is enough:
+ *
+ * 1. `statechange` on the worker objects (`installing`, `waiting`, `active` — whichever the
+ *    registration currently holds). This is the real event; it is *not* dispatched on the
+ *    registration, which is the mistake this function exists to not repeat.
+ * 2. `updatefound` on the registration, which is how a worker that installs *after*
+ *    `register()` resolved becomes visible — its `installing` slot was still empty when the
+ *    first listeners were attached.
+ * 3. A poll of `registration.active`, because a worker can become active between two events,
+ *    and because `ServiceWorker.state` is optional in some engines.
+ *
+ * A worker that reaches `redundant` during install can never activate: Chromium does that
+ * when the script fails to install (a 404 or an HTML body at the script URL, a syntax error,
+ * a rejected `install` handler). Waiting out the remaining timeout would report a symptom
+ * seconds late, so that case fails at once and names the likely causes.
+ *
+ * Every listener and timer is released on both paths: a preview is republished on every
+ * build, and a leak here would accumulate one interval per build.
+ */
+export async function waitForPreviewWorker(
+  registration: PreviewWorkerRegistration,
+  options: { timeoutMs: number; pollMs: number },
+): Promise<void> {
+  if (registration.active !== null) return;
+
+  await new Promise<void>((resolve, reject) => {
+    /** Workers this wait has attached to, so none is left with a listener. */
+    const watched = new Set<PreviewWorker>();
+    let settled = false;
+    let poll: ReturnType<typeof setInterval> | null = null;
+    let deadline: ReturnType<typeof setTimeout> | null = null;
+
+    const settle = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      if (poll !== null) clearInterval(poll);
+      if (deadline !== null) clearTimeout(deadline);
+      for (const worker of watched) worker.removeEventListener("statechange", onStateChange);
+      registration.removeEventListener("updatefound", onUpdateFound);
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+
+    /** Attach to any worker slot that has been filled since the last call. */
+    const watchAll = (): void => {
+      for (const worker of [
+        registration.installing,
+        registration.waiting,
+        registration.active,
+      ]) {
+        if (worker === null || watched.has(worker)) continue;
+        watched.add(worker);
+        worker.addEventListener("statechange", onStateChange);
+      }
+    };
+
+    const checkActive = (): boolean => {
+      if (registration.active === null) return false;
+      settle();
+      return true;
+    };
+
+    const checkDiscarded = (): boolean => {
+      for (const worker of watched) {
+        if (worker.state !== "redundant") continue;
+        settle(
+          new Error(
+            "The preview worker was discarded while installing (state \"redundant\"). " +
+              "Chromium does that when the worker script cannot be installed — an HTML page " +
+              `or a 404 at ${PREVIEW_WORKER_URL}, a syntax error in it, or a rejected install ` +
+              "handler. Preview URLs are served directly from the guest instead.",
+          ),
+        );
+        return true;
+      }
+      return false;
+    };
+
+    function onStateChange(): void {
+      if (checkActive() || checkDiscarded()) return;
+      watchAll();
+    }
+
+    function onUpdateFound(): void {
+      watchAll();
+      // The new worker starts in `parsed`; `statechange` will follow, but a poll tick is a
+      // cheap guard for an engine that has already moved on.
+    }
+
+    deadline = setTimeout(() => settle(activationTimeout(options.timeoutMs, registration)), options.timeoutMs);
+    poll = setInterval(() => {
+      watchAll();
+      if (checkActive() || checkDiscarded()) return;
+    }, options.pollMs);
+    registration.addEventListener("updatefound", onUpdateFound);
+    watchAll();
+    checkActive();
+  });
 }
 
 /**
@@ -85,31 +240,9 @@ export async function registerPreviewWorker(
 
   if (registration.active !== null) return { registration, waited: false };
 
-  const timeoutMs = options.timeoutMs ?? 15_000;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(
-        new Error(
-          `The preview worker did not activate within ${String(timeoutMs)} ms. Preview ` +
-            "URLs are served directly from the guest instead; a reload retries registration.",
-        ),
-      );
-    }, timeoutMs);
-
-    const check = () => {
-      if (registration.active !== null) {
-        cleanup();
-        resolve();
-      }
-    };
-    const cleanup = () => {
-      clearTimeout(timer);
-      registration.removeEventListener("statechange", check);
-    };
-    registration.addEventListener("statechange", check);
-    // `installing`/`waiting` can already have changed state before the listener attached.
-    check();
+  await waitForPreviewWorker(registration, {
+    timeoutMs: options.timeoutMs ?? 15_000,
+    pollMs: options.pollMs ?? 100,
   });
 
   return { registration, waited: true };

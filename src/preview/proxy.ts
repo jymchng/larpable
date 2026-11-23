@@ -25,6 +25,7 @@ import { PREVIEW_MANIFEST_PATH } from "./guest-server";
 import {
   parsePreviewUrl,
   previewBody,
+  previewErrorHeaders,
   previewFailure,
   previewHeaders,
   resolvePreviewPath,
@@ -150,14 +151,19 @@ export async function servePreviewRequest(
  * its own: the guest is a generic file server, and the preview's cache policy (HTML must
  * not be stored; a hashed asset may be) is a decision about *this* product, not about
  * that server.
+ *
+ * The document headers (`cross-origin-opener-policy`) come from the same place and are the
+ * difference between a rendered preview and `ERR_BLOCKED_BY_RESPONSE`, because this app is
+ * cross-origin isolated. See `PREVIEW_DOCUMENT_HEADERS` for the measurement.
  */
 export function fileHeaders(path: string, buildId: string, length: number): Record<string, string> {
   return {
     ...previewHeaders({ path, buildId, length }),
-    // The iframe is deliberately an opaque origin (`sandbox` without `allow-same-origin`),
-    // which makes its module requests CORS requests. `*` is safe here: these are static
-    // build bytes, and the worker answers nothing that is not already public to the page.
+    // The previewed document shares this app's origin (a service worker can only answer a
+    // frame whose origin matches its scope), and these bytes are a build's static output
+    // that the page already holds. Both headers say so to the browser and nothing more.
     "access-control-allow-origin": "*",
+    "cross-origin-resource-policy": "cross-origin",
   };
 }
 
@@ -168,12 +174,10 @@ function text(
 ): PreviewHttpResult {
   return {
     status,
-    headers: {
-      "content-type": "text/plain; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      ...extra,
-    },
+    // A failure body can be what an iframe is showing, so it needs the same document
+    // headers as a build's HTML — otherwise Chromium replaces our explanation with its
+    // own `ERR_BLOCKED_BY_RESPONSE` page.
+    headers: previewErrorHeaders(extra),
     body: new TextEncoder().encode(message),
   };
 }

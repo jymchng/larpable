@@ -218,11 +218,59 @@ export function cacheControlFor(path: string): string {
 }
 
 /**
+ * The headers a *document* needs in order to be framed by this app at all.
+ *
+ * Measured, not assumed (Chromium 159, this app, `bun run dev`):
+ *
+ * - a `sandbox`ed iframe without `allow-same-origin` has an opaque origin and is **not** a
+ *   service-worker client — the worker's `clients.matchAll()` does not list it and its
+ *   `fetch` handler never sees the frame's navigation, so `/__preview__/<id>/` is answered
+ *   by the dev server (and by Netlify's `/*` redirect in production) with the *app's* own
+ *   `index.html`. That document then dies on `indexedDB` in an opaque origin: a blank pane;
+ * - with `allow-same-origin` the worker *does* answer, but this app is cross-origin isolated
+ *   (`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`,
+ *   see `vite.config.ts` and `netlify.toml`), and an embedded same-origin document without
+ *   its own `Cross-Origin-Opener-Policy` is refused with `ERR_BLOCKED_BY_RESPONSE`.
+ *
+ * So a previewed document must carry `cross-origin-opener-policy: same-origin`,
+ * `cross-origin-embedder-policy: require-corp` **and** `cross-origin-resource-policy:
+ * cross-origin` itself — all three, measured: COOP alone still produced
+ * `net::ERR_BLOCKED_BY_RESPONSE` on the frame's navigation, and adding COEP made the frame
+ * render the build (stylesheet applied, module executed, `location.pathname` the preview
+ * path).
+ *
+ * The cost of `require-corp` is real and worth stating: the previewed site becomes
+ * cross-origin isolated, so a *third-party* asset it pulls without CORS (a font or image
+ * from a CDN that sends no `Cross-Origin-Resource-Policy`) is blocked in the preview even
+ * though it loads on the deployed site. The build's own files are unaffected: the worker
+ * serves them from the same origin with `access-control-allow-origin` and
+ * `cross-origin-resource-policy: cross-origin`. A preview that renders nothing is worse
+ * than a preview that is stricter than production about third-party assets, and this is the
+ * cheapest honest trade — the alternative, an opaque-origin frame, cannot be served by a
+ * worker at all, and a truly separate preview origin is its own piece of work.
+ */
+export const PREVIEW_DOCUMENT_HEADERS: Readonly<Record<string, string>> = {
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-embedder-policy": "require-corp",
+  "cross-origin-resource-policy": "cross-origin",
+};
+
+/** True for the build's HTML entry documents, which get `PREVIEW_DOCUMENT_HEADERS`. */
+export function isPreviewDocument(path: string): boolean {
+  return mimeTypeFor(path).startsWith("text/html");
+}
+
+/**
  * Response headers for a preview file.
  *
  * `x-larpable-build` is the staleness contract: the page reads it back to notice that the
  * bytes it received belong to a different build than the one it asked for, which is the
  * one failure mode a preview server must never hide.
+ *
+ * A document additionally gets `PREVIEW_DOCUMENT_HEADERS`, because those are not about the
+ * file — they are about the browser allowing the frame to load it at all. Error bodies get
+ * them too (`previewErrorHeaders`): a 503 shown in a frame is a *document* as well, and a
+ * blocked one would replace this product's explanation with Chromium's error page.
  */
 export function previewHeaders(options: {
   path: string;
@@ -234,9 +282,21 @@ export function previewHeaders(options: {
     "cache-control": cacheControlFor(options.path),
     "x-content-type-options": "nosniff",
     "x-larpable-build": options.buildId,
+    ...(isPreviewDocument(options.path) ? PREVIEW_DOCUMENT_HEADERS : {}),
   };
   if (options.length !== undefined) headers["content-length"] = String(options.length);
   return headers;
+}
+
+/** Headers for a plain-text failure body that an iframe may be showing. */
+export function previewErrorHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    ...PREVIEW_DOCUMENT_HEADERS,
+    ...extra,
+  };
 }
 
 /**

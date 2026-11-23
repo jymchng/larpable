@@ -189,6 +189,75 @@ describe("handlePreviewRequest", () => {
   });
 });
 
+/**
+ * The headers without which the preview renders nothing at all.
+ *
+ * Measured (Chromium 159, `bun run dev`): this app is cross-origin isolated, and an embedded
+ * same-origin document that does not carry its own `Cross-Origin-Opener-Policy` is refused
+ * with `net::ERR_BLOCKED_BY_RESPONSE`. That was the blank pane. The worker builds these
+ * headers itself — it is a plain module with no imports — so the routing tests cannot
+ * cover it, and until these tests existed deleting two lines here broke the product while
+ * every test stayed green.
+ */
+describe("document headers", () => {
+  const files: WorkerFile[] = [
+    { path: "/index.html", body: "<!doctype html><div id=root></div>" },
+    { path: "/assets/index-abc12345.css", body: "body{margin:0}" },
+  ];
+
+  function expectDocumentHeaders(headers: Headers | undefined, label: string): void {
+    expect(headers?.get("cross-origin-opener-policy"), label).toBe("same-origin");
+    expect(headers?.get("cross-origin-embedder-policy"), label).toBe("require-corp");
+    expect(headers?.get("cross-origin-resource-policy"), label).toBe("cross-origin");
+  }
+
+  it("sends COOP, COEP and CORP with the build's HTML", () => {
+    const response = handlePreviewRequest(
+      requestFor("b-1/index.html"),
+      stateOf(snapshotOf("b-1", files, "/index.html")),
+    );
+    expectDocumentHeaders(response?.headers, "index.html");
+  });
+
+  it("sends them with the SPA fallback, which is the same document under another URL", () => {
+    const response = handlePreviewRequest(
+      requestFor("b-1/app/editor"),
+      stateOf(snapshotOf("b-1", files, "/index.html")),
+    );
+    expect(response?.status).toBe(200);
+    expectDocumentHeaders(response?.headers, "/app/editor");
+  });
+
+  // A failure body is often the document the frame is showing: without its own COOP the
+  // browser replaces the sentence that explains the failure with an error page of its own,
+  // which is precisely the blank pane the explanation exists to prevent.
+  it("sends them with the 503, 409 and 404 bodies an iframe may be showing", () => {
+    const cases: Array<[string, Request, ReturnType<typeof stateOf>]> = [
+      ["503 no build", requestFor("b-1/index.html"), stateOf(null)],
+      [
+        "409 stale build",
+        requestFor("b-16/index.html"),
+        stateOf(snapshotOf("b-17", files, "/index.html")),
+      ],
+      ["404 missing file", requestFor("b-1/nope"), stateOf(snapshotOf("b-1", files, null))],
+    ];
+    for (const [label, request, state] of cases) {
+      const response = handlePreviewRequest(request, state);
+      expect(response?.status, label).not.toBe(200);
+      expectDocumentHeaders(response?.headers, label);
+    }
+  });
+
+  it("does not hand a stylesheet the document headers it does not need", () => {
+    const response = handlePreviewRequest(
+      requestFor("b-1/assets/index-abc12345.css"),
+      stateOf(snapshotOf("b-1", files, "/index.html")),
+    );
+    expect(response?.headers.get("content-type")).toBe("text/css; charset=utf-8");
+    expect(response?.headers.get("content-security-policy")).toBeNull();
+  });
+});
+
 describe("installSnapshot", () => {
   it("reports how many files arrived, so a dropped asset cannot pass silently", () => {
     clearSnapshot();

@@ -14,7 +14,7 @@ previewed site cannot do.
 ┌──────────────────┐      ┌────────────────────┐      ┌──────────────────────┐
 │ preview-server   │ HTTP │ proxy.ts           │      │ sandbox="allow-      │
 │ (Node, serves    │◄────►│ routing.ts decides │─────►│ scripts allow-forms" │
-│  dist/ on 8123)  │  TCP │ every header       │      │ no allow-same-origin │
+│  dist/ on 8123)  │  TCP │ every header       │      │ allow-same-origin    │
 └──────────────────┘      │            │       │      └──────────────────────┘
                           │            ▼       │
                           │   preview-sw.js    │
@@ -73,28 +73,48 @@ cannot diagnose. A 409 says it.
 ## The sandbox, and what it costs
 
 ```tsx
-sandbox = "allow-scripts allow-forms";
+sandbox = "allow-scripts allow-forms allow-same-origin";
 ```
 
-No `allow-same-origin`. Preview URLs are on the app's own origin, so a same-origin document
-could read the app's `localStorage` — projects, conversations, provider settings — with one
-`localStorage.getItem`. Without `allow-same-origin` the document gets an opaque origin:
-scripts run, storage and cookies do not exist, and the parent app is out of reach.
+`allow-same-origin` is in that list because of a measurement, not a preference. Chromium does
+not hand a sandboxed frame's requests to a service worker unless the frame has an origin that
+matches the worker's scope. With `allow-scripts` alone the frame is opaque: the worker
+registers and activates, `clients.matchAll()` never lists the frame, and
+`/__preview__/<buildId>/` is answered by the dev server — or by Netlify's `/*` redirect in
+production — with the app's own `index.html`, which then throws on `indexedDB` in an opaque
+origin. The pane went blank. That measurement is why this attribute is here.
 
-No `allow-top-navigation`, no `allow-popups`, no `allow-modals`, no `allow-downloads`: a
-preview must not be able to leave the app, open a window, freeze it with `alert()`, or drop
-a file on the user's disk.
+Sharing the app's origin has a second consequence. This app is cross-origin isolated, and an
+embedded same-origin document without its own `Cross-Origin-Opener-Policy` is refused with
+`net::ERR_BLOCKED_BY_RESPONSE`. So a previewed document is served with
+`cross-origin-opener-policy: same-origin` **and** `cross-origin-embedder-policy: require-corp`
+(COOP alone still failed) plus `cross-origin-resource-policy: cross-origin`.
+`PREVIEW_DOCUMENT_HEADERS` in `src/preview/routing.ts` is that decision; it goes out on the
+build's HTML and on the plain-text error bodies, which an iframe may equally be showing.
+
+The cost, stated plainly: a previewed site shares this app's origin, so it can read and write
+the app's `localStorage` and `indexedDB` (the project list, the conversations), and it can
+remove its own `sandbox` attribute. What keeps that from being worse than it sounds: the build
+is the user's own project — code their own agent wrote, in a VM that already runs its
+`postinstall` scripts — and this app keeps no provider key, token or secret in origin
+storage, so a preview has nothing worth taking that the user cannot already see. The genuinely
+isolated answer is a separate origin for previews; that is its own piece of work, and stating
+the trade is better than hiding it.
+
+Deliberately still absent: `allow-top-navigation`, `allow-popups`, `allow-modals`,
+`allow-downloads` — a preview must not be able to leave the app, open a window, freeze it with
+`alert()`, or drop a file on the user's disk.
 
 ## Documented limits: what a previewed site cannot do
 
-These are consequences of the sandbox, not bugs. They are listed so a user who sees them
-knows where to look.
+These are consequences of the sandbox and of the origin it shares, not bugs. They are
+listed so a user who sees one knows where to look.
 
 | A previewed site cannot… | Why | What the user sees |
 | --- | --- | --- |
-| use `localStorage`, `sessionStorage`, `indexedDB` | opaque origin | a theme toggle resets on every reload; some apps throw `SecurityError` |
-| read or write cookies, or call an authenticated API | opaque origin, no credentials | the site's own login flow fails inside the preview |
-| register its own service worker | opaque origin | a PWA's offline mode does not activate |
+| load a font, image, stylesheet or frame from a CDN that sends no `Cross-Origin-Resource-Policy` | the preview is cross-origin isolated (`require-corp`) | the asset is blocked in the preview but loads on the deployed site; self-host it or send CORP/CORS from the CDN |
+| rely on storage being its *own* | the frame shares the app's origin | a project that writes `localStorage` writes the app's: it survives a reload, but it is not per-project |
+| register a service worker outside `/__preview__/` | the preview worker owns that scope | a PWA's offline mode registers, but never controls the app |
 | `alert()` / `confirm()` / `prompt()` | no `allow-modals` | the call returns without showing anything |
 | open a popup, or navigate the top window | no `allow-popups` / `allow-top-navigation` | `window.open` is a no-op; a `target=_top` link does nothing |
 | use WebAssembly modules over 4 KB without CORS headers | the worker is the server | fine for a normal build — the worker sends `access-control-allow-origin: *` |
@@ -110,8 +130,8 @@ refusing rather than guessing:
   its real type and `x-content-type-options: nosniff`, and is only ever fetched by the
   page, never opened as the preview itself.
 
-If a site needs storage, the honest answer is to deploy it: a preview is for looking at the
-site, and Netlify is where it becomes real.
+Storage in a preview is the app's storage, not the site's. Anything a site must keep — a
+login, a cart, a draft — belongs on the deployed site, where the origin is its own.
 
 ## The message protocol
 

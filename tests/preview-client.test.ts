@@ -5,6 +5,14 @@
  * nobody, so a publish that no worker received is indistinguishable from a successful one
  * unless the worker confirms it. Every test here is about that confirmation or about the
  * registration details that decide whether the worker can answer preview URLs at all.
+ *
+ * The fakes below dispatch events where the *platform* dispatches them, which is the whole
+ * point of `FakeServiceWorker` existing separately from `FakeRegistration`. An earlier
+ * version of this file had one object doing both and fired `"statechange"` on the
+ * registration — the event a real registration never sends. 669 green tests then coexisted
+ * with a browser in which the worker never counted as activated, so every cold publish
+ * waited 15 s and failed. A fake that models the implementation instead of the platform can
+ * only confirm what the implementation already believes.
  */
 
 import { describe, expect, it } from "vitest";
@@ -19,68 +27,154 @@ import {
   clearPublishedPreview,
   publishPreviewSnapshot,
   registerPreviewWorker,
+  type PreviewWorker,
   type PreviewWorkerContainer,
   type PreviewWorkerRegistration,
 } from "../src/preview/client";
 import type { PreviewSnapshot } from "../src/preview/proxy";
 
-/** What the worker receives and what it says back, without a service worker. */
+/** One tick of the macrotask queue, i.e. long enough for `setTimeout(…, 0)`. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * A `ServiceWorker`: the object that dispatches `statechange`.
+ *
+ * `send` is what `postMessage` does; a worker with no page to talk to passes a no-op.
+ */
+class FakeServiceWorker implements PreviewWorker {
+  #state: string;
+  readonly #stateListeners = new Set<() => void>();
+  readonly #send: (message: unknown) => void;
+
+  constructor(state: string, send: (message: unknown) => void = () => undefined) {
+    this.#state = state;
+    this.#send = send;
+  }
+
+  get state(): string {
+    return this.#state;
+  }
+
+  postMessage(message: unknown): void {
+    this.#send(message);
+  }
+
+  addEventListener(type: "statechange", listener: () => void): void {
+    // Anything else is not this object's event, and pretending otherwise is what hid the bug.
+    if (type === "statechange") this.#stateListeners.add(listener);
+  }
+
+  removeEventListener(type: "statechange", listener: () => void): void {
+    if (type === "statechange") this.#stateListeners.delete(listener);
+  }
+
+  /** How many listeners this worker is holding; a leak would show up here. */
+  listenerCount(): number {
+    return this.#stateListeners.size;
+  }
+
+  /** Move through a lifecycle state the way a browser does: change, then notify. */
+  transitionTo(state: string): void {
+    this.#state = state;
+    for (const listener of [...this.#stateListeners]) listener();
+  }
+}
+
+/** A `ServiceWorkerRegistration`: it dispatches `updatefound`, and only that. */
+class FakeRegistration implements PreviewWorkerRegistration {
+  active: FakeServiceWorker | null = null;
+  installing: FakeServiceWorker | null = null;
+  waiting: FakeServiceWorker | null = null;
+  readonly #updateFound = new Set<() => void>();
+
+  addEventListener(type: "updatefound", listener: () => void): void {
+    if (type === "updatefound") this.#updateFound.add(listener);
+  }
+
+  removeEventListener(type: "updatefound", listener: () => void): void {
+    this.#updateFound.delete(listener);
+  }
+
+  updateFoundListenerCount(): number {
+    return this.#updateFound.size;
+  }
+
+  fireUpdateFound(): void {
+    for (const listener of [...this.#updateFound]) listener();
+  }
+}
+
+/** The container (`navigator.serviceWorker`) plus the registration it hands out. */
 class FakeWorker implements PreviewWorkerContainer {
   readonly sent: unknown[] = [];
   readonly registrations: { scriptUrl: string; options?: { scope?: string; type?: string } }[] = [];
-  readonly #listeners = new Set<(event: MessageEvent) => void>();
-  active: { postMessage(message: unknown): void } | null = null;
-  installing: unknown = null;
-  waiting: unknown = null;
-  #stateListeners = new Set<() => void>();
-
+  readonly registration = new FakeRegistration();
   /** Answer a publish the way `public/preview-sw.js` does, counting the files. */
   autoReply = true;
+  readonly #messageListeners = new Set<(event: MessageEvent) => void>();
 
   async register(
     scriptUrl: string,
     options?: { scope?: string; type?: "module" | "classic" },
   ): Promise<PreviewWorkerRegistration> {
     this.registrations.push(options === undefined ? { scriptUrl } : { scriptUrl, options });
-    if (this.active === null) this.activate();
-    return this as unknown as PreviewWorkerRegistration;
+    return this.registration;
   }
 
-  activate(): void {
-    this.active = {
-      postMessage: (message: unknown) => {
-        this.sent.push(message);
-        const data = message as { type?: string; buildId?: string; files?: unknown[] };
-        if (!this.autoReply || data.type !== PUBLISH_MESSAGE) return;
-        // Asynchronously, as a worker would.
-        setTimeout(() => {
-          this.emit({
-            type: PUBLISHED_MESSAGE,
-            buildId: data.buildId,
-            files: Array.isArray(data.files) ? data.files.length : 0,
-          });
-        }, 0);
-      },
-    };
-    for (const listener of this.#stateListeners) listener();
+  addEventListener(type: "message", listener: (event: MessageEvent) => void): void {
+    if (type === "message") this.#messageListeners.add(listener);
   }
 
-  emit(data: unknown): void {
-    for (const listener of this.#listeners) listener({ data } as MessageEvent);
-  }
-
-  addEventListener(type: "message" | string, listener: (event: MessageEvent) => void): void {
-    if (type === "message") this.#listeners.add(listener);
-    else this.#stateListeners.add(listener as unknown as () => void);
-  }
-
-  removeEventListener(type: "message" | string, listener: (event: MessageEvent) => void): void {
-    if (type === "message") this.#listeners.delete(listener);
-    else this.#stateListeners.delete(listener as unknown as () => void);
+  removeEventListener(type: "message", listener: (event: MessageEvent) => void): void {
+    if (type === "message") this.#messageListeners.delete(listener);
   }
 
   listenerCount(): number {
-    return this.#listeners.size;
+    return this.#messageListeners.size;
+  }
+
+  /** A worker that is serving already, as on a second visit within one session. */
+  alreadyActive(): FakeServiceWorker {
+    const worker = new FakeServiceWorker("activated", (message) => this.#receive(message));
+    this.registration.active = worker;
+    return worker;
+  }
+
+  /** A cold visit: a worker turns up in `installing` and announces itself. */
+  install(state = "installing"): FakeServiceWorker {
+    const worker = new FakeServiceWorker(state, (message) => this.#receive(message));
+    this.registration.installing = worker;
+    this.registration.fireUpdateFound();
+    return worker;
+  }
+
+  /** The browser's own sequence: `activating`, the slot swap, `activated`. */
+  activate(worker: FakeServiceWorker): void {
+    worker.transitionTo("activating");
+    if (this.registration.installing === worker) this.registration.installing = null;
+    if (this.registration.waiting === worker) this.registration.waiting = null;
+    this.registration.active = worker;
+    worker.transitionTo("activated");
+  }
+
+  emit(data: unknown): void {
+    for (const listener of this.#messageListeners) listener({ data } as MessageEvent);
+  }
+
+  #receive(message: unknown): void {
+    this.sent.push(message);
+    const data = message as { type?: string; buildId?: string; files?: unknown[] };
+    if (!this.autoReply || data.type !== PUBLISH_MESSAGE) return;
+    // Asynchronously, as a worker would.
+    setTimeout(() => {
+      this.emit({
+        type: PUBLISHED_MESSAGE,
+        buildId: data.buildId,
+        files: Array.isArray(data.files) ? data.files.length : 0,
+      });
+    }, 0);
   }
 }
 
@@ -96,9 +190,19 @@ function snapshotOf(buildId: string, paths: string[]): PreviewSnapshot {
   };
 }
 
+/**
+ * A compile-time pin: the platform's own registration must still satisfy the slice this
+ * module uses. If a future edit widens the slice into something the browser does not offer
+ * (an `"statechange"` listener, say), this stops type-checking.
+ */
+const asSlice = (registration: ServiceWorkerRegistration): PreviewWorkerRegistration =>
+  registration;
+void asSlice;
+
 describe("registerPreviewWorker", () => {
   it("registers the module worker at the preview scope", async () => {
     const worker = new FakeWorker();
+    worker.alreadyActive();
     await registerPreviewWorker({ container: worker });
     expect(worker.registrations).toEqual([
       { scriptUrl: PREVIEW_WORKER_URL, options: { scope: PREVIEW_WORKER_SCOPE, type: "module" } },
@@ -111,36 +215,80 @@ describe("registerPreviewWorker", () => {
 
   it("does not wait when the worker is already active", async () => {
     const worker = new FakeWorker();
-    worker.active = { postMessage: () => undefined };
+    worker.alreadyActive();
     const result = await registerPreviewWorker({ container: worker });
     expect(result.waited).toBe(false);
   });
 
-  it("waits for activation when the worker is still installing", async () => {
+  it("waits for activation reported by the worker object, not the registration", async () => {
+    // The regression this file exists for. `register()` resolves while the worker is still
+    // installing; the only signal that it became active is `statechange` on the worker.
     const worker = new FakeWorker();
-    worker.register = async (scriptUrl, options) => {
-      worker.registrations.push({ scriptUrl, ...(options ? { options } : {}) });
-      setTimeout(() => worker.activate(), 5);
-      return worker as unknown as PreviewWorkerRegistration;
-    };
-    const result = await registerPreviewWorker({ container: worker, timeoutMs: 1_000 });
-    expect(result.waited).toBe(true);
-    expect(worker.active).not.toBeNull();
+    const registering = registerPreviewWorker({ container: worker, timeoutMs: 1_000, pollMs: 5 });
+    await tick();
+
+    const installing = worker.install();
+    await tick();
+    expect(worker.registration.active).toBeNull();
+    // The wait is listening to the worker, which is where the event is dispatched…
+    expect(installing.listenerCount()).toBe(1);
+    // …and has nothing to listen for on the registration beyond `updatefound`.
+    expect(worker.registration.updateFoundListenerCount()).toBe(1);
+
+    worker.activate(installing);
+    await expect(registering).resolves.toMatchObject({ waited: true });
+    // Nothing is left behind: a preview is republished on every build.
+    expect(installing.listenerCount()).toBe(0);
+    expect(worker.registration.updateFoundListenerCount()).toBe(0);
   });
 
-  it("says what to do when the worker never activates", async () => {
+  it("notices a worker that becomes active without any event", async () => {
+    // Belt and braces for engines that do not dispatch `statechange`, and for the race
+    // where the slot fills between two events.
     const worker = new FakeWorker();
-    worker.register = async () => worker as unknown as PreviewWorkerRegistration;
+    const registering = registerPreviewWorker({ container: worker, timeoutMs: 1_000, pollMs: 5 });
+    await tick();
+    worker.alreadyActive();
+    await expect(registering).resolves.toMatchObject({ waited: true });
+  });
+
+  it("fails at once when the worker is discarded while installing", async () => {
+    // Chromium marks a worker `redundant` when its script cannot install. Waiting out the
+    // timeout would report a symptom 15 s late and hide the cause.
+    const worker = new FakeWorker();
+    const started = Date.now();
+    const registering = registerPreviewWorker({ container: worker, timeoutMs: 10_000, pollMs: 5 });
+    await tick();
+    const installing = worker.install();
+    installing.transitionTo("redundant");
+
+    await expect(registering).rejects.toThrow(/discarded while installing/);
+    await expect(registering).rejects.toThrow(new RegExp(PREVIEW_WORKER_URL));
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  it("says what to do when the worker never activates, and names each slot", async () => {
+    const worker = new FakeWorker();
     await expect(
-      registerPreviewWorker({ container: worker, timeoutMs: 20 }),
-    ).rejects.toThrow(/did not activate/);
+      registerPreviewWorker({ container: worker, timeoutMs: 20, pollMs: 5 }),
+    ).rejects.toThrow(
+      /did not activate within 20 ms \(installing: none, waiting: none, active: none\)/,
+    );
+  });
+
+  it("reports the installing state in the timeout when it never advances", async () => {
+    const worker = new FakeWorker();
+    const registering = registerPreviewWorker({ container: worker, timeoutMs: 30, pollMs: 5 });
+    await tick();
+    worker.install();
+    await expect(registering).rejects.toThrow(/installing: installing/);
   });
 });
 
 describe("publishPreviewSnapshot", () => {
   it("posts the build and resolves the worker's file count", async () => {
     const worker = new FakeWorker();
-    worker.activate();
+    worker.alreadyActive();
     const { registration } = await registerPreviewWorker({ container: worker });
     const snapshot = snapshotOf("b-3", ["/index.html", "/assets/a.js"]);
     const reply = await publishPreviewSnapshot({
@@ -163,7 +311,7 @@ describe("publishPreviewSnapshot", () => {
 
   it("ignores a confirmation for a different build", async () => {
     const worker = new FakeWorker();
-    worker.activate();
+    worker.alreadyActive();
     const { registration } = await registerPreviewWorker({ container: worker });
     worker.autoReply = false;
 
@@ -182,7 +330,7 @@ describe("publishPreviewSnapshot", () => {
     // Silence is the dangerous case: without this rejection the caller would show the
     // previous build and call it a success.
     const worker = new FakeWorker();
-    worker.activate();
+    worker.alreadyActive();
     const { registration } = await registerPreviewWorker({ container: worker });
     worker.autoReply = false;
     await expect(
@@ -200,7 +348,7 @@ describe("publishPreviewSnapshot", () => {
     await expect(
       publishPreviewSnapshot({
         container: worker,
-        registration: worker as unknown as PreviewWorkerRegistration,
+        registration: new FakeRegistration(),
         snapshot: snapshotOf("b-6", []),
       }),
     ).rejects.toThrow(/not active/);
@@ -208,7 +356,7 @@ describe("publishPreviewSnapshot", () => {
 
   it("clears the published build", async () => {
     const worker = new FakeWorker();
-    worker.activate();
+    worker.alreadyActive();
     const { registration } = await registerPreviewWorker({ container: worker });
     clearPublishedPreview(registration);
     expect(worker.sent.at(-1)).toEqual({ type: CLEAR_MESSAGE });

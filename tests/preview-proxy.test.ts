@@ -254,6 +254,21 @@ describe("servePreviewRequest", () => {
 });
 
 describe("fileHeaders", () => {
+  it("gives a document the headers this app needs to frame it at all", () => {
+    // Measured: without its own COOP the frame's navigation dies with
+    // ERR_BLOCKED_BY_RESPONSE, because this app is cross-origin isolated.
+    const headers = fileHeaders("/index.html", "b-1", 3);
+    expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(headers["cross-origin-embedder-policy"]).toBe("require-corp");
+    expect(headers["cross-origin-resource-policy"]).toBe("cross-origin");
+  });
+
+  it("does not send a stylesheet the document-only headers", () => {
+    const headers = fileHeaders("/assets/a-12345678.css", "b-1", 3);
+    expect(headers["cross-origin-opener-policy"]).toBeUndefined();
+    expect(headers["cross-origin-resource-policy"]).toBe("cross-origin");
+  });
+
   it("agrees with the routing module for every file it types", () => {
     for (const path of ["/index.html", "/a.js", "/a.css", "/a.js.map", "/logo.png", "/x.bin"]) {
       const headers = fileHeaders(path, "b-1", 3);

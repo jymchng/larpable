@@ -7,9 +7,12 @@
  * `kernel.fetch()`. None of them loads a document, so none of them can answer the three
  * questions this goal is actually about:
  *
- * 1. does the service worker control an iframe that has **no `allow-same-origin`**? An
- *    opaque-origin frame is the whole security model, and if the worker cannot serve it the
- *    pane silently falls back to the app's own server and 404s;
+ * 1. does the service worker control the frame the app actually renders? A frame without
+ *    `allow-same-origin` is opaque, and Chromium does not hand an opaque frame's requests to
+ *    a worker at all — measured: the worker activated, `clients.matchAll()` never listed the
+ *    frame, and `/__preview__/<id>/` was answered by the dev server with the app's own HTML.
+ *    So the product's sandbox carries `allow-same-origin` and every document carries its own
+ *    COOP/COEP; this run is what proves that arrangement renders;
  * 2. does the build's CSS apply — i.e. are root-absolute `/assets/…` URLs rebased and served
  *    from the guest, not from the dev server?
  * 3. does a deep link (`/__preview__/<id>/app/editor`) resolve to the SPA entry and run its
@@ -38,6 +41,8 @@ import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
+
+import { echoesWholeLine, sizeCommand, sizeLine, writeFileCommand } from "./lib/pty-channel";
 
 const root = resolve(import.meta.dirname, "..");
 const reportPath = join(root, "docs", "preview-browser-report.md");
@@ -90,6 +95,8 @@ interface Measurements {
   publish: {
     status: string | null;
     servedBy: string | null;
+    /** The controller's own words for a guest-served publish; null when the worker served. */
+    note: string | null;
     url: string | null;
     buildId: string | null;
     wallClockMs: number;
@@ -146,11 +153,22 @@ async function reachable(url: string): Promise<boolean> {
   }
 }
 
-async function ensureDevServer(): Promise<{ child: ChildProcess | null; how: string }> {
-  if (await reachable(baseUrl)) return { child: null, how: "already running" };
+/** The bind address this script insists on for a server it starts itself. */
+const ACCEPTANCE_DEV_HOST = "127.0.0.1";
 
-  console.log(`[preview] ${baseUrl} is down; starting \`bun run dev\``);
-  const child = spawn("bun", ["run", "dev"], { cwd: root, stdio: "inherit" });
+async function ensureDevServer(): Promise<{ child: ChildProcess | null; how: string }> {
+  if (await reachable(baseUrl)) return { child: null, how: `already running at ${baseUrl}` };
+
+  console.log(`[preview] ${baseUrl} is down; starting \`bun run dev\` on ${ACCEPTANCE_DEV_HOST}`);
+  const child = spawn("bun", ["run", "dev"], {
+    cwd: root,
+    stdio: "inherit",
+    // Loopback only, whatever the environment says. A dev server that any host can reach can
+    // be made to execute code: measured, a remote `import.meta.glob` payload ran inside Vite
+    // and its `vite:error` overlay then covered the page this run needs to click. An
+    // acceptance run must not depend on a server the internet can reach.
+    env: { ...process.env, LARPABLE_DEV_HOST: ACCEPTANCE_DEV_HOST },
+  });
   const deadline = Date.now() + SERVER_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (await reachable(baseUrl)) return { child, how: "started by this script" };
@@ -187,8 +205,10 @@ async function runInTerminal(
 ): Promise<{ answered: boolean; line: string | null; tail: string }> {
   await page.locator("[data-testid=terminal-screen]").click();
   for (const line of lines) {
-    await page.keyboard.type(line, { delay: 2 });
-    await page.keyboard.press("Enter");
+    const typed = await typeLine(page, line);
+    // Do not press Enter on a line the pty did not receive whole: a short command whose tail
+    // was lost is a *different* command, and one of them writes a truncated file.
+    if (!typed.ok) return { answered: false, line: null, tail: typed.tail };
   }
 
   const deadline = Date.now() + timeoutMs;
@@ -204,6 +224,44 @@ async function runInTerminal(
     .filter((entry) => entry.includes(marker))
     .pop();
   return { answered: seen.includes(marker), line: line ?? null, tail: seen.slice(-400) };
+}
+
+/**
+ * Type one line and press Enter only once the pty has echoed it back in full.
+ *
+ * Typing into xterm drops characters under load — that is not a bug in this script, it is
+ * what a real pty under a real workload does. What the script must not do is *assume* the
+ * line arrived. So each attempt types the line, reads the terminal mirror back, and only
+ * presses Enter when the echo matches; a partial line is killed with `Ctrl-U` and retyped,
+ * a little slower each time. The cost is a few seconds; the alternative is a run that
+ * reports a file the guest never received.
+ */
+async function typeLine(
+  page: Page,
+  line: string,
+  attempts = 3,
+): Promise<{ ok: boolean; tail: string }> {
+  let tail = "";
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await page.locator("[data-testid=terminal-screen]").click();
+    // Throw away anything left on the line by a previous, partial attempt.
+    await page.keyboard.press("Control+u");
+    await page.keyboard.type(line, { delay: 6 + attempt * 10 });
+    // xterm mirrors its buffer into the DOM on animation frames, so the echo trails the
+    // keystrokes: poll for it rather than reading once and calling a slow render a lost
+    // character.
+    const echoDeadline = Date.now() + 5_000;
+    while (Date.now() < echoDeadline) {
+      tail = await transcript(page);
+      if (echoesWholeLine(tail.slice(-6_000), line)) {
+        await page.keyboard.press("Enter");
+        return { ok: true, tail };
+      }
+      await page.waitForTimeout(120);
+    }
+  }
+  await page.keyboard.press("Control+u");
+  return { ok: false, tail: tail.slice(-400) };
 }
 
 /**
@@ -249,15 +307,33 @@ const FIXTURE: { path: string; lines: readonly string[] }[] = [
   },
 ];
 
-function heredoc(path: string, lines: readonly string[], marker: string): string[] {
-  return [
-    `cat > ${path} <<'LARPABLE_EOF'`,
-    ...lines,
-    "LARPABLE_EOF",
-    // The marker is assembled by `printf` so it exists only in the OUTPUT: a marker spelled
-    // out in the typed command would match the shell's own echo of that command.
-    `printf "LARPABLE-%s %s\\n" "WROTE ${marker}" "$(wc -c < ${path})"`,
-  ];
+/** The bytes of a fixture entry, exactly as they land on disk. */
+function fixtureContent(lines: readonly string[]): string {
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Write one fixture file into the guest and make the guest count it.
+ *
+ * Two lines, both short: the base64 payload, then the byte count. See `scripts/lib/
+ * pty-channel.ts` for why the bytes travel as base64 and why the count comes from `wc`
+ * inside the guest rather than from this script. The retry is for a dropped character
+ * during typing, which `typeLine` has usually already caught; a second attempt costs a
+ * second and removes a whole class of red run.
+ */
+async function writeFixture(
+  page: Page,
+  file: { path: string; lines: readonly string[] },
+): Promise<{ ok: boolean; detail: string }> {
+  const content = fixtureContent(file.lines);
+  const bytes = Buffer.byteLength(content, "utf8");
+  const commands = [writeFileCommand(file.path, content), sizeCommand(file.path)];
+  let last = { answered: false, line: null as string | null, tail: "" };
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    last = await runInTerminal(page, commands, sizeLine(file.path, bytes), 45_000);
+    if (last.answered) break;
+  }
+  return { ok: last.answered, detail: last.line ?? last.tail };
 }
 
 interface FrameView {
@@ -367,14 +443,11 @@ async function main(): Promise<void> {
       30_000,
     );
     for (const file of FIXTURE) {
-      const name = file.path.split("/").pop() ?? file.path;
-      const wrote = await runInTerminal(
-        page,
-        heredoc(file.path, file.lines, name),
-        `LARPABLE-WROTE ${name}`,
-        30_000,
-      );
-      expect(`the guest accepted ${file.path}`, wrote.answered, wrote.line ?? wrote.tail);
+      const wrote = await writeFixture(page, file);
+      const bytes = Buffer.byteLength(fixtureContent(file.lines), "utf8");
+      // The detail is the guest's own count: "LARPABLE-SIZE <path> <bytes>" is printed by
+      // `printf` inside the VM, so a truncated write reports a smaller number and fails here.
+      expect(`the guest took ${file.path} whole (${bytes} bytes)`, wrote.ok, wrote.detail);
     }
     const listing = await runInTerminal(
       page,
@@ -402,15 +475,27 @@ async function main(): Promise<void> {
       .first()
       .getAttribute("data-build-id");
     const src = await page.locator("[data-testid=preview-iframe]").first().getAttribute("src");
+    const note =
+      (await page.locator("[data-testid=preview-status]").first().getAttribute("data-note")) ?? "";
     measurements.publish = {
       status: await text(page, "[data-testid=preview-status]"),
       servedBy: await text(page, "[data-testid=preview-served-by]"),
+      note: note.length > 0 ? note : null,
       url: src,
       buildId,
       wallClockMs: Date.now() - publishStartedAt,
     };
     log("publish", measurements.publish);
     expect("the pane published a build", buildId !== null, `build id ${String(buildId)}`);
+    // "guest" means the worker refused the publish, and `/__preview__/<id>/` then falls through
+    // to the dev server's SPA fallback — the iframe renders the *app*, not the build. That is a
+    // failure of this goal, not a variation of it, so it is asserted rather than merely reported.
+    expect(
+      "the preview worker holds the build",
+      measurements.publish.servedBy === "worker",
+      measurements.publish.note ??
+        `served by ${String(measurements.publish.servedBy)}, and the controller gave no reason`,
+    );
     expect(
       "the preview URL names the build",
       (src ?? "").startsWith(`/__preview__/${String(buildId)}/`),
@@ -578,6 +663,10 @@ function renderReport(measurements: Measurements): string {
       write.files ?? "(no listing)",
       "```",
       "",
+      "Written one file per command: the bytes travel as base64 (`printf %s … | base64 -d`,",
+      "which no quote or `$` can break) and the guest prints the byte count `wc -c` measured",
+      "for itself, so a truncated write fails the run instead of passing it.",
+      "",
       "Three files: an SPA entry with root-absolute `/assets/…` URLs, a stylesheet that paints",
       "the body `#123456`, and a module that writes `42` into `#answer` and `location.pathname`",
       "into `#route`. Root-absolute URLs are what a real build emits, and what `routing.ts` has",
@@ -596,6 +685,7 @@ function renderReport(measurements: Measurements): string {
       `| iframe \`src\` | \`${publish.url ?? "none"}\` |`,
       `| Pane status | ${publish.status ?? "none"} |`,
       `| Served by | ${publish.servedBy ?? "worker (no badge)"} |`,
+      `| Why the guest answered, if it did | ${publish.note ?? "(not applicable)"} |`,
       `| Click to published iframe | ${publish.wallClockMs} ms |`,
       "",
       publish.servedBy === "guest"

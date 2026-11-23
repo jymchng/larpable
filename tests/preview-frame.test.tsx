@@ -40,11 +40,16 @@ describe("previewUrlFor", () => {
 });
 
 describe("PreviewFrame", () => {
-  it("runs scripts but not with the app's origin", () => {
-    // `allow-scripts` without `allow-same-origin` is the whole security model: scripts run,
-    // storage and the parent document do not exist for them.
+  it("runs scripts, and keeps the origin the worker needs to serve them", () => {
+    // `allow-same-origin` is deliberate and measured. A sandboxed frame without it is an
+    // opaque origin, which Chromium refuses to hand to a service worker: the frame's
+    // `/__preview__/<id>/` request goes to the dev server (and to Netlify's SPA redirect in
+    // production) and the app's own HTML is loaded into the frame, which then dies on
+    // `indexedDB` — the blank pane users reported. The cost, stated in `sandbox.ts`: the
+    // previewed build shares this app's origin.
     expect(PREVIEW_IFRAME_SANDBOX.split(" ")).toContain("allow-scripts");
-    expect(PREVIEW_IFRAME_SANDBOX).not.toContain("allow-same-origin");
+    expect(PREVIEW_IFRAME_SANDBOX.split(" ")).toContain("allow-same-origin");
+    expect(PREVIEW_IFRAME_SANDBOX.split(" ")).toContain("allow-forms");
   });
 
   it("grants nothing that lets guest code leave the pane", () => {

@@ -120,6 +120,11 @@ export function PreviewToolbar({ phase, onRefresh, available }: PreviewToolbarPr
 
       <p
         data-testid="preview-status"
+        // The controller's own words for why the guest is answering. It used to reach the DOM
+        // nowhere at all, which made "served by the guest" an unexplained downgrade and hid
+        // the reason a publish failed from both the user and the acceptance run.
+        data-note={phase.kind === "ready" ? (phase.note ?? "") : ""}
+        title={phase.kind === "ready" ? (phase.note ?? undefined) : undefined}
         aria-live="polite"
         className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11.5px]"
       >

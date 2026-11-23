@@ -14,10 +14,12 @@ import {
   PREVIEW_PREFIX,
   cacheControlFor,
   isImmutableAsset,
+  isPreviewDocument,
   isSourceMap,
   mimeTypeFor,
   normalisePreviewPath,
   parsePreviewUrl,
+  previewErrorHeaders,
   previewFailure,
   previewHeaders,
   resolvePreviewPath,
@@ -261,6 +263,49 @@ describe("previewHeaders", () => {
 
   it("omits content-length when the length is unknown", () => {
     expect(previewHeaders({ path: "/a.css", buildId: "b-1" })).not.toHaveProperty("content-length");
+  });
+});
+
+describe("document headers", () => {
+  // Measured in Chromium 159 against this app: a same-origin frame served without its own
+  // COOP is refused with ERR_BLOCKED_BY_RESPONSE on a cross-origin isolated page, and a
+  // frame without `allow-same-origin` is not a service-worker client at all. Either way the
+  // preview is blank. So the document headers are not decoration; they are the difference
+  // between a rendered site and an empty pane.
+  it("gives an HTML document its own COOP and a framable CORP", () => {
+    const headers = previewHeaders({ path: "/index.html", buildId: "b-1" });
+    expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(headers["cross-origin-embedder-policy"]).toBe("require-corp");
+    expect(headers["cross-origin-resource-policy"]).toBe("cross-origin");
+  });
+
+  it("treats every HTML entry point as a document, not just index.html", () => {
+    for (const path of ["/index.html", "/about.html", "/docs/index.html"]) {
+      expect(isPreviewDocument(path)).toBe(true);
+      expect(previewHeaders({ path, buildId: "b-1" })["cross-origin-opener-policy"]).toBe(
+        "same-origin",
+      );
+    }
+  });
+
+  it("does not impose isolation headers on assets", () => {
+    // A stylesheet or a module is not a document; COOP on it would mean nothing, and the
+    // assertion is here so a future "add it everywhere" change has to think about it.
+    for (const path of ["/assets/app.js", "/assets/app.css", "/logo.svg"]) {
+      expect(isPreviewDocument(path)).toBe(false);
+      expect(previewHeaders({ path, buildId: "b-1" })).not.toHaveProperty(
+        "cross-origin-opener-policy",
+      );
+    }
+  });
+
+  it("gives failure bodies the same headers, because a 503 in a frame is a document", () => {
+    const headers = previewErrorHeaders({ "x-larpable-build": "b-1" });
+    expect(headers["content-type"]).toBe("text/plain; charset=utf-8");
+    expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(headers["cross-origin-embedder-policy"]).toBe("require-corp");
+    expect(headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(headers["x-larpable-build"]).toBe("b-1");
   });
 });
 
