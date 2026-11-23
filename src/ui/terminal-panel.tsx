@@ -58,6 +58,7 @@ import {
   type ModifierState,
 } from "@/ui/terminal-keys";
 import { activeTabOf, addTab, closeTab, type ShellTab } from "@/ui/terminal-tabs";
+import { TranscriptBuffer } from "@/ui/terminal-transcript";
 import { cn } from "@/lib/utils";
 
 export interface TerminalPanelProps {
@@ -598,23 +599,17 @@ function ShellTab({
     let observer: ResizeObserver | null = null;
     let onData: { dispose: () => void } | null = null;
 
-    // The transcript is buffered in a ref and flushed on a timer, so a command that
-    // prints thousands of lines costs a handful of renders instead of thousands.
-    let pending = "";
-    let lastFlush = 0;
-    const flush = (force: boolean) => {
-      if (!force && pending.length === 0) return;
-      const now = Date.now();
-      if (!force && now - lastFlush < TRANSCRIPT_INTERVAL_MS) return;
-      lastFlush = now;
-      const chunk = pending;
-      pending = "";
-      if (chunk.length === 0) return;
+    // The transcript is buffered and flushed on a timer, so a command that prints
+    // thousands of lines costs a handful of renders instead of thousands. The buffer
+    // always schedules its own flush: a chunk that arrives moments after the previous
+    // flush must not wait for the *next* chunk, because the last line of a command has
+    // nothing after it and would otherwise never reach the DOM.
+    const transcriptBuffer = new TranscriptBuffer((chunk: string) => {
       setTranscript((previous) => {
         const next = previous + chunk;
         return next.length > TRANSCRIPT_LIMIT ? next.slice(next.length - TRANSCRIPT_LIMIT) : next;
       });
-    };
+    }, TRANSCRIPT_INTERVAL_MS);
 
     void (async () => {
       setConnection("connecting");
@@ -697,16 +692,15 @@ function ShellTab({
           const text = decoder.decode(value, { stream: true });
           if (text.length === 0) continue;
           terminal.write(text);
-          pending += text;
-          flush(false);
+          transcriptBuffer.push(text);
         }
 
         const tail = decoder.decode();
         if (tail.length > 0) {
           terminal.write(tail);
-          pending += tail;
+          transcriptBuffer.push(tail);
         }
-        flush(true);
+        transcriptBuffer.flush();
 
         const end = await session.ended.catch(() => ({ type: "lost" as const }));
         if (disposed) return;
@@ -730,6 +724,7 @@ function ShellTab({
 
     return () => {
       disposed = true;
+      transcriptBuffer.dispose();
       observer?.disconnect();
       onData?.dispose();
       void session?.close().catch(() => undefined);
