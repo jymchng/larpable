@@ -297,4 +297,14 @@ describe("createPreviewController", () => {
     expect(sessions[0]?.options?.root).toBe("dist");
     expect(sessions[0]?.options?.fallbackPath).toBeNull();
   });
+
+  it("gives the guest's server a budget that survives a cold runtime download", async () => {
+    const { controller, sessions } = await harness();
+
+    await controller.refresh("build-1");
+
+    // The guest's `node` is a first-use shim (~147 s measured); the session's own default is
+    // 120 s, which would report a broken preview for a slow first start.
+    expect(sessions[0]?.options?.timeoutMs).toBe(300_000);
+  });
 });

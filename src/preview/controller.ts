@@ -64,6 +64,15 @@ export interface PreviewControllerOptions {
   port?: number;
   /** `/index.html` for an SPA build; null to make deep links 404. Default `/index.html`. */
   fallbackPath?: string | null;
+  /**
+   * Budget for the guest's server to announce its port. Default 300 s.
+   *
+   * Not the session's 120 s default, because the guest's `node` is a first-use shim that
+   * downloads the runtime on its first call — measured at ~147 s on this image. A user's
+   * first preview of their first project is exactly the case that pays it, and a timeout
+   * there would look like a broken preview rather than a slow machine.
+   */
+  startTimeoutMs?: number;
   /** Injected by tests and by the acceptance run. Default: the real session. */
   startSession?: (options: StartPreviewSessionOptions) => Promise<PreviewSession>;
   /** Injected by tests. Default: walk the guest's publish directory. */
@@ -101,6 +110,7 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
   const root = options.root ?? "dist";
   const listFiles = options.listFiles ?? listPublishFiles;
   const startSession = options.startSession ?? startPreviewSession;
+  const startTimeoutMs = options.startTimeoutMs ?? 300_000;
 
   const listeners = new Set<(phase: PreviewPhase) => void>();
   let phase: PreviewPhase = { kind: "idle" };
@@ -164,6 +174,7 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
           environment: options.environment,
           http,
           root,
+          timeoutMs: startTimeoutMs,
           ...(options.port !== undefined ? { port: options.port } : {}),
           ...(options.fallbackPath !== undefined ? { fallbackPath: options.fallbackPath } : {}),
         });

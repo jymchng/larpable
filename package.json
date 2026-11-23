@@ -20,7 +20,8 @@
     "fetch:node": "bun scripts/fetch-node.ts",
     "feasibility": "bun scripts/feasibility.ts",
     "test:guest": "LARPABLE_GUEST_TESTS=1 ./.tooling/node/bin/node ./node_modules/vitest/vitest.mjs run tests/guest",
-    "acceptance:browser": "bun scripts/browser-acceptance.ts"
+    "acceptance:browser": "bun scripts/browser-acceptance.ts",
+    "acceptance:preview": "bun scripts/preview-browser-acceptance.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
