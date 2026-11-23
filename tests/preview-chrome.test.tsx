@@ -202,10 +202,15 @@ describe("PreviewPane as a browser", () => {
     expect(html).not.toMatch(/data-testid="preview-reload"[^>]*disabled=""/);
   });
 
-  it("has no reload and no address before a build is published", () => {
-    const html = renderPane({ kind: "idle" });
+  it("offers reload — the publish control — before a build is published", () => {
+    const html = renderPane({
+      kind: "idle",
+    });
 
-    expect(html).toMatch(/data-testid="preview-reload"[^>]*disabled=""/);
+    // Reload is what publishes now that the toolbar's own button is gone, so this pane must hand
+    // it `reloadDisabled={false}` whenever a build can be published; a bare `PreviewPane` with no
+    // machine still disables it, which is the case here (the caller passes `available`).
+    expect(html).toContain('data-testid="preview-reload"');
     expect(html).toContain("Nothing loaded yet");
     expect(html).toContain('data-loaded="false"');
   });
@@ -224,7 +229,10 @@ describe("PreviewPane as a browser", () => {
 
     expect(html).toContain('data-testid="preview-toolbar"');
     expect(html).toContain('data-testid="preview-served-by"');
-    expect(html).toContain('data-testid="preview-status"');
+    // A ready preview says nothing on the status line any more ("Serving 3 files…" was removed),
+    // so the row is absent rather than empty.
+    expect(html).not.toContain('data-testid="preview-status"');
+    expect(html).not.toContain("Serving 3 files");
     // …and inside the browser window, not floating over the document.
     expect(html.indexOf('data-testid="preview-toolbar"')).toBeLessThan(
       html.indexOf('data-testid="preview-iframe"'),
@@ -258,12 +266,11 @@ describe("the frame under the chrome", () => {
 
 describe("the toolbar without the device control", () => {
   it("no longer renders a viewport control, because the device toolbar owns it", () => {
-    const html = renderToStaticMarkup(
-      <PreviewToolbar phase={ready} onRefresh={() => undefined} available />,
-    );
+    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
 
     expect(html).not.toContain('data-testid="preview-viewport-mobile"');
-    expect(html).toContain('data-testid="preview-build"');
+    // The publish button left this row too: publishing is the browser bar's reload arrow.
+    expect(html).not.toContain('data-testid="preview-build"');
     expect(html).toContain('data-testid="preview-served-by"');
   });
 });

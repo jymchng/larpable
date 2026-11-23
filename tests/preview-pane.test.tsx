@@ -191,11 +191,10 @@ describe("PreviewPane with a running app", () => {
     );
 
     expect(html).toContain(`src="${PREVIEW_PREFIX}/app-mf3k2/"`);
-    expect(html).toContain('data-testid="preview-stop-app"');
-    // No "Run the app" control exists any more (removed on request), so nothing can spawn a
-    // second server on the port this one holds.
+    // No "Run the app" control and no stop control exist any more (both removed with the
+    // toolbar's publish button on request), so nothing can spawn a second server on that port.
     expect(html).not.toContain('data-testid="preview-run-app"');
-    expect(html).toContain("Stop app");
+    expect(html).not.toContain('data-testid="preview-stop-app"');
   });
 
   it("says which command answered and on which port, instead of just \"running\"", () => {
@@ -258,7 +257,7 @@ describe("PreviewPane with a running app", () => {
   });
 
   it("describes an idle app without pretending one is running", () => {
-    expect(describeAppPreview({ kind: "idle" })).toBe("No app running.");
+    expect(describeAppPreview({ kind: "idle" })).toBeNull();
     expect(describeAppPreview(undefined)).toBeNull();
   });
 
@@ -298,12 +297,14 @@ describe("build strip", () => {
     expect(html).not.toContain('data-testid="preview-install-build"');
   });
 
-  it("says no build has run yet, and offers the button that fixes it", () => {
+  it("shows the hammer in the device row and says nothing before the first build", () => {
     const html = renderWithBuild(control());
 
-    expect(html).toContain('data-testid="preview-build-strip"');
-    expect(html).toContain("No build has run yet.");
+    // The sentence ("No build has run yet.") was removed on request, and the strip is not
+    // rendered for a silent phase; the hammer is in the device row with the width buttons.
+    expect(html).not.toContain("No build has run yet.");
     expect(html).toContain("Install &amp; build");
+    expect(html).toContain('data-testid="preview-viewports"');
     expect(html).not.toContain('data-testid="preview-cancel-build"');
   });
 

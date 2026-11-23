@@ -43,8 +43,10 @@ describe("initialBuild", () => {
     expect(initialBuild()).toEqual({ kind: "none" });
   });
 
-  it("says so in words rather than showing an empty progress line", () => {
-    expect(describeBuildProgress(initialBuild())).toBe("No build has run yet.");
+  it("says nothing at all before the first build", () => {
+    // "No build has run yet." was removed on request: the strip's own hammer says what it would
+    // do, and the line is not rendered when the answer is empty.
+    expect(describeBuildProgress(initialBuild())).toBe("");
   });
 });
 

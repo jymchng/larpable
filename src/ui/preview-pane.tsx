@@ -154,7 +154,9 @@ export function describeAppPreview(state: AppPreviewState | undefined): string |
   if (state === undefined) return null;
   switch (state.kind) {
     case "idle":
-      return "No app running: “Run the app” starts the project’s own start script.";
+      // Removed on request. An idle app server with nothing on screen is the normal state, and
+      // the sentence pointed at a button that no longer exists.
+      return null;
     case "starting":
       return state.message;
     case "running":

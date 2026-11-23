@@ -369,6 +369,8 @@ describe("the environment card", () => {
 
 describe("the preview pane", () => {
   it("publishes with the hammer and shows a green tone, not a worded button", () => {
+    // The hammer moved into the device row (beside the three width buttons); the markup and the
+    // tone are unchanged, which is what this test is about.
     const html = preview(appControl({ kind: "idle" }), readyPhase, buildControl());
     const build = buttonMarkup(html, "preview-install-build");
 
@@ -379,32 +381,21 @@ describe("the preview pane", () => {
     expect(textOf(attribute(build, "aria-label") ?? "")).toBe("Install & build");
   });
 
-  it("runs the app with a terminal and stops it with a red square", () => {
-    const idle = preview(appControl({ kind: "idle" }));
-    expect(buttonMarkup(idle, "preview-run-app")).toContain("lucide-square-terminal");
-    expect(attribute(buttonMarkup(idle, "preview-run-app"), "aria-label")).toBe("Run the app");
-
-    const failed = preview(appControl({ kind: "failed", message: "no start script" }));
-    expect(attribute(buttonMarkup(failed, "preview-run-app"), "aria-label")).toBe("Run the app again");
-
-    const running = preview(
-      appControl({
-        kind: "running",
-        buildId: "build-mf3k2-1",
-        port: 3000,
-        command: "bun run start",
-        status: 200,
-      }),
-    );
-    const stop = buttonMarkup(running, "preview-stop-app");
-    expect(stop).toContain("lucide-square");
-    expect(stop).not.toContain("lucide-square-terminal");
-    expect(stop).toContain('data-tone="stop"');
+  it("no longer offers a 'Run the app' button — removed on request", () => {
+    // The SquareTerminal control and the red square that stopped it left the pane with the
+    // toolbar's publish button. A running app is still reported on the status line.
+    for (const app of [appControl({ kind: "idle" }), appControl({ kind: "failed", message: "no start" })]) {
+      const html = preview(app);
+      expect(html).not.toContain('data-testid="preview-run-app"');
+      expect(html).not.toContain('data-testid="preview-stop-app"');
+    }
   });
 
-  it("publishes again with a circling arrow once a build is on screen", () => {
+  it("publishes with the browser bar's circling arrow, not a second green button", () => {
     const html = preview(appControl({ kind: "idle" }));
-    expect(buttonMarkup(html, "preview-build")).toContain("lucide-rotate-cw");
+
+    expect(buttonMarkup(html, "preview-reload")).toContain("lucide-rotate-cw");
+    expect(html).not.toContain('data-testid="preview-build"');
   });
 });
 
