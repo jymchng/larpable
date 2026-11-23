@@ -98,15 +98,29 @@ describe("PreviewPanel", () => {
     });
   }
 
-  it("renders no placeholder at all before the first build", () => {
-    // "No production build yet." and the copy under it were removed on request: an idle pane is
-    // the browser chrome and nothing else, so there is no div to leave behind either.
+  it("says there is no preview yet, and points at the control that makes one", () => {
+    // Reversed on request: the idle pane used to be chrome and nothing else, which left a
+    // first-time user with no sentence and no pointer at the hammer (user request: "when there
+    // is no preview show that there is no preview and a hint to click on the Hammer button").
+    const html = render(
+      <PreviewPanel state={{ kind: "idle" }} emptyHint="Click the hammer above." />,
+    );
+
+    expect(html).toContain('data-testid="preview-placeholder"');
+    expect(html).toContain('data-kind="idle"');
+    expect(html).toContain("No preview yet.");
+    expect(html).toContain("Click the hammer above.");
+    expect(html).not.toContain("<iframe");
+  });
+
+  it("says only that there is no preview when the caller has no build control", () => {
+    // No hammer on screen means no sentence naming one: a hint pointing at nothing is worse than
+    // no hint at all.
     const html = render(<PreviewPanel state={{ kind: "idle" }} />);
 
-    expect(html).not.toContain("No production build yet.");
-    expect(html).not.toContain("never a mock page");
-    expect(html).not.toContain('data-testid="preview-placeholder"');
-    expect(html).not.toContain("<iframe");
+    expect(html).toContain("No preview yet.");
+    expect(html).toContain("A preview appears here once a build has been published.");
+    expect(html).not.toContain("Click the hammer");
   });
 
   it("renders the frame and a reload control once a build is ready", () => {

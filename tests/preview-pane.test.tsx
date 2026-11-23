@@ -350,6 +350,29 @@ describe("build strip", () => {
     expect(html).not.toContain('data-testid="preview-cancel-build"');
   });
 
+  it("points an empty pane at the hammer, and only when the hammer is on screen", () => {
+    // User request: "when there is no preview show that there is no preview and a hint to click on
+    // the Hammer button". The hint is `PreviewPane`'s to write, because this is the file that
+    // renders the hammer — `PreviewPanel` owns the chrome, not the build manager.
+    const withHammer = renderToStaticMarkup(
+      <PreviewPane phase={{ kind: "idle" }} onRefresh={() => undefined} available build={control()} />,
+    );
+
+    expect(withHammer).toContain('data-kind="idle"');
+    expect(withHammer).toContain("No preview yet.");
+    expect(withHammer).toContain("Click the hammer above");
+    expect(withHammer).toContain("Install &amp; build");
+
+    // A caller with no build control has no hammer, so the placeholder must not name one.
+    const withoutHammer = renderToStaticMarkup(
+      <PreviewPane phase={{ kind: "idle" }} onRefresh={() => undefined} available />,
+    );
+
+    expect(withoutHammer).toContain("No preview yet.");
+    expect(withoutHammer).not.toContain("Click the hammer above");
+    expect(withoutHammer).not.toContain('data-testid="preview-install-build"');
+  });
+
   it("shows the run's stage as a toast, and Cancel instead of a second start", () => {
     const html = renderWithBuild(control({ status: { kind: "running", stage: "building" }, busy: true }));
 

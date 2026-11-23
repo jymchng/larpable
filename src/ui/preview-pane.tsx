@@ -318,6 +318,16 @@ export function PreviewPane({
         path={path}
         framePath={browser.navigation.path}
         reloads={browser.navigation.nonce}
+        // The empty pane points at the one control that fills it (user request: "when there is no
+        // preview show that there is no preview and a hint to click on the Hammer button"). The
+        // sentence lives here because this is the file that renders the hammer: `PreviewPanel`
+        // owns the chrome, not the build manager. Absent when the caller has no build control, so
+        // the placeholder never names a button that is not on screen.
+        emptyHint={
+          build === undefined
+            ? undefined
+            : "Click the hammer above — Install & build — to build the project in the guest. The real output appears here when it finishes."
+        }
         canGoBack={canGoBack(browser.history)}
         canGoForward={canGoForward(browser.history)}
         // The bar's Reload button is what publishes a build now that the toolbar's own publish

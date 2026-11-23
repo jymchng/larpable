@@ -35,7 +35,7 @@
  * carries the navigation nonce, so a reload is a fresh document at the URL on screen.
  */
 
-import { TriangleAlert } from "lucide-react";
+import { Hammer, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
@@ -245,6 +245,15 @@ export interface PreviewPanelProps {
    * rather than as booleans because the pane owns their state and their handlers.
    */
   deviceActions?: ReactNode;
+  /**
+   * What to say under "No preview yet.", when the caller has a way to make one.
+   *
+   * The pane cannot name the control that starts a build — `PreviewPanel` knows nothing about the
+   * build manager — so the caller that renders the hammer supplies the sentence that points at it.
+   * Absent, the placeholder says only that there is no preview, which is all a caller without a
+   * build control can honestly say.
+   */
+  emptyHint?: ReactNode;
   frameRef?: RefObject<HTMLIFrameElement>;
   onFrameLoad?: () => void;
   className?: string;
@@ -260,6 +269,12 @@ export interface PreviewPanelProps {
  * worth writing. The chrome stays visible in every state: a browser with no page still shows
  * its tab strip and its address bar, and hiding them would make the pane's state harder to
  * read, not easier.
+ *
+ * The *idle* case is the one the pane used to leave blank on purpose, and it was a dead end: a
+ * first-time user saw chrome and nothing else, with no sentence saying a preview does not exist
+ * yet and no pointer at the hammer that makes one (user request: "when there is no preview show
+ * that there is no preview and a hint to click on the Hammer button"). So it has a placeholder
+ * too — a headline, and the caller's own hint about the control to press.
  */
 export function PreviewPanel({
   state,
@@ -278,6 +293,7 @@ export function PreviewPanel({
   viewport = viewportFor("desktop"),
   onViewport,
   deviceActions,
+  emptyHint,
   frameRef,
   onFrameLoad,
   className,
@@ -352,9 +368,10 @@ export function PreviewPanel({
             }
           />
         </div>
-      ) : state.kind === "building" || state.kind === "error" ? (
+      ) : (
         <div
           data-testid="preview-placeholder"
+          data-kind={state.kind}
           /*
             `min-h-0 overflow-y-auto`: in landscape at 844 x 390 this pane is about 196 px tall
             once the tab strip, address bar and device toolbar have taken theirs, and this
@@ -374,7 +391,7 @@ export function PreviewPanel({
                 {state.status === null ? state.message : `${String(state.status)} — ${state.message}`}
               </p>
             </>
-          ) : (
+          ) : state.kind === "building" ? (
             <>
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
               <p className="text-sm font-medium">Building the site…</p>
@@ -382,9 +399,22 @@ export function PreviewPanel({
                 The preview shows the real output as soon as the build finishes.
               </p>
             </>
+          ) : (
+            <>
+              {/* The hammer, because that is the control the hint names: an icon-only button is
+                  easier to find by shape than by reading the row.
+
+                  No `aria-live`: this is a state, not an announcement — the build's own progress
+                  and its result are toasts (`docs/toast.md`). */}
+              <Hammer aria-hidden="true" className="text-muted-foreground/60 size-6" />
+              <p className="text-sm font-medium">No preview yet.</p>
+              <p className="text-muted-foreground max-w-[46ch] text-[13px]">
+                {emptyHint ?? "A preview appears here once a build has been published."}
+              </p>
+            </>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
