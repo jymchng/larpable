@@ -5,16 +5,17 @@ import { DEFAULT_WORKSPACE_PATH } from "@/env/default-project";
 import { summarizeDistro } from "@/env/distro";
 import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
-import { initialBuild } from "@/ui/build-state";
 import { ChatPanel } from "@/ui/chat-panel";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
+import { createNetlifyPort } from "@/ui/netlify-port";
 import { PreviewPane } from "@/ui/preview-pane";
 import { SettingsPanel } from "@/ui/settings-panel";
 import { StatusBar } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
 import { TerminalPanel } from "@/ui/terminal-panel";
 import { useAgentChat } from "@/ui/use-agent-chat";
+import { useBuild } from "@/ui/use-build";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 import { useAppPreview } from "@/ui/use-app-preview";
 import { useLlmSettings } from "@/ui/use-llm-settings";
@@ -51,11 +52,31 @@ export function App() {
   });
 
   const settings = useLlmSettings();
-  // No build manager is constructed here yet, so the session's build/netlify/preview ports
-  // are absent and the tools that need them say so in their own words rather than pretending.
+  // The build: one controller per machine, behind the warm-runtime gate, publishing into the
+  // pane's strip and the status bar. Its successful id is what the preview publishes, so the
+  // frame always shows exactly the bytes that were built.
+  const build = useBuild({
+    environment: environment.environment,
+    onBuilt: (result) => preview.refresh(result.id),
+  });
+  // The agent's Netlify tool validates against the last successful build, read at call time.
+  const netlify = useMemo(
+    () =>
+      environment.environment === null
+        ? null
+        : createNetlifyPort({
+            environment: environment.environment,
+            lastBuild: () => build.port?.lastSuccessfulBuild() ?? null,
+          }),
+    [environment.environment, build.port],
+  );
+  // The tools receive the same objects the panes render: one build, one preview, one truth.
   const chat = useAgentChat({
     environment: environment.environment,
     settings: settings.settings,
+    build: build.port,
+    netlify,
+    preview: preview.port,
   });
 
   const distroQuery = useQuery(distroAssetsQueryOptions);
@@ -65,12 +86,12 @@ export function App() {
   );
 
   // Every segment is derived from an object that owns the fact: the environment snapshot, the
-  // build status the build hook publishes (no build has run here yet), the Netlify verdict the
-  // session recorded (none yet) and the preview controller's own phase.
+  // build status the build hook publishes, the Netlify verdict the session recorded (none yet,
+  // so it says "not validated") and the preview controller's own phase.
   const statusInput: StatusInput = {
     environment: environment.snapshot,
     project: { name: null, root: DEFAULT_WORKSPACE_PATH },
-    build: initialBuild(),
+    build: build.status,
     netlify: { kind: "unknown" },
     preview: preview.phase,
   };
@@ -126,6 +147,7 @@ export function App() {
           onRefresh={() => preview.refresh()}
           available={preview.available}
           app={appPreview}
+          build={build}
         />
       }
     />

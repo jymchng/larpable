@@ -15,7 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExecutionEnvironment } from "@/env/execution";
 import type { GuestHttpFetch } from "@/env/unkernel-kernel";
+import type { PreviewPort } from "@/agent/tools/types";
 import { createPreviewController, type PreviewPhase } from "@/preview/controller";
+import { createPreviewPort } from "@/ui/preview-port";
 
 export interface UsePreviewOptions {
   /** The booted machine, or null. */
@@ -42,6 +44,13 @@ export interface PreviewControl {
   refresh: (buildId?: string) => void;
   /** Stop the guest's preview server (called automatically when the machine goes away). */
   stop: () => void;
+  /**
+   * The port the agent's `preview_site` tool receives, or null before the machine exists.
+   *
+   * It is the *same* controller the pane renders, so a tool's publish moves the pane and the
+   * status bar. Two controllers would be two answers to "is the preview up".
+   */
+  port: PreviewPort | null;
 }
 
 export function usePreview(options: UsePreviewOptions): PreviewControl {
@@ -93,11 +102,14 @@ export function usePreview(options: UsePreviewOptions): PreviewControl {
     void controller?.stop().catch(() => undefined);
   }, [controller]);
 
+  const agentPort = useMemo(() => (controller === null ? null : createPreviewPort(controller)), [controller]);
+
   return {
     phase,
     busy: phase.kind === "starting" || phase.kind === "publishing",
     available: environment !== null && environment.status() === "ready",
     refresh,
     stop,
+    port: agentPort,
   };
 }

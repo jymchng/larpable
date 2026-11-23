@@ -30,7 +30,9 @@
  */
 
 import {
+  CircleStop,
   ExternalLink,
+  Hammer,
   Loader2,
   Maximize2,
   Minimize2,
@@ -48,8 +50,10 @@ import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { PreviewPhase } from "@/preview/controller";
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
+import { describeBuildProgress, type BuildStatus } from "@/ui/build-state";
 import { PreviewPanel, previewUrlFor, type PreviewState } from "@/ui/preview-frame";
 import type { AppPreviewControl, AppPreviewState } from "@/ui/use-app-preview";
+import type { BuildControl } from "@/ui/use-build";
 import {
   VIEWPORTS,
   describeViewport,
@@ -165,6 +169,12 @@ export interface PreviewPaneProps {
    * untouched.
    */
   app?: AppPreviewControl;
+  /**
+   * The build, when the caller has one: install + build inside the guest, with a status
+   * sentence and a Cancel button. Absent for a caller with no build manager, and the pane
+   * then behaves exactly as it did before — the publish button alone.
+   */
+  build?: BuildControl;
   /** The viewport the pane opens at. A prop so a test can render the tablet/mobile frames. */
   initialViewport?: ViewportName;
   className?: string;
@@ -175,6 +185,7 @@ export function PreviewPane({
   onRefresh,
   available,
   app,
+  build,
   initialViewport = "desktop",
   className,
 }: PreviewPaneProps) {
@@ -199,6 +210,7 @@ export function PreviewPane({
 
   return (
     <div ref={containerRef} data-testid="preview-pane" className={cn("flex min-h-0 flex-1 flex-col", className)}>
+      {build !== undefined ? <BuildStrip build={build} /> : null}
       <PreviewPanel
         state={state}
         onReload={onRefresh}
@@ -218,6 +230,81 @@ export function PreviewPane({
           />
         }
       />
+    </div>
+  );
+}
+
+/**
+ * Install + build, as one control with one status sentence.
+ *
+ * The pane used to have only "Preview build", which publishes whatever `dist/` already holds
+ * — so a user with no build had a button that could only fail. This strip is the other half:
+ * it runs the guest's install and build (through `src/ui/build-controller.ts`, the same object
+ * the agent's tools use) and says what happened in the manager's own words.
+ *
+ * The two buttons are never both shown: a run in flight offers Cancel, and only Cancel. A
+ * disabled button states why, from `build.problem`, which is derived from the machine's own
+ * status rather than from a guess.
+ */
+function BuildStrip({ build }: { build: BuildControl }): ReactNode {
+  const { status } = build;
+  const running = status.kind === "running";
+  const disabled = build.busy || build.problem !== null;
+
+  return (
+    <div
+      data-testid="preview-build-strip"
+      data-kind={status.kind}
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5"
+    >
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        data-testid="preview-install-build"
+        onClick={build.run}
+        disabled={disabled}
+        title={build.problem ?? "Run npm install and npm run build inside the guest"}
+        className="gap-1.5"
+      >
+        {running ? (
+          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+        ) : (
+          <Hammer aria-hidden="true" className="size-3.5" />
+        )}
+        {status.kind === "ok" ? "Rebuild" : "Install & build"}
+      </Button>
+
+      {build.busy ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          data-testid="preview-cancel-build"
+          onClick={build.cancel}
+          className="gap-1.5"
+        >
+          <CircleStop aria-hidden="true" className="size-3.5" />
+          Cancel
+        </Button>
+      ) : null}
+
+      <p
+        data-testid="preview-build-status"
+        aria-live="polite"
+        className={cn(
+          "min-w-0 flex-1 truncate font-mono text-[11.5px]",
+          status.kind === "failed" ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {describeBuildProgress(status)}
+      </p>
+
+      {build.problem !== null ? (
+        <span data-testid="preview-build-problem" className="text-muted-foreground text-[11.5px]">
+          {build.problem}
+        </span>
+      ) : null}
     </div>
   );
 }

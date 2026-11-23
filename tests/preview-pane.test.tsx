@@ -23,6 +23,7 @@ import {
   toPreviewState,
 } from "../src/ui/preview-pane";
 import type { AppPreviewControl } from "../src/ui/use-app-preview";
+import type { BuildControl } from "../src/ui/use-build";
 
 function render(phase: PreviewPhase, available = true): string {
   return renderToStaticMarkup(
@@ -259,5 +260,76 @@ describe("PreviewPane with a running app", () => {
     expect(html).not.toContain('data-testid="preview-run-app"');
     expect(html).not.toContain('data-testid="preview-stop-app"');
     expect(html).not.toContain('data-testid="preview-app-status"');
+  });
+});
+
+describe("build strip", () => {
+  function control(overrides: Partial<BuildControl> = {}): BuildControl {
+    return {
+      status: { kind: "none" },
+      busy: false,
+      problem: null,
+      run: () => undefined,
+      cancel: () => undefined,
+      port: null,
+      ...overrides,
+    };
+  }
+
+  function renderWithBuild(build: BuildControl): string {
+    return renderToStaticMarkup(
+      <PreviewPane phase={ready} onRefresh={() => undefined} available build={build} />,
+    );
+  }
+
+  it("is absent when the caller has no build, so the old pane is unchanged", () => {
+    const html = render(ready);
+
+    expect(html).not.toContain('data-testid="preview-build-strip"');
+    expect(html).not.toContain('data-testid="preview-install-build"');
+  });
+
+  it("says no build has run yet, and offers the button that fixes it", () => {
+    const html = renderWithBuild(control());
+
+    expect(html).toContain('data-testid="preview-build-strip"');
+    expect(html).toContain("No build has run yet.");
+    expect(html).toContain("Install &amp; build");
+    expect(html).not.toContain('data-testid="preview-cancel-build"');
+  });
+
+  it("shows the run's stage and cancel instead of a second start", () => {
+    const html = renderWithBuild(control({ status: { kind: "running", stage: "building" }, busy: true }));
+
+    expect(html).toContain("Building the site in the guest");
+    expect(html).toContain('data-testid="preview-cancel-build"');
+    // One control for one run: the start button is disabled while it is in flight.
+    expect(html).toMatch(/data-testid="preview-install-build"[^>]*disabled/);
+  });
+
+  it("states a failure in the manager's own words, and offers a rebuild", () => {
+    const html = renderWithBuild(
+      control({ status: { kind: "failed", summary: "src/main.ts(3,1): error TS2322" } }),
+    );
+
+    expect(html).toContain("The build failed: src/main.ts(3,1): error TS2322");
+    expect(html).toContain("text-destructive");
+    expect(html).toContain("Install &amp; build");
+  });
+
+  it("labels a successful build with its id and duration, and says Rebuild", () => {
+    const html = renderWithBuild(control({ status: { kind: "ok", id: "build-3", durationMs: 4200 } }));
+
+    expect(html).toContain("Build build-3 succeeded in 4.2 s.");
+    expect(html).toContain("Rebuild");
+  });
+
+  it("disables the button and prints why when the machine cannot build", () => {
+    const problem = "The Linux machine is stopped, so the build has nowhere to run yet.";
+    const html = renderWithBuild(control({ problem }));
+
+    expect(html).toMatch(/data-testid="preview-install-build"[^>]*disabled/);
+    expect(html).toContain('data-testid="preview-build-problem"');
+    expect(html).toContain(problem);
   });
 });
