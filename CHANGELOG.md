@@ -130,6 +130,15 @@ All notable changes to Larpable are documented here. The format follows
 - Guest images are pinned to the installed unkernel release and fetched by
   `bun run fetch:distros`; the runtime decisions that used to say "Alpine" now name the image
   they were measured on.
+- **A published build no longer wears a green `worker` badge.** It appeared the moment the preview
+  worker took a build — the *normal* outcome, painted in the colour `docs/toast.md` reserves for
+  news, and it repeated the debug popover's `Preview` segment. The badge and the toolbar row that
+  held it are gone (`src/ui/preview-pane.tsx`), so the row is absent rather than empty; the
+  guest's amber `guest` badge stays, because a fallback is the case a debugging user needs, and
+  the app preview keeps its own. The controller's answer is still machine-readable as
+  `data-served` on the pane, which is what `scripts/preview-browser-acceptance.ts` reads for its
+  "the preview worker holds the build" check. Asserted by `tests/preview-pane.test.tsx` and
+  `tests/preview-chrome.test.tsx`.
 
 ### Fixed
 
