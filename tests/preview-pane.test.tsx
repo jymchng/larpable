@@ -137,11 +137,14 @@ describe("PreviewPane", () => {
     expect(html).not.toContain("null —");
   });
 
-  it("states that the guest is serving when the worker could not", () => {
+  it("states that the guest is serving, as an attribute rather than a badge", () => {
     const html = render({ ...ready, served: "guest", note: "This browser has no worker." });
 
-    expect(html).toContain('data-testid="preview-served-by"');
-    expect(html).toContain("guest");
+    // The controller's answer is still readable — as the attribute the acceptance run reads. The
+    // warning-coloured `guest` badge was removed on request: in dev mode the guest answers every
+    // request, so it was the pane complaining about the mode the Prod switch exists to provide.
+    expect(html).toContain('data-served="guest"');
+    expect(html).not.toContain('data-testid="preview-served-by"');
   });
 
   it("says nothing about the worker, because the worker is the normal answer", () => {
@@ -158,28 +161,33 @@ describe("PreviewPane", () => {
 });
 
 describe("PreviewToolbar", () => {
-  // The row only exists for the answer that is not the expected one — the guest serving — so
-  // these assertions render that phase. The worker's case is asserted to render nothing.
+  // The row exists for one answer only now — the app server — so a guest-served build (which is
+  // every dev preview) renders no row at all. What is worth asserting is that the controls that
+  // used to live in that row are somewhere real, and that the row does not come back for the two
+  // cases it was removed from.
   const guest: PreviewPhase = { ...ready, served: "guest", note: "This browser has no worker." };
 
   it("has no publish button of its own any more", () => {
     // Removed on request: the circling arrow in the browser bar publishes, and a second green
     // button in this row was the same job in a different place.
-    const html = renderToStaticMarkup(<PreviewToolbar phase={guest} />);
+    const html = render(guest);
 
     expect(html).not.toContain('data-testid="preview-build"');
     expect(html).not.toContain("Rebuild preview");
-    expect(html).toContain('data-testid="preview-served-by"');
+    // The arrow that does the job is in the chrome, and it is enabled whenever a build *can* be
+    // published — which is what makes it a publish control and not only a reload.
+    expect(html).toContain('data-testid="preview-reload"');
+    expect(html).not.toContain('data-testid="preview-toolbar"');
   });
 
   it("has handed the device control to the browser chrome", () => {
     // The three presets used to live here, in the same row as "Preview build". They are a
     // browser's device toolbar now (`preview-chrome.tsx`), so the pane has one place that
     // sizes the frame and states the size, not two.
-    const html = renderToStaticMarkup(<PreviewToolbar phase={guest} />);
+    const html = render(guest);
 
-    expect(html).not.toContain('data-testid="preview-viewports"');
-    expect(html).toContain('data-testid="preview-served-by"');
+    expect(html).toContain('data-testid="preview-viewports"');
+    expect(html).not.toContain('data-testid="preview-toolbar"');
   });
 
   it("renders no row at all when the worker holds the build", () => {

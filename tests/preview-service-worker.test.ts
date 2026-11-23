@@ -19,10 +19,13 @@ import {
 // The worker is a plain module with no imports, which is what makes it importable here.
 import {
   PREVIEW_PREFIX,
+  claimForward,
   clearSnapshot,
   currentBuildId,
+  forwardRequest,
   handlePreviewRequest,
   installSnapshot,
+  settleForward,
 } from "../public/preview-sw.js";
 
 type WorkerFile = { path: string; body: Uint8Array | string; headers?: Record<string, string> };
@@ -289,5 +292,80 @@ describe("installSnapshot", () => {
     );
     expect(response?.status).toBe(404);
     clearSnapshot();
+  });
+});
+
+/**
+ * Forwarding, and the one thing a worker cannot know by itself.
+ *
+ * A forwarded session lives in the *page*, not in the worker: the worker's memory does not survive
+ * a restart (Chromium stops an idle worker after ~30 s, and a new script version replaces it), so a
+ * preview that had been attached and working could revert to "No preview build has been published
+ * yet" with nothing to explain it. Hence the claim: the worker asks, the page that owns the session
+ * answers in one hop, and only then does the long budget for the guest apply. These tests hold the
+ * three outcomes together — nobody claims (snapshot answer), somebody claims and answers (their
+ * bytes), somebody claims and goes quiet (504, not a hang).
+ */
+describe("forwardRequest", () => {
+  const request = () => new Request(`https://larpable.netlify.app${PREVIEW_PREFIX}/dev-1/`);
+
+  it("answers from the snapshot path when no page claims the request", async () => {
+    // The fallback is what this worker would have replied before forwarding existed, so a session
+    // nobody forwards is answered exactly as it always was — just after the ownership window.
+    const response = await forwardRequest(request(), {
+      requestId: "own-1",
+      post: () => undefined,
+      ownershipMs: 5,
+      fallback: () => new Response("no build yet", { status: 503 }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("no build yet");
+  });
+
+  it("serves the claiming page's bytes, however slow the guest is", async () => {
+    const response = forwardRequest(request(), {
+      requestId: "own-2",
+      post: () => undefined,
+      ownershipMs: 5,
+      timeoutMs: 1_000,
+      fallback: () => new Response("no build yet", { status: 503 }),
+    });
+
+    // The claim arrives at once; the bytes arrive later than the ownership window, which is the
+    // whole point: a first Vite compile takes seconds, and it must not lose its own session.
+    expect(claimForward({ requestId: "own-2" })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    settleForward({
+      requestId: "own-2",
+      status: 200,
+      headers: { "content-type": "text/html" },
+      body: new TextEncoder().encode("<html>vite</html>").buffer,
+    });
+
+    const settled = await response;
+    expect(settled.status).toBe(200);
+    expect(settled.headers.get("x-larpable-served-by")).toBe("app");
+    expect(await settled.text()).toBe("<html>vite</html>");
+  });
+
+  it("turns a claimed-but-unanswered request into a 504 instead of a hang", async () => {
+    const response = forwardRequest(request(), {
+      requestId: "own-3",
+      post: () => undefined,
+      ownershipMs: 100,
+      timeoutMs: 5,
+      fallback: () => new Response("no build yet", { status: 503 }),
+    });
+    claimForward({ requestId: "own-3" });
+
+    const settled = await response;
+    expect(settled.status).toBe(504);
+    expect(await settled.text()).toContain("did not answer");
+  });
+
+  it("ignores a claim for a request it is not waiting on", () => {
+    expect(claimForward({ requestId: "never-sent" })).toBe(false);
+    expect(settleForward({ requestId: "never-sent", status: 200 })).toBe(false);
   });
 });

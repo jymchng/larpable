@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FORWARD_CLAIM_MESSAGE,
   FORWARD_REPLY_MESSAGE,
   FORWARD_REQUEST_MESSAGE,
   attachPreviewForwarder,
@@ -17,10 +18,12 @@ function container(): {
   container: { addEventListener: (type: "message", listener: Listener) => void; removeEventListener: (type: "message", listener: Listener) => void };
   deliver: (data: unknown) => void;
   replies: unknown[];
+  claims: unknown[];
   listeners: () => number;
 } {
   const listeners = new Set<Listener>();
   const replies: unknown[] = [];
+  const claims: unknown[] = [];
   return {
     container: {
       addEventListener: (type, listener) => {
@@ -32,10 +35,22 @@ function container(): {
     },
     deliver: (data) => {
       for (const listener of listeners) {
-        listener({ data, source: { postMessage: (message) => replies.push(message) } });
+        listener({
+          data,
+          source: {
+            postMessage: (message) => {
+              // The page says two things per forwarded request now: "this session is mine" and
+              // then the bytes. Keeping them apart is what lets a test assert each one.
+              const kind = (message as { type?: string }).type;
+              if (kind === FORWARD_CLAIM_MESSAGE) claims.push(message);
+              else replies.push(message);
+            },
+          },
+        });
       }
     },
     replies,
+    claims,
     listeners: () => listeners.size,
   };
 }
@@ -93,6 +108,11 @@ describe("attachPreviewForwarder", () => {
     expect(reply.headers["content-type"]).toContain("text/html");
     expect(new TextDecoder().decode(new Uint8Array(reply.body))).toBe("<h1>/_next/static/x.js</h1>");
     expect(forwarder.answered()).toBe(1);
+    // The claim comes first, and it is what tells the worker this session is being forwarded at
+    // all: without it the worker answers from the published-build path once its ownership window
+    // closes, which is the "No preview build has been published yet" a user sees when a worker
+    // restarts between attaching and the first request.
+    expect(harness.claims).toEqual([{ type: FORWARD_CLAIM_MESSAGE, requestId: "r1" }]);
   });
 
   it("turns a failure into a 502 the pane can show, and records it", async () => {

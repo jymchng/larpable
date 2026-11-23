@@ -201,6 +201,24 @@ export function clearSnapshot() {
  */
 const FORWARD_TIMEOUT_MS = 30_000;
 
+/**
+ * How long the worker waits for a page to *claim* a forward request before it answers from the
+ * snapshot path instead.
+ *
+ * The claim exists because the worker cannot know on its own whether a session is being
+ * forwarded. The page that forwards it holds that fact, and a worker's memory does not survive a
+ * restart: Chromium stops an idle worker after about thirty seconds, and a new script version
+ * replaces the old instance outright. Storing the session in a variable therefore meant that a
+ * preview which had been attached — and which had been working — could revert, silently, to the
+ * snapshot path's "No preview build has been published yet" the moment the worker was replaced,
+ * with nothing in the pane to explain it. So the worker asks the page for every request it cannot
+ * answer from a published build, and the page that owns the session claims it immediately (one
+ * message hop). No claim inside this window means no page is forwarding this session, and the
+ * snapshot answer is then the honest one — which is also why a stale frame still gets its 409
+ * rather than a thirty-second wait.
+ */
+const FORWARD_OWNERSHIP_MS = 2_000;
+
 /** The session a running app is being served under, or null in static mode. */
 let forwarder = null;
 /** Requests waiting for a page's answer, keyed by request id. */
@@ -230,32 +248,58 @@ export function forwardResponse(reply) {
 }
 
 /**
- * Ask the page for one request's bytes, with a budget.
+ * Ask the page for one request's bytes, with a budget and an ownership window.
  *
- * The timeout is not decoration: an iframe waiting on a page that is itself waiting on a
- * guest app that never answers would hang forever, and a hanging preview looks like a
- * frozen tab. 504 says "the app did not answer", which is the truth.
+ * Two timers, because there are two different questions. The first is "is any page forwarding
+ * this session at all", and it is answered by the page's claim in milliseconds or not at all —
+ * `options.fallback()` is the snapshot path's own answer, which is what this worker would have
+ * replied before forwarding existed. The second is "the page owns it, so how long may the guest
+ * take", and only starts once a claim arrives: an iframe waiting on a page that is itself waiting
+ * on a guest app that never answers would hang forever, and a hanging preview looks like a frozen
+ * tab. 504 says "the app did not answer", which is the truth.
  */
 export function forwardRequest(request, options) {
   const requestId =
     options.requestId ?? `f-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
   const timeoutMs = options.timeoutMs ?? FORWARD_TIMEOUT_MS;
+  const ownershipMs = options.ownershipMs ?? FORWARD_OWNERSHIP_MS;
+
+  const tooSlow = () =>
+    textResponse(
+      504,
+      `The app did not answer for ${request.url} within ${String(Math.round(timeoutMs / 1000))} s. ` +
+        "It may still be compiling; reload the preview.",
+    );
 
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      pendingForwards.delete(requestId);
-      resolve(
-        textResponse(
-          504,
-          `The app did not answer for ${request.url} within ${String(Math.round(timeoutMs / 1000))} s. ` +
-            "It may still be compiling; reload the preview.",
-        ),
-      );
-    }, timeoutMs);
+    let timer = null;
+    let settled = false;
 
-    pendingForwards.set(requestId, (reply) => {
-      clearTimeout(timer);
-      resolve(forwardResponse(reply));
+    const settle = (response) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      pendingForwards.delete(requestId);
+      resolve(response);
+    };
+
+    timer = setTimeout(
+      () => settle(options.fallback === undefined ? tooSlow() : options.fallback()),
+      ownershipMs,
+    );
+
+    pendingForwards.set(requestId, {
+      /** A page said "this session is mine": the guest now has a real budget. */
+      claim() {
+        if (settled) return;
+        if (timer !== null) clearTimeout(timer);
+        timer = setTimeout(() => settle(tooSlow()), timeoutMs);
+      },
+      /** The page's bytes. */
+      reply(reply) {
+        settle(forwardResponse(reply));
+      },
     });
 
     options.post({
@@ -270,10 +314,17 @@ export function forwardRequest(request, options) {
 
 /** Resolve a pending forward with the page's answer. Returns false for an unknown id. */
 export function settleForward(message) {
-  const resolve = pendingForwards.get(message.requestId);
-  if (resolve === undefined) return false;
-  pendingForwards.delete(message.requestId);
-  resolve(message);
+  const pending = pendingForwards.get(message.requestId);
+  if (pending === undefined) return false;
+  pending.reply(message);
+  return true;
+}
+
+/** Record that a page owns this request's session, so the long budget applies. */
+export function claimForward(message) {
+  const pending = pendingForwards.get(message.requestId);
+  if (pending === undefined) return false;
+  pending.claim();
   return true;
 }
 
@@ -311,6 +362,8 @@ if (inServiceWorker) {
     } else if (message.type === "larpable:preview:forward:install") {
       const buildId = installForwarder(message);
       event.source?.postMessage?.({ type: "larpable:preview:forward:installed", buildId });
+    } else if (message.type === "larpable:preview:forward:claim") {
+      claimForward(message);
     } else if (message.type === "larpable:preview:forward:reply") {
       settleForward(message);
     }
@@ -326,26 +379,39 @@ if (inServiceWorker) {
     // `null` means "not a preview request": let the network have it, untouched.
     if (snapshotAnswer === null) return;
 
-    // Server mode takes precedence for its own session: its bytes do not exist in any
-    // snapshot, so a static 404/503 here would be a lie about a running app.
     const target = parsePath(request.url);
-    const session = forwarderBuildId();
-    if (forwarder !== null && target !== null && target.buildId === session) {
-      event.respondWith(
-        forwardRequest(request, {
-          timeoutMs: forwarder.timeoutMs,
-          post: (message) => {
-            // Every client is asked: the frame's requests may be attributed to a page the
-            // worker cannot single out, and a page that is not the app ignores the message.
-            void self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then((clients) => {
-              for (const client of clients) client.postMessage(message);
-            });
-          },
-        }),
-      );
+    if (target === null) {
+      event.respondWith(snapshotAnswer);
       return;
     }
 
-    event.respondWith(snapshotAnswer);
+    // A published build that answers *this* session needs no round trip.
+    const published = snapshot !== null && snapshot.buildId === target.buildId;
+    // The session this worker was told about, when it still remembers. It is a fast path, not the
+    // mechanism: a worker instance that started after the page attached has no memory of the
+    // session at all, and the page is the only thing that can say whether one is being forwarded.
+    const installed = forwarder !== null && forwarder.buildId === target.buildId;
+
+    if (published && !installed) {
+      event.respondWith(snapshotAnswer);
+      return;
+    }
+
+    // Everything else is asked of the pages. The page that owns the session claims it in one
+    // message hop; a page that does not own it stays silent, and `FORWARD_OWNERSHIP_MS` later the
+    // snapshot answer goes out — which is what a stale frame has always got.
+    event.respondWith(
+      forwardRequest(request, {
+        ...(forwarder === null ? {} : { timeoutMs: forwarder.timeoutMs }),
+        fallback: () => snapshotAnswer,
+        post: (message) => {
+          // Every client is asked: the frame's requests may be attributed to a page the
+          // worker cannot single out, and a page that is not the app ignores the message.
+          void self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then((clients) => {
+            for (const client of clients) client.postMessage(message);
+          });
+        },
+      }),
+    );
   });
 }

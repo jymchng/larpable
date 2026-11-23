@@ -21,6 +21,19 @@ export const FORWARD_REQUEST_MESSAGE = "larpable:preview:forward";
 export const FORWARD_REPLY_MESSAGE = "larpable:preview:forward:reply";
 
 /**
+ * The page saying "that request's session is mine", before it has the bytes.
+ *
+ * The worker cannot know which sessions are being forwarded: that fact belongs to the page, and a
+ * worker's memory does not survive a restart (Chromium stops an idle worker after ~30 s, and a new
+ * script version replaces it). So the worker asks the pages, and gives itself a short window
+ * (`FORWARD_OWNERSHIP_MS` in `public/preview-sw.js`) to be told that somebody owns the request
+ * before it answers from the published-build path — which, for a forwarded session, is the
+ * misleading "No preview build has been published yet". This claim is that answer, and it is sent
+ * as soon as the session id matches, not when the guest finally replies.
+ */
+export const FORWARD_CLAIM_MESSAGE = "larpable:preview:forward:claim";
+
+/**
  * Told to the worker so it knows which session it forwards.
  *
  * It is the third leg of the handshake: the page listens (`attachPreviewForwarder`), the worker
@@ -141,6 +154,12 @@ export function attachPreviewForwarder(options: AttachForwarderOptions): Preview
       });
       return;
     }
+
+    // Claimed before the guest is asked, not after: the worker is deciding *now* whether any page
+    // forwards this session, and a claim that arrived with the bytes would arrive after the worker
+    // had already answered from the published-build path. One message hop, so a slow dev server
+    // (a first Vite compile) cannot lose its session to a timeout.
+    event.source?.postMessage({ type: FORWARD_CLAIM_MESSAGE, requestId });
 
     void (async () => {
       try {

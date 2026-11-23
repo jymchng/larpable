@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { attachGuestServer } from "../src/preview/attach";
 import type { PreviewWorkerContainer, PreviewWorkerRegistration } from "../src/preview/client";
 import type { MessageContainer } from "../src/preview/forwarder";
+import { FORWARD_CLAIM_MESSAGE, FORWARD_REPLY_MESSAGE } from "../src/preview/forwarder";
 
 interface Harness {
   requested: string[];
@@ -22,6 +23,16 @@ interface Harness {
   deliver(data: unknown, source: { postMessage(message: unknown): void }): void;
   /** How many listeners the page currently has. */
   listeners(): number;
+}
+
+/**
+ * The page's two answers, kept apart.
+ *
+ * Every forwarded request now gets a claim first ("this session is mine") and the bytes second, so
+ * a test that counts "replies" must say which of the two it means.
+ */
+function ofType(messages: unknown[], type: string): unknown[] {
+  return messages.filter((message) => (message as { type?: string }).type === type);
 }
 
 function workerContainer(): {
@@ -185,10 +196,15 @@ describe("attachGuestServer", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(h.requested.at(-1)).toBe("http://127.0.0.1:1234/app");
-    expect(replies).toHaveLength(1);
-    expect(replies[0]?.status).toBe(200);
+    expect(ofType(replies, FORWARD_REPLY_MESSAGE)).toHaveLength(1);
+    const [answer] = ofType(replies, FORWARD_REPLY_MESSAGE) as {
+      status: number;
+      headers: Record<string, string>;
+      body: ArrayBuffer | null;
+    }[];
+    expect(answer?.status).toBe(200);
     expect(h.attach.attach.answered()).toBe(1);
-    const body = new TextDecoder().decode(new Uint8Array(replies[0]?.body ?? new ArrayBuffer(0)));
+    const body = new TextDecoder().decode(new Uint8Array(answer?.body ?? new ArrayBuffer(0)));
     // Root-absolute URLs are rebased onto the preview prefix, or the page loads the *app's*
     // stylesheet and renders unstyled.
     expect(body).toContain("/__preview__/dev-1/assets/x.css");
@@ -278,8 +294,9 @@ describe("attachGuestServer", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(requested.at(-1)).toBe("http://127.0.0.1:1234/");
-    expect(replies).toHaveLength(1);
-    expect((replies[0] as { status: number }).status).toBe(200);
+    expect(ofType(replies, FORWARD_CLAIM_MESSAGE)).toHaveLength(1);
+    expect(ofType(replies, FORWARD_REPLY_MESSAGE)).toHaveLength(1);
+    expect((ofType(replies, FORWARD_REPLY_MESSAGE)[0] as { status: number }).status).toBe(200);
     expect(result.attach.answered()).toBe(1);
   });
 
