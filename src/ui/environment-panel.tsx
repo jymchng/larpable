@@ -10,9 +10,10 @@
  * all: offering a button that cannot work is the silent failure PRD §5.3 forbids.
  */
 
-import { Check, Cpu, FlaskConical, Loader2, Power, PowerOff, TriangleAlert, X } from "lucide-react";
+import { Check, Cpu, FlaskConical, Info, Loader2, Power, PowerOff, TriangleAlert, X } from "lucide-react";
 
 import type { SelfTestResult } from "@/env/self-test";
+import { handsetNotes, type HandsetFacts } from "@/ui/mobile";
 import type { EnvironmentSnapshot } from "@/env/status";
 import { statusLabel } from "@/env/status";
 import type { SupportReport } from "@/env/support";
@@ -29,6 +30,13 @@ export interface EnvironmentPanelProps {
   selfTestBusy: boolean;
   bootDurationMs?: number | null;
   error: string | null;
+  /**
+   * The device, when the caller knows it. Its notes are the *phone-specific* half of a boot
+   * problem: which engine an iPhone can actually use, how much memory the guest needs, and the
+   * one habit that keeps a mobile tab alive. Absent on a desktop render, which then shows the
+   * plain support problems and nothing extra.
+   */
+  handset?: HandsetFacts;
   onBoot: () => void;
   onSelfTest: () => void;
   onShutdown: () => void;
@@ -52,11 +60,15 @@ export function EnvironmentPanel({
   selfTestBusy,
   bootDurationMs,
   error,
+  handset,
   onBoot,
   onSelfTest,
   onShutdown,
 }: EnvironmentPanelProps) {
   const ready = snapshot.status === "ready";
+  // Computed here rather than passed in so the wording cannot drift between callers, and only
+  // when the caller said which device it is: a desktop has nothing to gain from either note.
+  const notes = handset === undefined ? [] : handsetNotes(support, handset);
 
   return (
     <Card data-testid="environment-panel">
@@ -71,6 +83,25 @@ export function EnvironmentPanel({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {notes.length > 0 && (
+          <ul data-testid="handset-notes" className="space-y-1.5 text-[11.5px]">
+            {notes.map((note) => (
+              <li
+                key={note.text}
+                data-tone={note.tone}
+                className={
+                  note.tone === "warn"
+                    ? "flex gap-2 rounded-md border border-warning/30 bg-warning/10 p-2"
+                    : "text-muted-foreground flex gap-2 p-2"
+                }
+              >
+                <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <span>{note.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {!support.ok ? (
           <div
             data-testid="support-problems"

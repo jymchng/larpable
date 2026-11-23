@@ -36,6 +36,7 @@
  */
 
 import { TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { PREVIEW_IFRAME_SANDBOX } from "@/preview/sandbox";
@@ -45,7 +46,7 @@ import {
   PreviewDeviceToolbar,
   PreviewTabStrip,
 } from "@/ui/preview-chrome";
-import { viewportFor, type ViewportName, type ViewportPreset } from "@/ui/viewport";
+import { frameZoom, viewportFor, type ViewportName, type ViewportPreset } from "@/ui/viewport";
 import { cn } from "@/lib/utils";
 
 // The sandbox string lives in `preview/sandbox.ts` so that the browser acceptance run
@@ -92,6 +93,11 @@ export interface PreviewFrameProps {
    * sees the viewport the preset names (`100vw` in the page is the frame's width).
    */
   style?: CSSProperties | null;
+  /**
+   * The factor the frame is drawn at when the preset is wider than the pane (see
+   * `frameZoom` in `viewport.ts`). `1`/absent means no scaling.
+   */
+  zoom?: number;
   /** For watching where the frame navigates: the address bar reads this element. */
   frameRef?: RefObject<HTMLIFrameElement>;
   /** Fired on every document load, so the address bar updates without waiting for a poll. */
@@ -109,6 +115,7 @@ export function PreviewFrame({
   path = "",
   reloadKey = 0,
   style,
+  zoom = 1,
   frameRef,
   onLoad,
   className,
@@ -128,10 +135,53 @@ export function PreviewFrame({
       referrerPolicy="no-referrer"
       allow=""
       onLoad={onLoad}
-      style={style ?? undefined}
+      // `zoom` keeps the frame's own layout width (the preset's CSS pixels) while shrinking the
+      // box it occupies, so a 834-px tablet preview is legible on a 390-px phone instead of
+      // forcing the pane to scroll sideways.
+      style={zoom === 1 ? (style ?? undefined) : { ...style, zoom }}
       className={cn("bg-background size-full border-0", className)}
     />
   );
+}
+
+/**
+ * The scale the frame should be drawn at, measured from the box it lives in.
+ *
+ * Measured rather than derived from the viewport width: the pane's own width is what matters, and
+ * on a phone the pane is narrower than the window (padding, the switcher, a scrollbar). One
+ * ResizeObserver on the box is enough — the pane resizes when the device toolbar changes preset,
+ * when the split is dragged, and when the window is rotated.
+ *
+ * A desktop preset has no fixed width (`viewport.width === null`) and fills the pane, so it is
+ * never scaled; `frameZoom` decides the rest, including the floor below which a scrollbar is the
+ * more honest answer than an illegible page.
+ */
+function useFitZoom(
+  box: RefObject<HTMLDivElement | null>,
+  viewport: ViewportPreset,
+): number {
+  const [zoom, setZoom] = useState(1);
+  const frameWidth = viewport.width;
+
+  useEffect(() => {
+    const element = box.current;
+    if (element === null || frameWidth === null) {
+      setZoom(1);
+      return;
+    }
+    const measure = (): void => {
+      setZoom(frameZoom(element.clientWidth, frameWidth));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [box, frameWidth]);
+
+  return zoom;
 }
 
 /** The frame's origin, when this code is running in a browser. Null in a static render. */
@@ -220,6 +270,10 @@ export function PreviewPanel({
   className,
 }: PreviewPanelProps) {
   const ready = state.kind === "ready";
+  // A fixed-preset frame (tablet, mobile) can be wider than a phone's pane. Measuring the box
+  // lets the frame be drawn at a factor that fits, and the toolbar prints the factor.
+  const frameBox = useRef<HTMLDivElement | null>(null);
+  const zoom = useFitZoom(frameBox, viewport);
   const buildId = state.kind === "ready" ? state.buildId : null;
   const address = buildId === null ? "" : addressFor(buildId, path);
   const title = ready ? (state.title ?? "Website preview") : "Preview";
@@ -244,7 +298,7 @@ export function PreviewPanel({
         reloadDisabled={!ready}
       />
 
-      <PreviewDeviceToolbar viewport={viewport} onChange={onViewport} />
+      <PreviewDeviceToolbar viewport={viewport} onChange={onViewport} zoom={zoom} />
 
       {toolbar}
       {strip}
@@ -252,7 +306,9 @@ export function PreviewPanel({
       {ready ? (
         <div
           data-testid="preview-frame-box"
+          ref={frameBox}
           data-sized={frameStyle === undefined || frameStyle === null ? "false" : "true"}
+          data-zoom={zoom < 1 ? zoom.toFixed(2) : "1"}
           className={cn(
             "relative min-h-0 flex-1",
             frameStyle !== undefined && frameStyle !== null && "flex items-center justify-center overflow-auto",
@@ -263,7 +319,11 @@ export function PreviewPanel({
             title={state.title}
             path={framePath ?? path}
             reloadKey={reloads}
+            // `zoom` rather than a transform: the layout box shrinks with it, so a scaled frame
+            // neither scrolls the pane nor overflows it, and the iframe still lays its document
+            // out at the preset's width (which is the whole point of the preset).
             style={frameStyle ?? null}
+            zoom={zoom}
             {...(frameRef !== undefined ? { frameRef } : {})}
             {...(onFrameLoad !== undefined ? { onLoad: onFrameLoad } : {})}
             className={
@@ -276,7 +336,14 @@ export function PreviewPanel({
       ) : (
         <div
           data-testid="preview-placeholder"
-          className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center"
+          /*
+            `min-h-0 overflow-y-auto`: in landscape at 844 x 390 this pane is about 196 px tall
+            once the tab strip, address bar and device toolbar have taken theirs, and this
+            placeholder is ~163 px of icon and copy. A plain `flex-1` child keeps its content's
+            min-height, so the pane grew to 574 px inside a 390 px window and — `body` is
+            `overflow: hidden` — the explanation at the bottom was clipped, not scrolled.
+          */
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center"
         >
           {state.kind === "error" ? (
             <>

@@ -2,8 +2,21 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      `viewport-fit=cover` lets the shell paint under the notch and use `env(safe-area-inset-*)`
+      (see `src/ui/globals.css`); without it iOS letterboxes the page and those insets are always
+      0. `interactive-widget=resizes-content` asks Chrome on Android to shrink the layout viewport
+      when the keyboard opens instead of sliding the prompt box underneath it; iOS ignores the
+      hint, which is why `useAppHeight` also measures `visualViewport`.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Larpable</title>
+    <!-- The two theme colours a phone paints its own chrome with; both are the app's background. -->
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101218" media="(prefers-color-scheme: dark)" />
     <meta
       name="description"
       content="Larpable — describe a website, and an autonomous agent builds it inside a Linux environment running in your browser."

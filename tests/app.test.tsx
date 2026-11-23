@@ -135,7 +135,9 @@ describe("Dashboard", () => {
     const html = renderDashboard();
 
     expect(html).toContain('data-testid="diagnostics-toggle"');
-    expect(html).toContain('aria-expanded="true"');
+    // Closed until asked for: the report is debugging, not product, and it no longer
+    // occupies a band above the footer.
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-controls="diagnostics-body"');
     expect(html).toContain('id="diagnostics-body"');
   });
@@ -230,6 +232,33 @@ describe("Dashboard §13 layout", () => {
     expect(html.indexOf('data-testid="injected-chat"')).toBeGreaterThan(
       html.indexOf('data-testid="injected-settings"'),
     );
+  });
+
+  it("puts the provider behind a cog beside the Agent heading, closed until asked for", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        settings={<div data-testid="injected-settings" />}
+        chat={<div data-testid="injected-chat" />}
+      />,
+    );
+
+    // A disclosure, not a banner: one icon button with a name, a state and a target.
+    expect(html).toContain('data-testid="settings-toggle"');
+    expect(html).toContain('aria-label="Provider settings"');
+    expect(html).toContain('title="Provider, model and API key"');
+    expect(html).toMatch(/data-testid="settings-toggle"[^>]*aria-expanded="false"/);
+    expect(html).toMatch(/data-testid="settings-toggle"[^>]*aria-controls="settings-region"/);
+    // The cog carries the settings, and the settings start hidden but present.
+    expect(html.indexOf('data-testid="settings-toggle"')).toBeLessThan(
+      html.indexOf('data-testid="injected-settings"'),
+    );
+    expect(html).toMatch(/id="settings-region" class="hidden"/);
+    // The heading keeps naming the pane for a screen reader even where it is not painted.
+    expect(html).toContain('id="agent-heading"');
   });
 
   it("offers a real separator with the split's own bounds announced", () => {

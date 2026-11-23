@@ -136,20 +136,102 @@
     @apply border-border outline-ring/50;
   }
 
+  /*
+   * The notch: a phone's safe area is where the status bar, the home indicator and (in
+   * landscape) the rounded corners live. Published as variables once, so a component can say
+   * `pb-[max(0.5rem,var(--safe-bottom))]` instead of repeating `env()` — and so a browser
+   * without `env()` support gets `0px`, which is the same layout this page had before.
+   */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
   html,
   body,
   #root {
     height: 100%;
   }
 
+  html {
+    /* iOS Safari inflates text in landscape unless it is told not to; this page is a tool
+       window, and its 11 px mono readouts are chosen, not accidental. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     /* A dev tool lives in its own window; never let a stray wide element scroll the page. */
     overflow: hidden;
+    /* A rubber-banding page under a virtual machine feels broken; and a grey flash on every
+       tap reads as a disabled control, which this app's buttons are not. */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Never hide focus: the agent controls a real machine, so keyboard users need it. */
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+/*
+ * One pane at a time on a phone.
+ *
+ * Below the laptop breakpoint (Tailwind's `lg`, 1024 px) the two panes stop being columns and
+ * become stages: the switcher's `data-stage` decides which of them is on screen. Keyed on an
+ * attribute rather than a React conditional for three reasons — both panes stay mounted (a reply
+ * keeps streaming while the preview is being read), the rule applies before hydration, and a
+ * browser that does not understand the query at all falls back to the stacked layout the markup
+ * describes, which is usable rather than blank.
+ *
+ * `>` from `[data-stage]` reaches only the panes, never a nested element that happens to carry a
+ * `data-pane` in some future component.
+ */
+@media (max-width: 1023.98px) {
+  [data-stage="agent"] > [data-pane]:not([data-pane="agent"]),
+  [data-stage="preview"] > [data-pane]:not([data-pane="preview"]) {
+    display: none;
+  }
+}
+
+
+/*
+ * A phone in landscape has a short pane, and the preview has more chrome than fits.
+ *
+ * Measured at 844 x 390 with the preview stage selected: the pane is 196 px tall, and its tab
+ * strip (29), browser bar (53), device toolbar (55), publish row (61) and build strip (57) come
+ * to 255 px before any content. The rows cannot usefully shrink, and because `body` is
+ * `overflow: hidden` the overflow did not scroll — it grew the document to 574 px and clipped
+ * the frame and its empty state below the fold, unreachable.
+ *
+ * So under 500 px of height the pane becomes the scroll container and keeps a floor under the
+ * frame, and the one row that repeats something (`PreviewTabStrip` names the build the address
+ * bar already shows) steps aside. Nothing functional is hidden: publish, install & build,
+ * reload, the address and the device presets above 500 px are all still there.
+ */
+@media (max-height: 500px) {
+  [data-pane="preview"] {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* `flex-shrink: 0` keeps each row at its own height inside the scrolling pane; without it the
+     flex algorithm crushes them to nothing and the pane scrolls an empty column. */
+  [data-pane="preview"] > *,
+  [data-pane="preview"] [data-testid="preview-browser"] > * {
+    flex-shrink: 0;
+  }
+
+  [data-pane="preview"] [data-testid="preview-tab-strip"] {
+    display: none;
+  }
+
+  [data-pane="preview"] [data-testid="preview-frame-box"],
+  [data-pane="preview"] [data-testid="preview-placeholder"] {
+    min-height: 11rem;
   }
 }

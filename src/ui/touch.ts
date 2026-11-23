@@ -11,7 +11,7 @@
  * Why a constant instead of writing `max-lg:size-11` in nine components: the number is a
  * requirement, and a requirement that is copied is a requirement that drifts. `size-11` is
  * 11 x 0.25rem = 2.75rem = 44 px at a 16 px root, which is where `TOUCH_TARGET_MIN_PX` comes
- * from \u2014 the browser's audit in `scripts/mobile-acceptance.ts` re-measures the rendered
+ * from \u2014 the browser's audit in `scripts/mobile-acceptance.ts` (`bun run acceptance:mobile`) re-measures the rendered
  * rectangles, so the arithmetic is checked, not assumed.
  */
 

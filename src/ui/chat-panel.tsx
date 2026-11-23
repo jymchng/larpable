@@ -130,12 +130,26 @@ export function ChatPanel({
                 submit();
               }
             }}
+            // Focusing the box on a phone scrolls the keyboard up over the composer unless the
+            // browser is told to keep it in view; `block: nearest` is the least jarring scroll.
+            onFocus={(event) => {
+              event.currentTarget.scrollIntoView({ block: "nearest" });
+            }}
             rows={2}
             disabled={blocked}
+            // The keyboard's action key says "send" instead of "return", which is the one label
+            // that makes Enter-to-send discoverable without the tooltip nobody has on a phone.
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             placeholder={
               blocked ? "The agent is not available yet." : "Build me a landing page with a hero…"
             }
-            className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2.5 py-2 font-mono text-[12.5px] outline-none focus-visible:ring-[3px] disabled:opacity-60"
+            // 16 px below `lg` is not a style choice: iOS Safari zooms the page when a focused
+            // field's text is smaller than that, and a zoomed app is a broken app. The laptop
+            // size stays 12.5 px, where density is worth more than a magnifier.
+            className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2.5 py-2 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
           />
           {/* Send is the prompt's primary action, so it keeps the filled (primary) variant
               rather than the ghost one: the pictogram is the label, the fill is the emphasis. */}
@@ -174,7 +188,7 @@ function ChatRow({ entry }: { entry: ChatEntry }): ReactNode {
     case "user":
       return (
         <li data-testid="chat-user" className="flex justify-end">
-          <p className="bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5 text-[13px] whitespace-pre-wrap">
+          <p className="bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5 text-[13px] break-words whitespace-pre-wrap">
             {entry.text}
           </p>
         </li>
@@ -185,7 +199,7 @@ function ChatRow({ entry }: { entry: ChatEntry }): ReactNode {
         <li
           data-testid="chat-assistant"
           data-streaming={entry.streaming ? "true" : "false"}
-          className="text-[13px] whitespace-pre-wrap"
+          className="text-[13px] break-words whitespace-pre-wrap"
         >
           {entry.text}
           {entry.streaming ? (
@@ -274,12 +288,12 @@ function ToolRow({ entry }: { entry: ChatToolEntry }): ReactNode {
             Output{entry.truncated ? " (shortened)" : ""}
           </summary>
           {entry.output.length > 0 ? (
-            <pre className="bg-muted/40 mt-1 max-h-40 overflow-auto rounded p-1.5 font-mono text-[10.5px] whitespace-pre-wrap">
+            <pre className="bg-muted/40 mt-1 max-h-40 overflow-auto rounded p-1.5 font-mono text-[10.5px] break-words whitespace-pre-wrap">
               {entry.output}
             </pre>
           ) : null}
           {entry.result !== null ? (
-            <pre className="bg-muted/40 mt-1 max-h-40 overflow-auto rounded p-1.5 font-mono text-[10.5px] whitespace-pre-wrap">
+            <pre className="bg-muted/40 mt-1 max-h-40 overflow-auto rounded p-1.5 font-mono text-[10.5px] break-words whitespace-pre-wrap">
               {entry.result}
             </pre>
           ) : null}

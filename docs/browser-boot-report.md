@@ -100,3 +100,10 @@ bun run acceptance:browser        # starts a dev server if one is not already ru
 The guest's own network access (needed by `npm install`) goes through a Wisp proxy.
 Setting `VITE_LINUX_NETWORK=0` resolves the boot config to `network: "none"` for hosts
 that do not run a proxy.
+
+## On a phone
+
+The boot path above is measured on a desktop browser. What changes on a handset — one pane
+at a time, 44 px targets, and the JSPI/memory/suspended-tab limits that decide whether the
+kernel can boot at all — is [`mobile.md`](mobile.md), with its measurements in
+[`mobile-report.md`](mobile-report.md) and `bun run acceptance:mobile`.

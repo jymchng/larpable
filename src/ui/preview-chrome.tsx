@@ -72,7 +72,7 @@ export function PreviewTabStrip({
         data-build-id={buildId ?? ""}
         data-loaded={loaded ? "true" : "false"}
         className={cn(
-          "flex h-7 max-w-[22rem] min-w-0 items-center gap-1.5 rounded-t-md border border-b-0 px-2.5",
+          "flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-t-md border border-b-0 px-2.5 sm:max-w-[22rem]",
           loaded ? "bg-background" : "bg-muted/60 text-muted-foreground",
         )}
       >
@@ -81,7 +81,9 @@ export function PreviewTabStrip({
         {buildId !== null ? (
           <span
             data-testid="preview-tab-build"
-            className="text-muted-foreground shrink-0 font-mono text-[10.5px]"
+            // The build id is exact and long; on a phone it would push the tab past the pane's
+            // right edge, so it is dropped from the painted strip (the aria-label keeps it).
+            className="text-muted-foreground hidden shrink-0 font-mono text-[10.5px] sm:inline"
             title={`Build ${buildId}`}
           >
             {buildId}
@@ -216,7 +218,9 @@ export function PreviewBrowserBar({
         {origin !== null ? (
           <span
             data-testid="preview-address-origin"
-            className="text-muted-foreground shrink-0 font-mono text-[11px]"
+            // An origin plus a path does not fit in a 390 px omnibox; the path is the part that
+            // changes, so the origin is the part that goes.
+            className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline"
           >
             {origin}
           </span>
@@ -246,6 +250,11 @@ export interface PreviewDeviceToolbarProps {
   viewport: ViewportPreset;
   /** Absent when the caller has no viewport state: the buttons then render unpressable. */
   onChange?: (name: ViewportName) => void;
+  /**
+   * The factor the frame is drawn at when the preset is wider than the pane. `1` (the default)
+   * means "not scaled", and the readout says nothing extra.
+   */
+  zoom?: number;
 }
 
 /**
@@ -259,12 +268,16 @@ export interface PreviewDeviceToolbarProps {
 export function PreviewDeviceToolbar({
   viewport,
   onChange,
+  zoom = 1,
 }: PreviewDeviceToolbarProps): ReactNode {
   const ICONS: Readonly<Record<ViewportName, ReactNode>> = {
     desktop: <Monitor aria-hidden="true" className="size-3.5" />,
     tablet: <Tablet aria-hidden="true" className="size-3.5" />,
     mobile: <Smartphone aria-hidden="true" className="size-3.5" />,
   };
+  // Below 100 % the readout must admit it, or the number describes a frame the user is not
+  // actually looking at that size.
+  const scaled = zoom < 1;
 
   return (
     <div

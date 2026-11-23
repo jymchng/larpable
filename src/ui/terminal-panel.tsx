@@ -67,6 +67,7 @@ import {
   type ClipboardResult,
 } from "@/ui/terminal-clipboard";
 import { TranscriptBuffer } from "@/ui/terminal-transcript";
+import { TOUCH_TARGET_BLOCK, TOUCH_TARGET_ICON } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 
 export interface TerminalPanelProps {
@@ -354,7 +355,9 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
                 aria-label={`${tab.label} (${status})`}
                 title={`${tab.label} (${status})`}
                 onClick={() => selectTab(tab.id)}
-                className="font-mono text-[11px]"
+                // A tab is a word, not a pictogram, so it takes the block floor: 44 px tall below
+                // `lg` (a 17 px baseline is a thumb miss), its own text height above it.
+                className={cn("font-mono text-[11px]", TOUCH_TARGET_BLOCK)}
               >
                 {tab.label}
               </button>
@@ -381,7 +384,12 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
           title="New shell tab"
           onClick={openTab}
           disabled={!ready}
-          className="flex size-8 shrink-0 items-center justify-center rounded text-slate-400 outline-none hover:bg-slate-800 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70 disabled:opacity-40"
+          // 32 px is a pointer's size; a thumb gets the 44 px floor below `lg`, same as every
+          // other icon button in the app.
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded text-slate-400 outline-none hover:bg-slate-800 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70 disabled:opacity-40",
+            TOUCH_TARGET_ICON,
+          )}
         >
           <Plus aria-hidden="true" className="size-4" />
         </button>
@@ -446,7 +454,10 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         data-testid="terminal-keys"
         role="toolbar"
         aria-label="Terminal keys"
-        className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 px-2 py-1"
+        // One row that must stay on one line, so the keys share the width: at 44 px per key
+        // eight keys plus 2 px gaps fit 390 px exactly, and a wider set scrolls in place rather
+        // than pushing the page sideways.
+        className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 px-2 py-1 max-lg:gap-0.5 max-lg:px-1"
       >
         {TERMINAL_KEYS.map((key) => {
           const armed =
@@ -464,6 +475,9 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
               className={cn(
                 "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] leading-4 transition-colors",
                 "disabled:opacity-40",
+                // A keycap is 22 px tall, which is right for a hardware keyboard's row and wrong
+                // for a thumb: below `lg` each key is a 44 x 44 target, still in one row.
+                TOUCH_TARGET_ICON,
                 armed
                   ? "border-sky-400 bg-sky-500/20 text-sky-200"
                   : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500 hover:text-slate-100",

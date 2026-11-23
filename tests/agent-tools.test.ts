@@ -31,7 +31,7 @@ import {
 import {
   ensureNetlifyConfigTool,
 } from "../src/agent/tools/netlify";
-import { buildProjectTool, installDependenciesTool } from "../src/agent/tools/build";
+import { buildProjectTool } from "../src/agent/tools/build";
 import { publishPreviewTool, previewStatusTool } from "../src/agent/tools/preview";
 import { projectStatusTool, toolsFor } from "../src/agent/tools/index";
 import type { BuildPort, NetlifyPort, PreviewPort, ToolContext } from "../src/agent/tools/types";
@@ -295,13 +295,14 @@ describe("shell tools", () => {
 });
 
 describe("build, Netlify and preview tools", () => {
-  it("reports an install and a build", async () => {
-    const context = contextFor(await readyEnvironment(), { build: buildStub() });
+  it("offers no install tool: installing is a command, not a capability", async () => {
+    const names = toolsFor(contextFor(await readyEnvironment())).map((tool) => tool.definition.name);
+    expect(names).not.toContain("install_dependencies");
+    expect(names).toContain("execute_command");
+  });
 
-    const install = await installDependenciesTool.run({}, context);
-    expect(install.ok).toBe(true);
-    expect(install.content).toContain("npm ci");
-    expect(install.content).toContain("added 128 packages");
+  it("reports a build", async () => {
+    const context = contextFor(await readyEnvironment(), { build: buildStub() });
 
     const build = await buildProjectTool.run({}, context);
     expect(build.ok).toBe(true);

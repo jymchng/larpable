@@ -44,7 +44,6 @@ const TOOLS: readonly ToolDefinition[] = [
   tool("read_file"),
   tool("write_file"),
   tool("execute_command"),
-  tool("install_dependencies"),
   tool("build_project"),
   tool("ensure_netlify_config"),
   tool("publish_preview"),
@@ -65,7 +64,7 @@ describe("the procedures are PRD §10's, in order, with tool names", () => {
     const steps = CREATE_PROCEDURE.join("\n");
     expect(steps).toContain("scaffold_project"); // 3: scaffold
     expect(steps).toContain("write_file"); // 4: source files
-    expect(steps).toContain("install_dependencies"); // 5: install
+    expect(steps).toContain("execute_command"); // 5: install, through the shell
     expect(steps).toContain("ensure_netlify_config"); // 6/7: generate and validate
     expect(steps).toContain("build_project"); // 8: build
     expect(steps).toContain("publish_preview"); // 11: preview
@@ -74,8 +73,8 @@ describe("the procedures are PRD §10's, in order, with tool names", () => {
 
   it("keeps the numbered order of the PRD (scaffold before install before build before preview)", () => {
     const at = (text: string): number => CREATE_PROCEDURE.findIndex((step) => step.includes(text));
-    expect(at("scaffold_project")).toBeLessThan(at("install_dependencies"));
-    expect(at("install_dependencies")).toBeLessThan(at("ensure_netlify_config"));
+    expect(at("scaffold_project")).toBeLessThan(at("Install dependencies"));
+    expect(at("Install dependencies")).toBeLessThan(at("ensure_netlify_config"));
     expect(at("ensure_netlify_config")).toBeLessThan(at("build_project"));
     expect(at("build_project")).toBeLessThan(at("publish_preview"));
   });

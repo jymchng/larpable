@@ -5,7 +5,7 @@
  * quietly faked the interesting half would prove nothing:
  *
  * - **Real:** the tool set (`scaffold_project`, `write_file`, `edit_file`,
- *   `install_dependencies`, `ensure_netlify_config`, `build_project`, `publish_preview`),
+ *   `execute_command` for the install, `ensure_netlify_config`, `build_project`, `publish_preview`),
  *   the `BuildManager` (command detection, log capture, failure classification, the
  *   entry-point check), `ensureNetlifyConfig` (facts, generation, validation of the file on
  *   disk), the preview controller's state machine, the loop's ordering and validation, the
@@ -383,8 +383,13 @@ describe("§18.3 create: a landing page from nothing to a published build", () =
             { name: "write_file", arguments: { path: "src/style.css", content: CSS } },
           ],
         }),
-        // 4-6: install, configure, build.
-        () => ({ calls: [{ name: "install_dependencies" }] }),
+        // 4-6: install, configure, build. The install is a command, not a tool: that is the
+        // whole point of not having an `install_dependencies` in the registry.
+        () => ({
+          calls: [
+            { name: "execute_command", arguments: { command: "npm install --no-audit --no-fund" } },
+          ],
+        }),
         () => ({ calls: [{ name: "ensure_netlify_config" }] }),
         () => ({ calls: [{ name: "build_project" }] }),
         // 7: publish the build the tool just reported.

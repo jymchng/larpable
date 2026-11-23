@@ -30,7 +30,7 @@ import type { ChatMessage, ToolDefinition } from "@/llm/types";
 
 /** What the session can actually do. Mirrors the ports on `ToolContext`. */
 export interface PromptCapabilities {
-  /** A build manager is available: `install_dependencies` and `build_project` exist. */
+  /** A build manager is available: `build_project` exists. */
   build: boolean;
   /** A Netlify step is available: `ensure_netlify_config` exists. */
   netlify: boolean;
@@ -66,7 +66,7 @@ export const CREATE_PROCEDURE: readonly string[] = [
   "Select an appropriate framework. React + TypeScript + Vite (`react-ts`) is the default; `vue`, `svelte` and `vanilla` are available.",
   "Scaffold the project with `scaffold_project`. Do not run a generator such as `npm create vite`: the templates ship with the app, and the guest's package manager costs minutes on a cold start.",
   "Create the necessary source files with `write_file`. Write real content for the request — a landing page needs its sections, not placeholders.",
-  "Install dependencies with `install_dependencies`. Do this before building, and again after changing `package.json`.",
+  "Install dependencies by running the package manager in the guest with `execute_command` (for example `npm install`). Do this before building, and again after changing `package.json`; there is no separate install tool.",
   "Generate `netlify.toml` with `ensure_netlify_config`.",
   "Verify the deployment configuration. `ensure_netlify_config` validates the file it wrote; a validation error is a problem in the project, not a message to reword.",
   "Execute the production build with `build_project`.",

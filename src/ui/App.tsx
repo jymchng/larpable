@@ -6,6 +6,8 @@ import { summarizeDistro } from "@/env/distro";
 import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
 import { ChatPanel } from "@/ui/chat-panel";
+import { detectHandset } from "@/ui/mobile";
+import { DEFAULT_STAGE, stageFromSearch } from "@/ui/stage";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
 import { PreviewPane } from "@/ui/preview-pane";
@@ -36,6 +38,15 @@ export function App() {
     () => applySupportSimulation(detectSupport(), window.location.search, import.meta.env.DEV),
     [],
   );
+  // Which half of the app a phone opens on, from `?pane=preview` when a link says so. Read once:
+  // the switcher owns the value afterwards, so a deep link does not fight the user's presses.
+  const initialStage = useMemo(
+    () => (typeof window === "undefined" ? DEFAULT_STAGE : stageFromSearch(window.location.search)),
+    [],
+  );
+  // The device, read once: the handset notes are about the hardware, which does not change
+  // during a session, and re-reading a user agent on every render buys nothing.
+  const handset = useMemo(() => detectHandset(), []);
   const environment = useEnvironmentBoot();
   // The preview shares the booted machine with the terminal: same kernel, one HTTP door.
   // It is created lazily and does nothing at all until the user asks for a build.
@@ -96,6 +107,7 @@ export function App() {
       version={__APP_VERSION__}
       support={support}
       environment={environment.snapshot}
+      initialStage={initialStage}
       distro={distro}
       statusBar={<StatusBar input={statusInput} />}
       settings={
@@ -123,6 +135,7 @@ export function App() {
           selfTestBusy={environment.selfTestBusy}
           bootDurationMs={environment.bootDurationMs}
           error={environment.error}
+          handset={handset}
           onBoot={environment.boot}
           onSelfTest={environment.runSelfTest}
           onShutdown={environment.shutdown}

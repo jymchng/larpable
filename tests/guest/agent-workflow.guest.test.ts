@@ -381,7 +381,11 @@ describe.skipIf(!enabled)("§18.3-18.5 in the real guest", () => {
         { name: "write_file", arguments: { path: "src/style.css", content: LANDING_CSS } },
       ],
     }),
-    () => ({ calls: [{ name: "install_dependencies" }] }),
+    () => ({
+      calls: [
+        { name: "execute_command", arguments: { command: "npm install --no-audit --no-fund" } },
+      ],
+    }),
     () => ({ calls: [{ name: "ensure_netlify_config" }] }),
     () => ({ calls: [{ name: "build_project" }] }),
     (s: TurnState) => ({

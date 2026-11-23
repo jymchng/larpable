@@ -144,6 +144,7 @@ security boundary.
 | [`docs/preview.md`](docs/preview.md) | How the preview is served, and why the iframe needs `allow-same-origin` |
 | [`docs/deploy-report.md`](docs/deploy-report.md) | Production deployment measurements and headers |
 | [`docs/feasibility-report.md`](docs/feasibility-report.md) | The measured unkernel probes behind every runtime decision |
+| [`docs/mobile.md`](docs/mobile.md) | What a phone changes: one pane at a time, 44 px targets, and the limits a handset browser has when it cannot boot the kernel |
 
 ## License
 

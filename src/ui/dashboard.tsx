@@ -1,11 +1,12 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronRight, GripVertical, Terminal, TriangleAlert, X } from "lucide-react";
+import { Check, Cog, GripVertical, Terminal, TriangleAlert, X } from "lucide-react";
 
 import type { DistroSummary } from "@/env/distro";
 import type { EnvironmentSnapshot } from "@/env/status";
 import { describeEnvironment } from "@/env/status";
 import type { SupportReport } from "@/env/support";
 import { Badge } from "@/ui/components/badge";
+import { IconButton } from "@/ui/components/icon-button";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
 import { MIN_SPLIT, clampSplit, splitAfterKey, splitFromPointer } from "@/ui/split";
@@ -46,6 +47,12 @@ export interface DashboardProps {
   settings?: ReactNode;
   /** The starting split, in percent. A prop so a test can render a non-default layout. */
   initialSplit?: number;
+  /**
+   * The pane a phone opens on. A prop (and a `?pane=` link) so the layout is a pure function of
+   * its inputs: the switcher's state lives here, but every branch of it can be rendered in a
+   * static-markup test.
+   */
+  initialStage?: PaneStage;
 }
 
 /**
@@ -70,13 +77,23 @@ export function Dashboard({
   statusBar,
   settings,
   initialSplit = 50,
+  initialStage = DEFAULT_STAGE,
 }: DashboardProps) {
-  // Open by default: this report is why a boot button is disabled when it is, and
-  // hiding that behind a collapsed panel would hide the explanation. The user
-  // collapses it once they have read it.
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(true);
+  // The browser report is debugging, not product: it starts closed at every width now that it
+  // lives behind the `d` glyph in the header instead of occupying a band above the footer.
+  const [debugOpen, setDebugOpen] = useState(false);
   const [split, setSplit] = useState(() => clampSplit(initialSplit));
+  // Which pane a phone shows. Both panes stay mounted below, so a run keeps streaming while
+  // the user looks at the preview; the media query in `globals.css` is what hides one of them.
+  const [stage, setStage] = useState<PaneStage>(initialStage);
+  // The provider is chosen once and then read by every turn, so it does not deserve a permanent
+  // band across the conversation: it sits behind the cog in the pane's heading row and is
+  // closed until asked for. Closed by default is the phone's answer too, where four provider
+  // buttons and two fields were the most expensive vertical space in the app.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const splitContainer = useRef<HTMLDivElement | null>(null);
+  // Publishes `--app-height` (the visual viewport, keyboard included) for the shell to read.
+  const visibleHeight = useAppHeight();
 
   const passed = [
     support.probe.jspi,
@@ -103,8 +120,13 @@ export function Dashboard({
   };
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-3 sm:px-6">
+    <div
+      // `h-dvh` is the stylesheet's answer; a measured visual viewport (which on iOS shrinks
+      // when the keyboard opens, and `dvh` often does not) replaces it once there is one.
+      style={{ height: visibleHeight === null ? "100dvh" : `${String(visibleHeight)}px` }}
+      className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip"
+    >
+      <header className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 pt-[max(0.5rem,var(--safe-top))] pb-2 sm:px-6 sm:py-3">
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"
@@ -114,35 +136,200 @@ export function Dashboard({
           <Badge variant="outline" className="font-mono text-[10px]">
             v{version}
           </Badge>
+          {/*
+            The browser report is a debugging aid, not a feature of the product: a person who
+            wants to write a website should never have to scroll past three requirement rows and
+            a boot card to find the prompt box. It lives behind a `d` in a circle beside the
+            wordmark — the one glyph that means "diagnostics" without spending a word — and its
+            content appears as a sheet under the header rather than in the layout, so opening it
+            cannot reflow the panes underneath.
+          */}
+          <IconButton
+            testId="diagnostics-toggle"
+            label={debugOpen ? "Close the browser report" : "Debug: this browser"}
+            hint="Requirements, the Linux image and the boot card"
+            tone="nav"
+            aria-expanded={debugOpen}
+            aria-controls="diagnostics-body"
+            onClick={() => setDebugOpen((open) => !open)}
+            className="ml-1"
+          >
+            <DebugGlyph />
+          </IconButton>
+          {/* The count stays visible even when the sheet is closed: a red dot is the one thing
+              here that changes what the user can do, so it must not be hidden behind a click. */}
+          <StatusDot
+            testId="requirements-status"
+            tone={requirementsTone(passed)}
+            label={`Requirements: ${String(passed)}/3 met`}
+          />
         </div>
-        <p className="text-muted-foreground text-xs sm:text-[13px]">
+        {/* The tagline is the first thing a 360 px header can afford to lose: the panes below
+            say what the product does far better than a sentence about it. */}
+        <p className="text-muted-foreground hidden text-xs sm:block sm:text-[13px]">
           Websites, built inside a Linux machine in your browser.
         </p>
+
+        {/*
+          The sheet itself. Always in the DOM and hidden with a class when closed, so
+          `aria-controls` points at something that exists and the requirement rows can be
+          inspected (by a person or an acceptance run) without a click; `hidden` is what takes it
+          out of the layout and out of the focus order, so a closed report cannot be tabbed into.
+        */}
+        <div
+          id="diagnostics-body"
+          role="region"
+          aria-labelledby="diagnostics-heading"
+          data-open={debugOpen ? "true" : "false"}
+          className={cn(
+            "bg-card absolute inset-x-2 top-full z-50 max-h-[min(70dvh,32rem)] overflow-y-auto rounded-lg border shadow-xl",
+            debugOpen ? undefined : "hidden",
+          )}
+        >
+          <div className="flex items-center justify-between gap-2 border-b px-4 py-1.5">
+            <h2
+              id="diagnostics-heading"
+              className="text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase"
+            >
+              This browser
+            </h2>
+            <IconButton
+              testId="diagnostics-close"
+              label="Close the browser report"
+              tone="muted"
+              onClick={() => setDebugOpen(false)}
+            >
+              <X aria-hidden="true" />
+            </IconButton>
+          </div>
+
+          <div className="grid gap-3 p-4 lg:grid-cols-2">
+            {environmentPanel}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Runtime requirements</CardTitle>
+                <CardDescription>What unkernel needs before a kernel can boot.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <CheckRow
+                  label="WebAssembly JSPI"
+                  ok={support.probe.jspi}
+                  detail={support.probe.jspi ? "available" : "missing"}
+                />
+                <CheckRow
+                  label="Cross-origin isolation"
+                  ok={support.probe.crossOriginIsolated}
+                  detail={support.probe.crossOriginIsolated ? "isolated" : "not isolated"}
+                />
+                <CheckRow
+                  label="SharedArrayBuffer"
+                  ok={support.probe.sharedArrayBuffer}
+                  detail={support.probe.sharedArrayBuffer ? "available" : "missing"}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Linux image</CardTitle>
+                <CardDescription>{distro.detail}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      distro.state === "ready"
+                        ? "success"
+                        : distro.state === "error"
+                          ? "destructive"
+                          : "warning"
+                    }
+                  >
+                    {distro.head}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {support.problems.length > 0 && (
+            <ul className="text-muted-foreground space-y-1.5 px-4 pb-4 text-xs">
+              {support.problems.map((problem) => (
+                <li key={problem} className="flex gap-2">
+                  <X aria-hidden="true" className="text-destructive mt-0.5 size-3.5 shrink-0" />
+                  <span>{problem}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </header>
 
       {statusBar}
 
-      <main ref={splitContainer} className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <StageSwitcher stage={stage} onChange={setStage} previewReady={preview !== undefined} />
+
+      <main
+        ref={splitContainer}
+        data-stage={stage}
+        data-testid="main-panes"
+        className="flex min-h-0 flex-1 flex-col lg:flex-row"
+      >
         <section
+          id="agent-pane"
+          data-pane="agent"
           aria-labelledby="agent-heading"
           data-testid="agent-pane"
           data-basis={split.toFixed(2)}
           style={{ "--agent-basis": `${split.toFixed(2)}%` } as CSSProperties}
-          className="flex min-h-0 flex-1 flex-col lg:flex-none lg:basis-[var(--agent-basis)]"
+          className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-none lg:basis-[var(--agent-basis)]"
         >
-          <h2
-            id="agent-heading"
-            className="text-muted-foreground border-b px-4 py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-6"
-          >
-            Agent
-          </h2>
-          {settings}
-          <div className="flex min-h-0 flex-1 flex-col">
+          {/*
+            The heading row is a strip of chrome, not a banner: `Agent` names the pane at `lg`
+            (where both panes are visible and need naming) and the cog is the pane's one control.
+            The cog is present at every width on purpose — below `lg` the heading is redundant
+            because the stage switcher already says "Agent", but the *setting* would otherwise
+            become unreachable on exactly the screens that need it most.
+          */}
+          <div className="flex items-center justify-between gap-2 border-b px-2 py-1 sm:px-6 sm:py-2.5">
+            <h2
+              id="agent-heading"
+              className="text-muted-foreground hidden text-[11px] font-semibold tracking-[0.1em] uppercase lg:block"
+            >
+              Agent
+            </h2>
+            {settings ? (
+              <IconButton
+                testId="settings-toggle"
+                label={settingsOpen ? "Hide provider settings" : "Provider settings"}
+                hint="Provider, model and API key"
+                tone="nav"
+                aria-expanded={settingsOpen}
+                aria-controls="settings-region"
+                onClick={() => setSettingsOpen((open) => !open)}
+                className="ml-auto"
+              >
+                <Cog aria-hidden="true" />
+              </IconButton>
+            ) : null}
+          </div>
+          {/*
+            Kept mounted and hidden rather than conditionally rendered: `SettingsPanel` owns no
+            focus trap and no request, so unmounting buys nothing, while hiding keeps the
+            provider's `aria-pressed` state readable by anything that inspects the page. The
+            `hidden` class (not just the attribute) is what takes it out of the flex column.
+          */}
+          {settings === undefined ? null : (
+            <div id="settings-region" className={settingsOpen ? undefined : "hidden"}>
+              {settings}
+            </div>
+          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chat}
             {terminal ? (
-              <div className="flex min-h-0 flex-1 flex-col p-3">{terminal}</div>
+              <div className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">{terminal}</div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
                 <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -176,19 +363,29 @@ export function Dashboard({
         </div>
 
         <section
+          id="preview-pane"
+          data-pane="preview"
           aria-labelledby="preview-heading"
-          className="flex min-h-0 flex-1 flex-col lg:min-w-0"
+          className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-0"
         >
           <h2
             id="preview-heading"
-            className="text-muted-foreground border-b px-4 py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-6"
+            className="text-muted-foreground hidden border-b px-4 py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-6 lg:block"
           >
             Preview
           </h2>
           {preview ? (
-            <div className="flex min-h-0 flex-1 flex-col">{preview}</div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">{preview}</div>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+            /*
+              `min-h-0 overflow-y-auto`, not a bare `flex-1`: in landscape at 844 x 390 the panes
+              are 196 px tall, and this empty state is ~163 px of padding and copy. Without the
+              min-height override the flex item refuses to shrink, the section grows past its
+              parent, and because `body` is `overflow: hidden` the explanation below the fold was
+              clipped and unreachable rather than scrolled — measured as a 574 px document in a
+              390 px window.
+            */
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center">
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
               <p className="text-sm font-medium">No production build yet.</p>
               <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -200,99 +397,9 @@ export function Dashboard({
         </section>
       </main>
 
-      <section aria-labelledby="diagnostics-heading" className="border-t bg-card/40">
-        <h2 id="diagnostics-heading" className="sr-only">
-          This browser
-        </h2>
-        <button
-          type="button"
-          data-testid="diagnostics-toggle"
-          aria-expanded={diagnosticsOpen}
-          aria-controls="diagnostics-body"
-          onClick={() => setDiagnosticsOpen((open) => !open)}
-          className="text-muted-foreground hover:bg-muted/60 flex w-full items-center gap-2 border-b px-4 py-2.5 text-left text-[11px] font-semibold tracking-[0.1em] uppercase transition-colors sm:px-6"
-        >
-          <ChevronRight
-            aria-hidden="true"
-            className={cn("size-3.5 transition-transform", diagnosticsOpen && "rotate-90")}
-          />
-          This browser
-          <StatusDot
-            testId="requirements-status"
-            tone={requirementsTone(passed)}
-            label={`Requirements: ${String(passed)}/3 met`}
-            className="ml-auto"
-          />
-        </button>
-
-        {diagnosticsOpen && (
-          <div id="diagnostics-body">
-            <div className="grid gap-3 p-4 sm:p-6 lg:grid-cols-2">
-              {environmentPanel}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Runtime requirements</CardTitle>
-                  <CardDescription>What unkernel needs before a kernel can boot.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <CheckRow
-                    label="WebAssembly JSPI"
-                    ok={support.probe.jspi}
-                    detail={support.probe.jspi ? "available" : "missing"}
-                  />
-                  <CheckRow
-                    label="Cross-origin isolation"
-                    ok={support.probe.crossOriginIsolated}
-                    detail={support.probe.crossOriginIsolated ? "isolated" : "not isolated"}
-                  />
-                  <CheckRow
-                    label="SharedArrayBuffer"
-                    ok={support.probe.sharedArrayBuffer}
-                    detail={support.probe.sharedArrayBuffer ? "available" : "missing"}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Linux image</CardTitle>
-                  <CardDescription>{distro.detail}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        distro.state === "ready"
-                          ? "success"
-                          : distro.state === "error"
-                            ? "destructive"
-                            : "warning"
-                      }
-                    >
-                      {distro.head}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {support.problems.length > 0 && (
-              <ul className="text-muted-foreground space-y-1.5 px-4 pb-4 text-xs sm:px-6">
-                {support.problems.map((problem) => (
-                  <li key={problem} className="flex gap-2">
-                    <X aria-hidden="true" className="text-destructive mt-0.5 size-3.5 shrink-0" />
-                    <span>{problem}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </section>
-
       <footer
         aria-live="polite"
-        className="bg-muted/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t px-4 py-2 font-mono text-[11.5px] sm:px-6"
+        className="bg-muted/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t px-3 pt-2 pb-[max(0.5rem,var(--safe-bottom))] font-mono text-[11.5px] sm:px-6"
       >
         <span className="text-muted-foreground">{describeEnvironment(environment)}</span>
         <Badge variant={support.ok ? "success" : "destructive"}>
@@ -300,6 +407,45 @@ export function Dashboard({
         </Badge>
       </footer>
     </div>
+  );
+}
+
+/**
+ * The `d` in a circle: diagnostics.
+ *
+ * Drawn rather than borrowed, because no icon set ships a letter-in-a-circle for an arbitrary
+ * letter and the letter is the whole point: `d` has meant "debugger" since `dbx`, while a cog
+ * would say "settings" — which is what the agent pane's cog already says, two hundred pixels
+ * away. Hand-drawn SVG for the same reason the app uses `lucide` everywhere else: it inherits
+ * `currentColor` and the button's size class, so a theme or a density change moves it too.
+ */
+function DebugGlyph(): ReactNode {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="12" cy="12" r="9.25" />
+      <text
+        x="12"
+        y="12"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize="12"
+        fontWeight="600"
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        fill="currentColor"
+        stroke="none"
+      >
+        d
+      </text>
+    </svg>
   );
 }
 

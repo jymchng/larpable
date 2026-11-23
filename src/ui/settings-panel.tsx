@@ -16,6 +16,7 @@ import { RotateCcw } from "lucide-react";
 
 import { IconButton } from "@/ui/components/icon-button";
 import { Input } from "@/ui/components/input";
+import { TOUCH_TARGET_BLOCK } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 import {
   PROVIDER_CHOICES,
@@ -74,6 +75,9 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
                 onClick={() => selectProvider(candidate.kind)}
                 className={cn(
                   "min-h-[32px] rounded-md border px-2 py-1 font-mono text-[11px] transition-colors",
+                  // A provider choice is a tap target on a phone like any other control: the
+                  // 32 px that suits a dense desktop row is 12 px short of a fingertip.
+                  TOUCH_TARGET_BLOCK,
                   selected
                     ? "border-primary bg-primary/10 text-foreground"
                     : "text-muted-foreground hover:bg-muted/60",

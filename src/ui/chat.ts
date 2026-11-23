@@ -109,7 +109,6 @@ const TOOL_LABELS: Readonly<Record<string, string>> = {
   terminate_process: "Stopping a process",
   list_processes: "Listing processes",
   scaffold_project: "Scaffolding a project",
-  install_dependencies: "Installing dependencies",
   build_project: "Building the site",
   ensure_netlify_config: "Writing netlify.toml",
   publish_preview: "Publishing the preview",

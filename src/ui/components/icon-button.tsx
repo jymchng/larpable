@@ -16,9 +16,10 @@
  * - `label` is required and non-optional in the type, so an icon button without a name does
  *   not compile. A dot can be decoration; a *button* cannot be, because it must be focusable
  *   and announced.
- * - The hit target is at least 32 px (`size-8`), which is what a thumb needs on a laptop
- *   trackpad and the floor for the §13/§14 controls; `size-9` is available by passing a
- *   className when a caller has room.
+ * - The hit target is 32 px on a laptop (`size-8`), which is what a pointer needs in a row of
+ *   dense controls, and 44 px below the laptop breakpoint (`max-lg:size-11`), which is what a
+ *   thumb needs. Both numbers come from `src/ui/touch.ts`, so a change is one edit and the
+ *   browser audit in `scripts/mobile-acceptance.ts` (`bun run acceptance:mobile`) re-measures the rendered rectangles.
  * - The colour is never the only channel: the tone class is decoration over an accessible
  *   name that already carries the meaning, so a colour-blind user loses nothing.
  *
@@ -30,6 +31,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@/ui/components/button";
+import { TOUCH_TARGET_ICON } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 
 export type ActionTone = "run" | "stop" | "muted" | "nav";
@@ -81,7 +83,7 @@ export function IconButton({
       title={hint ?? label}
       {...(testId === undefined ? {} : { "data-testid": testId })}
       data-tone={tone}
-      className={cn("size-8 shrink-0", TONE_CLASS[tone], className)}
+      className={cn("size-8 shrink-0", TOUCH_TARGET_ICON, TONE_CLASS[tone], className)}
       {...props}
     >
       {children}

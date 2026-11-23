@@ -7,6 +7,12 @@
  * cannot: the word (`Linux`), the value (`ready`, `build-…`, `valid`) and a `title` with the
  * full sentence — so the bar is readable by a colour-blind user and by a screen reader, which
  * is the whole reason `StatusDot` takes an accessible label.
+ *
+ * On a phone it *collapses* rather than shrinks: six label/value pairs do not fit in 390 px, and
+ * a bar that scrolls sideways hides the two facts on the right. The words stay in the accessible
+ * name and the tooltip, the values keep their truncation, and the row wraps to a second line
+ * instead of overflowing — so `Linux ready` and `Build succeeded` are still both legible, one
+ * above the other.
  */
 
 import type { ReactNode } from "react";
@@ -59,8 +65,11 @@ function StatusCell({ segment }: { segment: StatusSegment }): ReactNode {
       className="flex min-w-0 items-center gap-1"
     >
       <StatusDot testId={`status-dot-${segment.key}`} tone={segment.tone} label={segment.detail} />
-      <span className="text-foreground/70">{segment.label}</span>
+      {/* The dot already says the tone and the value says the fact; the word is the third
+          channel and the first thing a 390 px row can afford to drop. */}
+      <span className="text-foreground/70 hidden sm:inline">{segment.label}</span>
       <span className="text-foreground max-w-[18ch] truncate">{segment.value}</span>
     </span>
   );
 }
+

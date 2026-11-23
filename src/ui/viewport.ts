@@ -59,6 +59,32 @@ export function viewportFor(name: ViewportName): ViewportPreset {
   return preset ?? (VIEWPORTS[0] as ViewportPreset);
 }
 
+/**
+ * The factor to draw a fixed-size frame at so it fits the pane it is in.
+ *
+ * This exists because of the phone. A 390-px pane showing the 834-px tablet preset at 1:1 is a
+ * site you can only read by dragging the pane sideways, which is not a preview. Scaling down is
+ * the better answer \u2014 but it is a *claim* about the frame, so the toolbar prints the factor
+ * next to the size rather than letting `834 \u00d7 1112` describe something drawn at 45 %.
+ *
+ * Below 25 % nothing is legible and a scrollbar is the honest failure, so that is where the
+ * scale stops (`1` is returned instead, and the pane scrolls). A frame that already fits is
+ * never scaled up: a preview that inflates a 390-px page to fill a 900-px pane would misrepresent
+ * the layout it is showing.
+ */
+export function frameZoom(availableWidth: number | null, frameWidth: number | null): number {
+  if (availableWidth === null || frameWidth === null) return 1;
+  if (!Number.isFinite(availableWidth) || !Number.isFinite(frameWidth)) return 1;
+  if (availableWidth <= 0 || frameWidth <= 0) return 1;
+  if (frameWidth <= availableWidth) return 1;
+  const raw = availableWidth / frameWidth;
+  if (raw < 0.25) return 1;
+  // Two decimals: enough that `zoom` and the printed percentage agree, and stable across
+  // re-measures so a ResizeObserver cannot make the readout flicker.
+  return Math.round(raw * 100) / 100;
+}
+
+
 /** True when the preset constrains the frame at all. */
 export function isSizedViewport(preset: ViewportPreset): boolean {
   return preset.width !== null && preset.height !== null;
