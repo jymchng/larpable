@@ -1,17 +1,23 @@
 /**
- * Measure `curl` in the deployed app, the way the report arrived: boot the production
- * site, type the command a user types, read what came back.
+ * Measure `curl` in the deployed app, the way the report arrived: boot the
+ * production site, type the command a user types, read what came back.
  *
- * The guest's `curl` is a *first-use shim*: the first call can take ~90 s and can exit
- * non-zero, and an unprivileged uid 1000 cannot `apk add` a replacement. So "curl failed"
- * has several possible meanings — shim that never resolved, no network through the Wisp
- * proxy, TLS without a CA bundle, or a binary that is not there at all. This script
- * separates them instead of guessing.
+ * The guest's `curl` is a *first-use shim*: the first call can take ~90 s and can
+ * exit non-zero, and an unprivileged uid 1000 cannot `apk add` a replacement. So
+ * "curl failed" has several possible meanings — shim that never resolved, no
+ * network through the Wisp proxy, TLS without a CA bundle, or a binary that is
+ * not there at all. This script separates them instead of guessing.
+ *
+ * Each step prints a sentinel on its own line and the probe returns every line
+ * between the echoed command and that sentinel *verbatim*, so the recorded
+ * output is what the guest actually printed. An earlier version matched a
+ * substring that the command itself contained, which made a step "answer"
+ * before it had run — a failed fetch then looked like a pass.
  *
  *   LARPABLE_ACCEPTANCE_URL=https://larpable.netlify.app bun scripts/probe-curl-deployed.ts
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -40,43 +46,79 @@ function findChromium(): string {
   throw new Error(`no Chromium under ${cache}`);
 }
 
+const transcript: string[] = [];
+
 function log(label: string, value: unknown): void {
-  console.log(`[curl] ${label}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  console.log(`[curl] ${label}: ${text}`);
+  transcript.push(`## ${label}\n${text}`);
 }
 
+let sentinel = 0;
+
 /**
- * Type a line and wait for its marker. The timeout is generous because the guest's curl
- * is a first-use shim: the first invocation pays a download before it can answer.
+ * Type one line and return the guest's output for it, verbatim.
+ *
+ * The timeout is generous on purpose: the first `curl` invocation pays the
+ * shim's download before it can answer at all.
  */
-async function type(page: Page, command: string, marker: string, timeoutMs = 180_000) {
-  const before = (await page.locator("[data-testid=terminal-output]").textContent()) ?? "";
+async function type(page: Page, command: string, timeoutMs = 180_000) {
+  const done = `__PROBE_DONE_${++sentinel}__`;
+  // The sentinel is assembled from two pieces so the echoed command line cannot
+  // match the sentinel the probe is waiting for.
+  const line = `${command}; echo "__PROBE_DONE_""${sentinel}__"`;
+
   await page.mouse.click(400, 300);
-  await page.keyboard.type(command, { delay: 2 });
+  await page.keyboard.type(line, { delay: 2 });
   await page.keyboard.press("Enter");
 
+  // Read the *whole* transcript and look for the sentinel rather than assuming the
+  // DOM grows exactly where we expect. xterm renders on requestAnimationFrame, and a
+  // headless page that nobody is painting can lag a whole step behind the terminal
+  // buffer — which made the previous version of this probe report every step as
+  // unanswered while printing its output one step later.
+  const readAll = async () => (await page.locator("[data-testid=terminal-output]").textContent()) ?? "";
   const deadline = Date.now() + timeoutMs;
-  let transcript = before;
+  let full = "";
   while (Date.now() < deadline) {
-    transcript = (await page.locator("[data-testid=terminal-output]").textContent()) ?? "";
-    if (transcript.slice(before.length).includes(marker)) break;
-    await page.waitForTimeout(400);
+    full = await readAll();
+    if (full.includes(done)) break;
+    // Nudge the compositor so a throttled frame actually flushes.
+    await page.evaluate(() => window.dispatchEvent(new Event("resize"))).catch(() => undefined);
+    await page.waitForTimeout(250);
   }
 
-  const fresh = transcript.slice(before.length);
-  const lines = fresh.split(/\r?\n/).map((line) => line.trim());
-  const at = lines.findIndex((line) => line.includes(marker));
-  return {
-    answered: at !== -1,
-    output: lines.slice(Math.max(0, at - 6), at + 1).filter((line) => line.length > 0),
-  };
+  const answered = full.includes(done);
+  const lines = full
+    .split(/\r?\n/)
+    .map((entry) => entry.replace(/\u00a0/g, " ").trimEnd());
+  const stop = lines.lastIndexOf(lines.find((entry) => entry.includes(done)) ?? "");
+  const start = Math.max(0, lines.findIndex((entry) => entry.includes(command.slice(0, 40))));
+  const output = lines
+    .slice(start + 1, stop === -1 ? undefined : stop)
+    .map((entry) => entry.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "").trim())
+    .filter((entry) => entry.length > 0);
+
+  return { answered, command, output, lines: lines.length };
 }
 
 async function main(): Promise<void> {
-  const browser = await chromium.launch({ executablePath: findChromium(), headless: true });
+  const browser = await chromium.launch({
+    executablePath: findChromium(),
+    headless: true,
+    // Without these, a headless page is treated as occluded and requestAnimationFrame
+    // is throttled, so xterm's buffer reaches the DOM a step late.
+    args: [
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+    ],
+  });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
   try {
     await page.goto(`${baseUrl}/`, { waitUntil: "load" });
+    const bootedAt = Date.now();
     await page.locator("[data-testid=boot-button]").click();
     await page
       .locator("[data-testid=env-status]", { hasText: "Ready" })
@@ -85,27 +127,27 @@ async function main(): Promise<void> {
     await page
       .locator("[data-testid=terminal-panel][data-connection=connected]")
       .waitFor({ timeout: 90_000 });
-    log("boot", `ready at ${baseUrl}`);
+    log("boot", `ready at ${baseUrl} after ${((Date.now() - bootedAt) / 1000).toFixed(1)}s`);
+
+    log("binary", await type(page, 'command -v curl; readlink -f "$(command -v curl)"'));
+    // The goal asks for a real `curl --version`, so capture its first two lines
+    // and the exit status of the pipeline itself.
+    log("version", await type(page, "curl --version 2>&1 | head -2; echo \"RC=$?\""));
 
     log(
-      "which",
+      "https1",
       await type(
         page,
-        'printf "MK1%s\\n" "$(command -v curl || echo none) $(readlink -f "$(command -v curl 2>/dev/null)" 2>/dev/null)"',
-        "MK1",
+        'curl -sS --max-time 30 -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" https://example.com 2>&1; echo "RC=$?"',
+        120_000,
       ),
     );
 
-    // The marker is split in the command so it cannot match its own echo; otherwise the
-    // probe "answers" the instant it types, which is how a failed fetch looks like a pass.
-    log("version", await type(page, 'curl --version 2>&1 | head -1; echo "RC""1=$?"', "RC1="));
-
     log(
-      "example",
+      "https2",
       await type(
         page,
-        'curl -sS --max-time 20 -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" https://example.com 2>&1; echo "RC""2=$?"',
-        "RC2=",
+        'curl -sS --max-time 30 -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" https://example.com 2>&1; echo "RC=$?"',
         120_000,
       ),
     );
@@ -114,14 +156,25 @@ async function main(): Promise<void> {
       "plainHttp",
       await type(
         page,
-        'curl -sS --max-time 20 -o /dev/null -w "HTTP=%{http_code}\\n" http://example.com 2>&1; echo "RC""3=$?"',
-        "RC3=",
+        'curl -sS --max-time 20 -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" http://example.com 2>&1; echo "RC=$?"',
         120_000,
       ),
     );
 
-    log("dns", await type(page, 'getent hosts example.com; echo "RC""4=$?"', "RC4=", 60_000));
+    log(
+      "body",
+      await type(
+        page,
+        'curl -sS --max-time 30 https://example.com | head -c 120; echo; echo "RC=$?"',
+        120_000,
+      ),
+    );
+
+    log("dns", await type(page, 'getent hosts example.com; echo "RC=$?"', 60_000));
+
     await page.screenshot({ path: "/tmp/curl-probe.png", fullPage: true });
+    writeFileSync("/tmp/curl-probe-transcript.md", `${transcript.join("\n\n")}\n`);
+    console.log("[curl] transcript: /tmp/curl-probe-transcript.md");
   } finally {
     await browser.close().catch(() => undefined);
   }
