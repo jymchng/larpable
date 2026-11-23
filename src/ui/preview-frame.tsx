@@ -352,7 +352,7 @@ export function PreviewPanel({
             }
           />
         </div>
-      ) : (
+      ) : state.kind === "building" || state.kind === "error" ? (
         <div
           data-testid="preview-placeholder"
           /*
@@ -377,18 +377,14 @@ export function PreviewPanel({
           ) : (
             <>
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
-              <p className="text-sm font-medium">
-                {state.kind === "building" ? "Building the site…" : "No production build yet."}
-              </p>
+              <p className="text-sm font-medium">Building the site…</p>
               <p className="text-muted-foreground max-w-[42ch] text-[13px]">
-                {state.kind === "building"
-                  ? "The preview shows the real output as soon as the build finishes."
-                  : "The preview renders the real dist/ output built inside the guest, never a mock page."}
+                The preview shows the real output as soon as the build finishes.
               </p>
             </>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

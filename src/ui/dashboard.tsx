@@ -404,24 +404,7 @@ export function Dashboard({
           </h2>
           {preview ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">{preview}</div>
-          ) : (
-            /*
-              `min-h-0 overflow-y-auto`, not a bare `flex-1`: in landscape at 844 x 390 the panes
-              are 196 px tall, and this empty state is ~163 px of padding and copy. Without the
-              min-height override the flex item refuses to shrink, the section grows past its
-              parent, and because `body` is `overflow: hidden` the explanation below the fold was
-              clipped and unreachable rather than scrolled — measured as a 574 px document in a
-              390 px window.
-            */
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-2 text-center">
-              <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
-              <p className="text-sm font-medium">No production build yet.</p>
-              <p className="text-muted-foreground max-w-[42ch] text-[13px]">
-                The preview renders the real <code className="font-mono">dist/</code> output built
-                inside the guest, never a mock page.
-              </p>
-            </div>
-          )}
+          ) : null}
         </section>
       </main>
 
