@@ -4,6 +4,7 @@ import {
   DEFAULT_CPUS,
   DEFAULT_DISTRO_URL,
   DEFAULT_MEMORY_MIB,
+  DEFAULT_WISP_SERVERS,
   resolveBrowserEnvironmentConfig,
 } from "@/env/boot";
 import { DEFAULT_PROJECT_TREE, DEFAULT_WORKSPACE_PATH, defaultProjectFiles } from "@/env/default-project";
@@ -44,12 +45,53 @@ describe("resolveBrowserEnvironmentConfig", () => {
       memoryMiB: DEFAULT_MEMORY_MIB,
       cpus: DEFAULT_CPUS,
       network: "wisp",
-      wispServers: [],
-      wispServer: null,
+      // Not `[]`: an empty list hands the choice to unkernel's default proxy, which
+      // refuses every origin but localhost, so the deployed guest has no network at all.
+      wispServers: [...DEFAULT_WISP_SERVERS],
+      wispServer: DEFAULT_WISP_SERVERS[0],
       worker: true,
       persistentDataDisk: true,
       commandTimeoutMs: 600_000,
     });
+  });
+
+  it("defaults to a Wisp proxy that accepts a deployment origin, not unkernel's", () => {
+    // Measured from https://larpable.netlify.app: `wss://wisp.pi0.io:6680/` errors on the
+    // handshake, `wss://wisp.mercurywork.shop/` opens. With pi0.io the guest boots and
+    // looks healthy but `curl` fails with error 7 for every URL.
+    expect(DEFAULT_WISP_SERVERS.length).toBeGreaterThan(0);
+    expect(DEFAULT_WISP_SERVERS).not.toContain("wss://wisp.pi0.io:6680/");
+    expect(DEFAULT_WISP_SERVERS[0]).toBe("wss://wisp.mercurywork.shop/");
+    for (const server of DEFAULT_WISP_SERVERS) expect(server.startsWith("wss://")).toBe(true);
+  });
+
+  it("lets ?wisp= in the address bar replace the default", () => {
+    // The escape hatch that unblocked the deployed app before this default existed: one
+    // URL, editable in the address bar, no rebuild.
+    const config = resolveBrowserEnvironmentConfig({}, {}, "?wisp=wss://self.example/");
+
+    expect(config.wispServers).toEqual(["wss://self.example/"]);
+    expect(config.wispServer).toBe("wss://self.example/");
+  });
+
+  it("accepts a comma-separated proxy list from the environment, in order", () => {
+    const config = resolveBrowserEnvironmentConfig(
+      {},
+      { VITE_WISP_SERVERS: "wss://a.example/, wss://b.example/" },
+    );
+
+    expect(config.wispServers).toEqual(["wss://a.example/", "wss://b.example/"]);
+    expect(config.wispServer).toBe("wss://a.example/");
+  });
+
+  it("prefers ?wisp= over VITE_WISP_SERVERS, so a URL can rescue a bad build", () => {
+    const config = resolveBrowserEnvironmentConfig(
+      {},
+      { VITE_WISP_SERVERS: "wss://build.example/" },
+      "?wisp=wss://bar.example/",
+    );
+
+    expect(config.wispServers).toEqual(["wss://bar.example/"]);
   });
 
   it("lets deployment variables override every default", () => {

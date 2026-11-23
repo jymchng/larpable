@@ -91,24 +91,36 @@ async function main(): Promise<void> {
       "which",
       await type(
         page,
-        'printf "MARK curl=%s real=%s\\n" "$(command -v curl || echo none)" "$(readlink -f "$(command -v curl 2>/dev/null)" 2>/dev/null || echo none)"',
-        "MARK",
+        'printf "MK1%s\\n" "$(command -v curl || echo none) $(readlink -f "$(command -v curl 2>/dev/null)" 2>/dev/null)"',
+        "MK1",
       ),
     );
 
-    log("version", await type(page, 'curl --version 2>&1 | head -3; echo "RCMARK=$?"', "RCMARK"));
+    // The marker is split in the command so it cannot match its own echo; otherwise the
+    // probe "answers" the instant it types, which is how a failed fetch looks like a pass.
+    log("version", await type(page, 'curl --version 2>&1 | head -1; echo "RC""1=$?"', "RC1="));
 
     log(
       "example",
       await type(
         page,
-        'curl -sS -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" https://example.com 2>&1; echo "RCMARK=$?"',
-        "RCMARK",
-        240_000,
+        'curl -sS --max-time 20 -o /dev/null -w "HTTP=%{http_code} time=%{time_total}s\\n" https://example.com 2>&1; echo "RC""2=$?"',
+        "RC2=",
+        120_000,
       ),
     );
 
-    log("dns", await type(page, 'getent hosts example.com || echo "RCMARK=no-resolver"', "RCMARK"));
+    log(
+      "plainHttp",
+      await type(
+        page,
+        'curl -sS --max-time 20 -o /dev/null -w "HTTP=%{http_code}\\n" http://example.com 2>&1; echo "RC""3=$?"',
+        "RC3=",
+        120_000,
+      ),
+    );
+
+    log("dns", await type(page, 'getent hosts example.com; echo "RC""4=$?"', "RC4=", 60_000));
     await page.screenshot({ path: "/tmp/curl-probe.png", fullPage: true });
   } finally {
     await browser.close().catch(() => undefined);

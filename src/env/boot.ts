@@ -38,6 +38,23 @@ export const DEFAULT_CPUS = 2;
  */
 export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000;
 
+/**
+ * The Wisp proxy a deployment uses when nothing else says otherwise.
+ *
+ * Why this is a Larpable default and not unkernel's: unkernel ships exactly one default,
+ * `wss://wisp.pi0.io:6680/`, and that server **rejects pages on other origins** — measured
+ * from `https://larpable.netlify.app` as a bare WebSocket `error` on the handshake, while
+ * it opens for `http://localhost:5173`. A guest booted behind it has no network at all, so
+ * every `curl` reports `(7) Failed to connect` and `npm install` cannot reach a registry.
+ *
+ * `wss://wisp.mercurywork.shop/` completes the handshake from the Netlify origin, and the
+ * end-to-end proof is real traffic in the deployed guest: `curl https://example.com` →
+ * `HTTP=200 time=5.802675s`, exit 0 (measured 2026-11-23, `scripts/probe-curl-deployed.ts`).
+ * Both the proxy URL and the reason are one constant because they must change together if
+ * that host ever stops answering.
+ */
+export const DEFAULT_WISP_SERVERS: readonly string[] = ["wss://wisp.mercurywork.shop/"];
+
 export interface BrowserEnvironmentConfig {
   distroUrl: string;
   workspacePath: string;
@@ -46,14 +63,13 @@ export interface BrowserEnvironmentConfig {
   /** `"wisp"` routes the guest's TCP/UDP through a Wisp proxy; `"none"` boots offline. */
   network: KernelNetwork;
   /**
-   * Every Wisp proxy to try, in order. Empty means unkernel's default list, whose
-   * server **accepts only known origins** — measured: `wss://wisp.pi0.io:6680/` opens
-   * for `http://localhost:5173` and answers HTTP 404 on the WebSocket handshake for
-   * `https://larpable.netlify.app`. A deployment on its own origin therefore has to
-   * point this at a proxy that accepts it (`?wisp=wss://…` or `VITE_WISP_SERVERS`).
+   * Every Wisp proxy to try, in order. Defaults to `DEFAULT_WISP_SERVERS` — a proxy that
+   * accepts this deployment's origin, because unkernel's built-in default does not.
+   * Override with `?wisp=wss://…` (one URL, editable in the address bar) or
+   * `VITE_WISP_SERVERS` (a comma-separated list) to point at a self-hosted proxy.
    */
   wispServers: string[];
-  /** The first configured proxy, for a single-proxy display; `null` means the default. */
+  /** The first configured proxy, for a single-proxy display. */
   wispServer: string | null;
   /** Run the kernel in a Web Worker. Requires cross-origin isolation for SMP. */
   worker: boolean;
@@ -110,7 +126,12 @@ function serverList(raw: string | null | undefined): string[] {
 /**
  * The Wisp proxies to try, most specific first: an explicit option, then `?wisp=` (the
  * convention unkernel's own page uses, so a deployment can be unblocked by editing the
- * URL), then `VITE_WISP_SERVERS` (a list), then `VITE_WISP_SERVER` (one).
+ * URL), then `VITE_WISP_SERVERS` (a list), then `VITE_WISP_SERVER` (one), and finally
+ * `DEFAULT_WISP_SERVERS`.
+ *
+ * The last step is the one that matters for a deployment: returning an empty list would
+ * hand the choice back to unkernel, whose default server refuses unknown origins, and the
+ * guest would boot with no network while looking perfectly healthy.
  */
 function resolveWispServers(
   overrides: BrowserEnvironmentOptions,
@@ -125,7 +146,11 @@ function resolveWispServers(
 
   const fromList = serverList(stringFrom(env.VITE_WISP_SERVERS));
   if (fromList.length > 0) return fromList;
-  return serverList(stringFrom(env.VITE_WISP_SERVER));
+
+  const fromSingle = serverList(stringFrom(env.VITE_WISP_SERVER));
+  if (fromSingle.length > 0) return fromSingle;
+
+  return [...DEFAULT_WISP_SERVERS];
 }
 
 /**
