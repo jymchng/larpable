@@ -16,9 +16,13 @@ import type { PreviewPhase } from "../src/preview/controller";
 import {
   PreviewPane,
   PreviewToolbar,
+  describeAppPreview,
   describePreviewPhase,
+  mergePreviewStates,
+  toAppPreviewState,
   toPreviewState,
 } from "../src/ui/preview-pane";
+import type { AppPreviewControl } from "../src/ui/use-app-preview";
 
 function render(phase: PreviewPhase, available = true): string {
   return renderToStaticMarkup(
@@ -141,5 +145,119 @@ describe("PreviewToolbar", () => {
 
     expect(html).toContain("Rebuild preview");
     expect(html).not.toMatch(/data-testid="preview-build"[^>]*disabled/);
+  });
+});
+
+/**
+ * "Run the app" — the second way to fill this pane, for a project with a server and no
+ * `dist/`. These assertions are the acceptance criterion in miniature: after `bun run start`
+ * the iframe must point at a build id of the *app*, the toolbar must say which command
+ * answered, and stopping must be offered rather than hidden.
+ */
+function appControl(
+  state: AppPreviewControl["state"],
+  calls: { run?: () => void; stop?: () => void } = {},
+): AppPreviewControl {
+  return {
+    state,
+    run: calls.run ?? (() => undefined),
+    stop: calls.stop ?? (() => undefined),
+  };
+}
+
+function renderApp(app: AppPreviewControl, phase: PreviewPhase = { kind: "idle" }, available = true): string {
+  return renderToStaticMarkup(
+    <PreviewPane phase={phase} onRefresh={() => undefined} available={available} app={app} />,
+  );
+}
+
+describe("PreviewPane with a running app", () => {
+  it("points the frame at the app's own build id and stops offering to start it", () => {
+    const html = renderApp(
+      appControl({ kind: "running", buildId: "app-mf3k2", port: 3000, command: "bun run start", status: 200 }),
+    );
+
+    expect(html).toContain(`src="${PREVIEW_PREFIX}/app-mf3k2/"`);
+    expect(html).toContain('data-testid="preview-stop-app"');
+    expect(html).not.toContain('data-testid="preview-run-app"');
+    // The only way out is to stop it: offering "Run the app" while one is running would
+    // spawn a second server on the same port.
+    expect(html).toContain("Stop app");
+  });
+
+  it("says which command answered and on which port, instead of just \"running\"", () => {
+    const html = renderApp(
+      appControl({ kind: "running", buildId: "app-1", port: 3000, command: "bun run start", status: 200 }),
+    );
+
+    expect(html).toContain("`bun run start` answered 200 on guest port 3000.");
+  });
+
+  it("shows a start in progress as a placeholder with the hook's own words, not a blank frame", () => {
+    const html = renderApp(appControl({ kind: "starting", message: "Starting `bun run start` in the guest on port 3000…" }));
+
+    expect(html).not.toContain("<iframe");
+    expect(html).toContain("Building the site…");
+    expect(html).toMatch(/data-testid="preview-run-app"[^>]*disabled/);
+  });
+
+  it("offers to run it again after a failure and keeps the reason", () => {
+    const html = renderApp(
+      appControl({ kind: "failed", message: "package.json has no `start` script, so there is no app to run." }),
+    );
+
+    expect(html).toContain("Run the app again");
+    expect(html).toContain("package.json has no `start` script");
+    expect(html).not.toContain("<iframe");
+  });
+
+  it("keeps a published static build on screen when the app fails to start", () => {
+    // The build is real; an app that failed must not make it look gone. The failure is still
+    // on the status line, so nothing is hidden.
+    const merged = mergePreviewStates(ready, appControl({ kind: "failed", message: "next start exited" }));
+
+    expect(merged).toMatchObject({ kind: "ready", buildId: "build-mf3k2-1" });
+    const html = renderApp(appControl({ kind: "failed", message: "next start exited" }), ready);
+    expect(html).toContain(`src="${PREVIEW_PREFIX}/build-mf3k2-1/"`);
+    expect(html).toContain("next start exited");
+  });
+
+  it("lets the running app win over an older published build", () => {
+    expect(
+      mergePreviewStates(ready, appControl({ kind: "running", buildId: "app-9", port: 3000, command: "bun run start", status: 200 })),
+    ).toMatchObject({ kind: "ready", buildId: "app-9" });
+  });
+
+  it("maps every app state, with none left out", () => {
+    expect(toAppPreviewState(undefined)).toBeNull();
+    expect(toAppPreviewState(appControl({ kind: "idle" }))).toBeNull();
+    expect(toAppPreviewState(appControl({ kind: "starting", message: "…" }))).toEqual({
+      kind: "building",
+      buildId: null,
+    });
+    expect(
+      toAppPreviewState(appControl({ kind: "running", buildId: "app-2", port: 3000, command: "c", status: 200 })),
+    ).toMatchObject({ kind: "ready", buildId: "app-2" });
+    expect(toAppPreviewState(appControl({ kind: "failed", message: "no start" }))).toEqual({
+      kind: "error",
+      status: null,
+      message: "no start",
+    });
+  });
+
+  it("describes an idle app without pretending one is running", () => {
+    expect(describeAppPreview({ kind: "idle" })).toBe(
+      "No app running: “Run the app” starts the project’s own start script.",
+    );
+    expect(describeAppPreview(undefined)).toBeNull();
+  });
+
+  it("keeps the old toolbar when there is no app control at all", () => {
+    // Callers without a `useAppPreview` (and the acceptance run's static page) are unchanged.
+    const html = render(ready);
+
+    expect(html).not.toContain('data-testid="preview-run-app"');
+    expect(html).not.toContain('data-testid="preview-stop-app"');
+    expect(html).not.toContain('data-testid="preview-app-status"');
   });
 });

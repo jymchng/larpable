@@ -140,7 +140,10 @@ describe.skipIf(!enabled)("Next.js in the guest", () => {
         const warmClock = timed();
         let warmState = "failed";
         try {
-          const snapshot = await warm.warm();
+          // `ensureReady()`, not `warm()`: the 147 s download happens on first use, and the
+          // snapshot it settles with is the evidence (the earlier run called a method that
+          // does not exist — `warm.warm is not a function` — and so recorded nothing).
+          const snapshot = await warm.ensureReady();
           warmState = `ready node=${snapshot.nodeVersion ?? "?"} npm=${snapshot.npmVersion ?? "?"} reused=${String(snapshot.reused)} downloaded=${String(snapshot.downloaded)}`;
         } catch (error) {
           warmState = `failed: ${error instanceof Error ? error.message : String(error)}`;

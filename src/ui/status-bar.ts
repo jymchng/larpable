@@ -19,14 +19,17 @@
 import type { EnvironmentSnapshot } from "@/env/status";
 import { statusLabel } from "@/env/status";
 import type { PreviewPhase } from "@/preview/controller";
+import type { BuildStatus } from "@/ui/build-state";
 import type { StatusTone } from "@/ui/components/status-dot";
 
-/** The build, as the UI knows it. Produced by `src/ui/build-state.ts`. */
-export type BuildStatus =
-  | { kind: "none" }
-  | { kind: "running"; stage: "installing" | "building" }
-  | { kind: "ok"; id: string; durationMs: number | null }
-  | { kind: "failed"; summary: string };
+/**
+ * The build, as the UI knows it.
+ *
+ * The type is *owned* by `src/ui/build-state.ts`, which has the build manager's records to
+ * derive it from; this module only renders it. Re-exported so a consumer that derives the bar
+ * has one import.
+ */
+export type { BuildStatus };
 
 /** `netlify.toml`, as the agent's own validation reported it. */
 export type NetlifyStatus =

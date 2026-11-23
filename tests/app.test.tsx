@@ -204,3 +204,67 @@ describe("describeEnvironment", () => {
     expect(summary).toBe("Linux: Error | Error: JSPI missing");
   });
 });
+
+describe("Dashboard §13 layout", () => {
+  it("renders the injected status bar, settings and conversation where they belong", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        statusBar={<div data-testid="injected-status-bar" />}
+        settings={<div data-testid="injected-settings" />}
+        chat={<div data-testid="injected-chat" />}
+      />,
+    );
+
+    // The bar is about the whole window, so it sits under the header and above the panes.
+    expect(html.indexOf('data-testid="injected-status-bar"')).toBeLessThan(
+      html.indexOf('data-testid="agent-pane"'),
+    );
+    // Settings are part of the agent pane: they are the provider the conversation uses.
+    expect(html.indexOf('data-testid="injected-settings"')).toBeGreaterThan(
+      html.indexOf('data-testid="agent-pane"'),
+    );
+    expect(html.indexOf('data-testid="injected-chat"')).toBeGreaterThan(
+      html.indexOf('data-testid="injected-settings"'),
+    );
+  });
+
+  it("offers a real separator with the split's own bounds announced", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        initialSplit={63}
+      />,
+    );
+
+    expect(html).toContain('data-testid="split-handle"');
+    expect(html).toContain('role="separator"');
+    expect(html).toContain('aria-orientation="vertical"');
+    expect(html).toContain('aria-valuenow="63"');
+    expect(html).toContain('aria-valuemin="20"');
+    expect(html).toContain('aria-valuemax="80"');
+    // The width lives in a custom property the pane's flex-basis reads, so a drag is one number.
+    expect(html).toContain("--agent-basis:63.00%");
+    expect(html).toContain('data-basis="63.00"');
+  });
+
+  it("clamps a stored split outside the usable band", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        initialSplit={4}
+      />,
+    );
+
+    expect(html).toContain('aria-valuenow="20"');
+  });
+});

@@ -198,6 +198,12 @@ describe("startAppServer", () => {
 
   it("keeps only the tail of a chatty server's log", async () => {
     let emit: ((chunk: { text: string }) => void) | null = null;
+    // A closure, not a direct `emit?.(...)` call: TypeScript narrows `emit` to `null` at the
+    // call site (its only assignment is inside the fake's `execute`), which makes the direct
+    // call "not callable". In a nested function the declared union type is used instead.
+    const notify = (chunk: { text: string }) => {
+      emit?.(chunk);
+    };
     const result = await startAppServer({
       environment: environment({
         execute: (_command, options) => {
@@ -211,7 +217,7 @@ describe("startAppServer", () => {
       sleep: async () => undefined,
     });
 
-    for (let index = 0; index < 400; index += 1) emit?.({ text: `line ${String(index)}\n` });
+    for (let index = 0; index < 400; index += 1) notify({ text: `line ${String(index)}\n` });
     expect(result.session?.output()).toContain("line 399");
     expect(result.session?.output()!.length).toBeLessThan(2_000);
     await result.session?.stop();
