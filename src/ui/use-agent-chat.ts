@@ -22,6 +22,7 @@ import type { ExecutionEnvironment } from "@/env/execution";
 import type { AgentSession } from "@/agent/session";
 import { createAgentSession } from "@/agent/session";
 import { chatProblem } from "@/ui/availability";
+import { settingsProblem } from "@/llm/settings";
 import { useMachineStatus } from "@/ui/use-environment-status";
 import type { BuildPort, NetlifyPort, PreviewPort } from "@/agent/tools/types";
 import { describeFindings } from "@/agent/claims";
@@ -46,7 +47,21 @@ export interface AgentChatControl {
   stop: () => void;
   reset: () => void;
   /** Why the prompt is unusable right now, or null. Rendered next to the box. */
+  /**
+   * The *configuration* gap: a missing key, a model that is not set. Printed in the composer,
+   * because nothing else says it and nothing happened that a toast could announce.
+   *
+   * The machine's own state is deliberately not in here any more (user request: "DO NOT
+   * DUPLICATE: YOU ALREADY HAVE A TOAST"): "The Linux machine is booting, so the agent has no
+   * filesystem to work in yet." was printed under the prompt *and* announced as a blue toast at
+   * the top of the same window. `blocked` and `blockedReason` below carry that half without
+   * laying it out.
+   */
   problem: string | null;
+  /** True when a turn cannot be sent at all, whatever the draft says. */
+  blocked: boolean;
+  /** The whole reason, machine included — for the send button's tooltip, never for the layout. */
+  blockedReason: string | null;
 }
 
 export function useAgentChat(options: UseAgentChatOptions): AgentChatControl {
@@ -65,7 +80,9 @@ export function useAgentChat(options: UseAgentChatOptions): AgentChatControl {
   // environment object would freeze the "not available yet" sentence at boot time — measured
   // in the browser run, where the prompt stayed disabled after the guest reported Ready.
   const machine = useMachineStatus(environment);
-  const problem = useMemo(() => chatProblem(machine, settings), [machine, settings]);
+  const blockedReason = useMemo(() => chatProblem(machine, settings), [machine, settings]);
+  // Only the settings half is rendered: the machine half is a toast (see `notifications.ts`).
+  const problem = useMemo(() => settingsProblem(settings), [settings]);
 
   const controller = useMemo(() => {
     return createChatController({
@@ -124,5 +141,5 @@ export function useAgentChat(options: UseAgentChatOptions): AgentChatControl {
     controller.reset();
   }, [controller]);
 
-  return { state, send, stop, reset, problem };
+  return { state, send, stop, reset, problem, blocked: blockedReason !== null, blockedReason };
 }

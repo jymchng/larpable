@@ -393,19 +393,25 @@ async function main(): Promise<void> {
     // A cancel must not be reported as a failure, and must leave the control usable again.
     await page.locator("[data-testid=preview-install-build]").click();
     await page.locator("[data-testid=preview-cancel-build]").waitFor({ timeout: 60_000 });
-    const busyText = (await text(page, "[data-testid=preview-build-status]")) ?? "";
+    // The build's news is a toast now (user request: "ALL NOTIFICATIONS SHOULD BE TOASTS IN
+    // APPROPRIATE COLORS"): blue while it runs, green when it succeeds, red when it fails. The
+    // strip above the frame keeps only failures, so this reads the toast the app actually paints.
+    const busyToast = page.locator("[data-testid=toast-build]");
+    await busyToast.first().waitFor({ timeout: 30_000 });
+    const busyText = (await text(page, "[data-testid=toast-build]")) ?? "";
+    const busyTone = (await busyToast.first().getAttribute("data-tone")) ?? "";
     expect(
-      "the strip says what it is doing while the build runs",
-      /Installing|Building/.test(busyText),
-      busyText,
+      "a blue toast says what the build is doing while it runs",
+      /Installing|Building/.test(busyText) && busyTone === "info",
+      `${busyText} (tone=${busyTone})`,
     );
     await page.locator("[data-testid=preview-cancel-build]").click();
     await page.locator("[data-testid=preview-cancel-build]").waitFor({ state: "detached", timeout: 30_000 });
-    const afterCancel = (await text(page, "[data-testid=preview-build-status]")) ?? "";
+    const failureToasts = await page.locator("[data-testid=toast-build][data-tone=danger]").count();
     expect(
       "a cancelled build is not reported as a failure",
-      !/failed/i.test(afterCancel),
-      afterCancel,
+      failureToasts === 0,
+      `${String(failureToasts)} red build toast(s) after the cancel`,
     );
     expect(
       "the control is usable again after the cancel",
@@ -420,12 +426,21 @@ async function main(): Promise<void> {
     await page.locator("[data-testid=preview-install-build]").click();
 
     await page
-      .locator("[data-testid=preview-build-status]", { hasText: /succeeded|failed/i })
+      .locator("[data-testid=toast-build][data-tone=success], [data-testid=preview-build-status]")
       .first()
       .waitFor({ timeout: BUILD_TIMEOUT_MS });
     const buildMs = Date.now() - buildStartedAt;
-    const buildText = (await text(page, "[data-testid=preview-build-status]")) ?? "";
-    const buildKind = (await page.locator("[data-testid=preview-build-strip]").getAttribute("data-kind")) ?? "";
+    const buildToastTone = (await page.locator("[data-testid=toast-build]").first().getAttribute("data-tone")) ?? "";
+    const buildText =
+      (await text(page, "[data-testid=toast-build]")) ??
+      (await text(page, "[data-testid=preview-build-status]")) ??
+      "";
+    // `success` is the toast's green; a failure keeps a strip as well, so the kind is read from
+    // whichever surface reported the verdict.
+    const buildKind =
+      buildToastTone === "success"
+        ? "ok"
+        : ((await page.locator("[data-testid=preview-build-strip]").getAttribute("data-kind")) ?? "");
     const buildSample = await perf.read();
     note("build", `${buildText} (${String(buildMs)} ms, kind=${buildKind})`);
     note("responsiveness during the build", summarise(buildSample));

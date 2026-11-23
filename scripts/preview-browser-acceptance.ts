@@ -475,10 +475,13 @@ async function main(): Promise<void> {
       .first()
       .getAttribute("data-build-id");
     const src = await page.locator("[data-testid=preview-iframe]").first().getAttribute("src");
+    // The transient status sentence is a toast now; the durable note about *why* the guest is
+    // answering lives on the toolbar row that survives (user request: all notifications are
+    // toasts, so no sentence is printed in that row any more).
     const note =
-      (await page.locator("[data-testid=preview-status]").first().getAttribute("data-note")) ?? "";
+      (await page.locator("[data-testid=preview-toolbar]").first().getAttribute("data-note")) ?? "";
     measurements.publish = {
-      status: await text(page, "[data-testid=preview-status]"),
+      status: await text(page, "[data-testid=preview-served-by]"),
       servedBy: await text(page, "[data-testid=preview-served-by]"),
       note: note.length > 0 ? note : null,
       url: src,

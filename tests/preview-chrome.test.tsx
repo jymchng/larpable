@@ -319,23 +319,25 @@ describe("PreviewPane as a browser", () => {
 
   it("puts the popout beside the fullscreen control, in the device row", () => {
     const html = renderPane(ready);
-    const newTab = html.indexOf('data-testid="preview-new-tab"');
+    // The link's own opening tag, which is where `Button asChild` put the test id.
+    const link = /<a\b[^>]*data-testid="preview-new-tab"[^>]*>/.exec(html)?.[0] ?? "";
+    const newTab = html.indexOf(link);
     const fullscreen = html.indexOf('data-testid="preview-fullscreen"');
 
-    // Inside the browser's device row, which is where the frame is sized (user request: the
-    // popout "must be beside the full screen button in the Preview tab") — not in the row below.
+    expect(link).not.toBe("");
     expect(newTab).toBeGreaterThan(html.indexOf('data-testid="preview-device-toolbar"'));
-    expect(newTab).toBeLessThan(html.indexOf('data-testid="preview-toolbar"'));
     expect(fullscreen).toBeGreaterThan(newTab);
+    // …and it has left the row below it, which is the whole point of the move.
+    expect(newTab).toBeLessThan(html.indexOf('data-testid="preview-toolbar"'));
 
-    // Beside, not merely nearby: nothing but the link's own markup and the fullscreen button
-    // sits between them — no third control was slipped in on the way.
-    const between = html.slice(newTab + 'data-testid="preview-new-tab"'.length, fullscreen);
+    // Beside, not merely nearby: nothing but the two controls' own markup is between them.
+    const between = html.slice(newTab + link.length, fullscreen);
     expect(between).not.toContain("data-testid=");
+
     // A real link to the build on screen, opened in a real tab.
-    expect(between).toContain(`href="/__preview__/${BUILD}/"`);
-    expect(between).toContain('target="_blank"');
-    expect(between).toContain('aria-label="Open the preview in a new tab"');
+    expect(link).toContain(`href="/__preview__/${BUILD}/"`);
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('aria-label="Open the preview in a new tab"');
   });
 
   it("keeps the error surface, chrome and all", () => {

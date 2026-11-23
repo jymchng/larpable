@@ -159,7 +159,13 @@ export function App() {
           state={chat.state}
           onSend={chat.send}
           onStop={chat.stop}
+          // `problem` is a *setting* gap (no key, no model) and is printed under the prompt;
+          // `blockedReason` is the machine's half, which is a toast and only reaches the layout
+          // as the send button's tooltip (user request: "DO NOT DUPLICATE: YOU ALREADY HAVE A
+          // TOAST").
           unavailableReason={chat.problem}
+          blocked={chat.blocked}
+          blockedReason={chat.blockedReason}
         />
       }
       environmentPanel={

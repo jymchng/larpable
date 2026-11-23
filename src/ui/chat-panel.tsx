@@ -34,12 +34,27 @@ export interface ChatPanelProps {
   onSend: (text: string) => void;
   onStop: () => void;
   /**
-   * Why the prompt cannot be used right now, or null when it can.
+   * The *configuration* reason the prompt cannot be used (no key, no model), or null.
    *
-   * A disabled box with no explanation is the single most common way this kind of UI lies;
-   * the reason is rendered next to the control, not only in a tooltip.
+   * A disabled box with no explanation is the single most common way this kind of UI lies, so a
+   * setting that is simply absent is still printed here — nothing “happened” that a toast could
+   * announce, and the gap stays true until the user fixes it.
+   *
+   * What is *not* printed here any more is the machine's state (user request: "DO NOT DUPLICATE:
+   * YOU ALREADY HAVE A TOAST"): "The Linux machine is booting, so the agent has no filesystem to
+   * work in yet." was laid out under the prompt and announced as a blue toast over the same
+   * window at the same moment. The gate is `blocked`, and the sentence is `blockedReason`, which
+   * reaches the user through the send button's tooltip.
    */
   unavailableReason: string | null;
+  /**
+   * Whether a turn can be sent at all, when it is not `unavailableReason` that says so (a booting
+   * machine, a stopped one, no machine yet). Defaults to `unavailableReason !== null`, so a
+   * caller that only has a reason keeps the old behaviour.
+   */
+  blocked?: boolean;
+  /** The whole reason, machine included, for the send button's tooltip. */
+  blockedReason?: string | null;
   className?: string;
   /** Placeholder for the empty transcript; the caller supplies the product's wording. */
   emptyHint?: string;
@@ -50,11 +65,13 @@ export function ChatPanel({
   onSend,
   onStop,
   unavailableReason,
+  blocked: blockedProp,
+  blockedReason = null,
   className,
   emptyHint = "Describe the site you want. The agent writes files in the guest, builds them and previews the result.",
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
-  const blocked = unavailableReason !== null;
+  const blocked = blockedProp ?? unavailableReason !== null;
   const canSend = !blocked && !state.running && draft.trim().length > 0;
   // Empty and idle is silent now: `describeChat` returns `""` for that state, so the status row
   // is not rendered at all and the transcript starts at the top of the pane.
@@ -163,7 +180,8 @@ export function ChatPanel({
             size="icon"
             data-testid="chat-send"
             aria-label={state.running ? "Sending…" : "Send the prompt"}
-            title="Send the prompt (Enter)"
+            // The machine's own reason, when there is one, without printing it in the pane.
+            title={blockedReason ?? "Send the prompt (Enter)"}
             disabled={!canSend}
             className="size-9 lg:size-8"
           >
@@ -174,7 +192,10 @@ export function ChatPanel({
             )}
           </Button>
         </div>
-        {blocked ? (
+        {/* The reason, and only when there *is* one to print: `blocked` can be true without a
+            sentence (a booting machine), and an empty paragraph under the prompt would be the
+            worst of both worlds — a layout gap with no message. */}
+        {unavailableReason !== null ? (
           <p
             data-testid="chat-unavailable"
             className="text-muted-foreground mt-1 flex items-start gap-1 text-[11.5px]"

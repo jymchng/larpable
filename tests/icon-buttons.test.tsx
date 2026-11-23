@@ -25,6 +25,8 @@ import { describe, expect, it } from "vitest";
 import type { SupportReport } from "../src/env/support";
 import type { EnvironmentSnapshot } from "../src/env/status";
 import { ChatPanel } from "../src/ui/chat-panel";
+import { ToastHost } from "../src/ui/components/toast";
+import { raiseToast } from "../src/ui/toast";
 import { beginTurn, initialChat, type ChatState } from "../src/ui/chat";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
 import type { PreviewPhase } from "../src/preview/controller";
@@ -226,6 +228,20 @@ function terminal(ready: boolean): string {
   );
 }
 
+/** A toast carrying its close button: the newest icon-only control in the app. */
+function toasts(): string {
+  return renderToStaticMarkup(
+    <ToastHost
+      toasts={raiseToast([], {
+        id: "build",
+        message: "Installing dependencies in the guest\u2026",
+        tone: "info",
+      })}
+      onDismiss={() => undefined}
+    />,
+  );
+}
+
 /** Every surface, each rendered in the states that change its buttons. */
 const SURFACES: ReadonlyArray<{ name: string; html: string }> = [
   { name: "chat, idle", html: chat(initialChat()) },
@@ -268,6 +284,7 @@ const SURFACES: ReadonlyArray<{ name: string; html: string }> = [
     name: "settings, keyed",
     html: settings({ provider: "openai", model: "gpt-4o-mini", apiKey: "sk-test-1234abcd" }),
   },
+  { name: "a toast", html: toasts() },
   { name: "terminal, waiting for the guest", html: terminal(false) },
   { name: "terminal, ready", html: terminal(true) },
 ];

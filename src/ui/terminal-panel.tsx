@@ -538,9 +538,9 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             <p className="font-mono text-[11.5px] text-slate-400">
               {ready ? "No shell open. Press + for a new shell." : "Boot Linux to get a shell in /workspace."}
             </p>
-            {!ready && typeof unavailableReason === "string" && unavailableReason.length > 0 && (
-              <p className="font-mono text-[11px] text-slate-500">{unavailableReason}</p>
-            )}
+            {/* The machine's own sentence used to be printed here as well, and it is a toast now
+                (user request: "DO NOT DUPLICATE: YOU ALREADY HAVE A TOAST") — the same words, over
+                whichever pane the user is looking at, instead of at the bottom of this one. */}
           </div>
         )}
       </div>

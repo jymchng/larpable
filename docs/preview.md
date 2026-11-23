@@ -192,8 +192,13 @@ never swap in a different build's bytes. The acceptance run asserts the document
 setting a property on the old document's `window` and checking it is gone afterwards.
 
 The device toolbar is a device toolbar, not a phone: desktop fills the pane, tablet is 834 × 1112
-CSS px, mobile is 390 × 844, and the row states the size it is applying plus the limit — sizing
-only, no touch events, no device pixel ratio. `src/ui/viewport.ts` owns those numbers.
+CSS px, mobile is 390 × 844, and the size it applies is stated — with its limit, sizing only, no
+touch events, no device pixel ratio — in the **tooltip of the button that applies it** rather than
+in a readout of its own, so the row stays three pictograms wide. `src/ui/viewport.ts` owns those
+numbers; `src/ui/components/tooltip.tsx` paints the bubble (CSS-only hover and `:focus-visible`,
+never a native `title` on the same control). `src/ui/preview-pane.tsx` no longer prints the build's
+progress or a publish's progress in a row either: that is a toast now (`docs/toast.md`), and the
+strip above the frame keeps only a failed build's reason.
 
 | File | Job |
 | --- | --- |

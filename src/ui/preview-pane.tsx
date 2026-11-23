@@ -351,7 +351,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
   // left in this row is the half a toast cannot do — *stay readable after it has gone*. A failed
   // build's reason and a "you cannot build yet, because…" line are state, not news, and a person
   // debugging an install should not have to catch a sentence that leaves after eight seconds.
-  if (status.kind !== "failed" && build.problem === null) return null;
+  if (status.kind !== "failed") return null;
 
   return (
     <div
@@ -370,11 +370,10 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
         </p>
       ) : null}
 
-      {build.problem !== null ? (
-        <span data-testid="preview-build-problem" className="text-muted-foreground text-[11.5px]">
-          {build.problem}
-        </span>
-      ) : null}
+      {/* `build.problem` ("The Linux machine is booting, so the build has nowhere to run
+          yet.") used to be laid out here. It is the machine's state, which is a toast now, and
+          the reason still reaches a mouse user through the disabled hammer's own tooltip
+          (`hint={build.problem}` in `BuildActions`) — one sentence, one place. */}
     </div>
   );
 }

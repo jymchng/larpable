@@ -116,7 +116,11 @@ describe("PreviewPane", () => {
     ]) {
       const html = render(phase);
       expect(html).toMatch(/data-testid="preview-reload"[^>]*disabled/);
-      expect(html).toContain('data-testid="preview-status"');
+      // "Starting the guest's server…" / "Reading 3 files out of the guest…" are toasts now
+      // (user request: "ALL NOTIFICATIONS SHOULD BE TOASTS IN APPROPRIATE COLORS"), so there is
+      // no status line in the pane to read — and nothing for a screenshot to quote.
+      expect(html).not.toContain('data-testid="preview-status"');
+      expect(html).not.toContain(phase.detail);
     }
   });
 
@@ -198,12 +202,23 @@ describe("PreviewPane with a running app", () => {
     expect(html).not.toContain('data-testid="preview-stop-app"');
   });
 
-  it("says which command answered and on which port, instead of just \"running\"", () => {
-    const html = renderApp(
-      appControl({ kind: "running", buildId: "app-1", port: 3000, command: "bun run start", status: 200 }),
-    );
+  it("says which command answered and on which port, in the toast rather than the pane", () => {
+    const running = appControl({
+      kind: "running",
+      buildId: "app-1",
+      port: 3000,
+      command: "bun run start",
+      status: 200,
+    });
+    const html = renderApp(running);
 
-    expect(html).toContain("`bun run start` answered 200 on guest port 3000.");
+    // The sentence is still the app's own words, and still exact — it is now a success toast
+    // (`notifications.ts`), which is the version visible from the other pane as well.
+    expect(describeAppPreview(running.state)).toBe("`bun run start` answered 200 on guest port 3000.");
+    expect(html).not.toContain("answered 200");
+    // What the pane keeps is the fact: the badge that says the bytes come from the app.
+    expect(html).toContain('data-testid="preview-served-by"');
+    expect(html).toContain(">app<");
   });
 
   it("shows a start in progress as a placeholder with the hook's own words, not a blank frame", () => {
@@ -231,7 +246,10 @@ describe("PreviewPane with a running app", () => {
     expect(merged).toMatchObject({ kind: "ready", buildId: "build-mf3k2-1" });
     const html = renderApp(appControl({ kind: "failed", message: "next start exited" }), ready);
     expect(html).toContain(`src="${PREVIEW_PREFIX}/build-mf3k2-1/"`);
-    expect(html).toContain("next start exited");
+    // The failure is announced by a danger toast rather than printed in the pane's row, so the
+    // build stays on screen *and* the reason is not lost: it is the toast's sentence.
+    expect(html).not.toContain("next start exited");
+    expect(describeAppPreview({ kind: "failed", message: "next start exited" })).toBe("next start exited");
   });
 
   it("lets the running app win over an older published build", () => {
@@ -309,10 +327,12 @@ describe("build strip", () => {
     expect(html).not.toContain('data-testid="preview-cancel-build"');
   });
 
-  it("shows the run's stage and cancel instead of a second start", () => {
+  it("shows the run's stage as a toast, and Cancel instead of a second start", () => {
     const html = renderWithBuild(control({ status: { kind: "running", stage: "building" }, busy: true }));
 
-    expect(html).toContain("Building the site in the guest");
+    // "Building the site in the guest…" is an info toast now; the row it used to occupy is gone.
+    expect(html).not.toContain("Building the site in the guest");
+    expect(html).not.toContain('data-testid="preview-build-strip"');
     expect(html).toContain('data-testid="preview-cancel-build"');
     // One control for one run: the start button is disabled while it is in flight.
     expect(html).toMatch(/data-testid="preview-install-build"[^>]*disabled/);
@@ -328,19 +348,26 @@ describe("build strip", () => {
     expect(html).toContain("Install &amp; build");
   });
 
-  it("labels a successful build with its id and duration, and says Rebuild", () => {
+  it("turns the hammer into Rebuild after a success, which the toast announces", () => {
     const html = renderWithBuild(control({ status: { kind: "ok", id: "build-3", durationMs: 4200 } }));
 
-    expect(html).toContain("Build build-3 succeeded in 4.2 s.");
+    // The success sentence ("Build build-3 succeeded in 4.2 s.") is a green toast now; the pane
+    // keeps no receipt for it, because the frame appearing *is* the receipt.
+    expect(html).not.toContain("succeeded in 4.2 s.");
+    expect(html).not.toContain('data-testid="preview-build-strip"');
     expect(html).toContain("Rebuild");
   });
 
-  it("disables the button and prints why when the machine cannot build", () => {
+  it("disables the button and keeps the reason in its tooltip, not in a line of its own", () => {
     const problem = "The Linux machine is stopped, so the build has nowhere to run yet.";
     const html = renderWithBuild(control({ problem }));
 
     expect(html).toMatch(/data-testid="preview-install-build"[^>]*disabled/);
-    expect(html).toContain('data-testid="preview-build-problem"');
-    expect(html).toContain(problem);
+    // The sentence is announced as a toast (it is the machine's state) and, for a mouse user who
+    // asks the button itself, in its `title` — never laid out a third time above the frame
+    // (user request: "DO NOT DUPLICATE: YOU ALREADY HAVE A TOAST").
+    expect(html).not.toContain('data-testid="preview-build-problem"');
+    expect(html).not.toContain('data-testid="preview-build-strip"');
+    expect(html).toContain(`title="${problem}"`);
   });
 });
