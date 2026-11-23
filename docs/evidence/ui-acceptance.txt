@@ -1,0 +1,50 @@
+verdict: PASS — 20/20 checks passed
+
+§13 UI acceptance run — prompt -> tool activity -> build -> preview, with frame-gap sampling
+started: 2026-11-23T07:27:20.991Z
+page: http://127.0.0.1:5173
+
+dev server: already running at http://127.0.0.1:5173
+
+browser: Chromium 159.0.8154.6
+
+console.error: Failed to load resource: the server responded with a status of 404 (Not Found)
+PASS  the status bar is on the page with its six segments — 12 segments
+PASS  the split pane has a separator with bounds — separator present, agent pane starts at 50.00 %
+PASS  settings offer the keyless demo provider first, and the key field is a password — demo pressed, key field type=password
+console.error: [host] data disk: created from the template (547 blocks) in IndexedDB kwdisk:kwdata-v1
+PASS  the guest booted to Ready — 7890 ms from click to Ready
+PASS  the prompt appears in the transcript — Write the demo site into dist/ so the preview has something to publish.
+PASS  the agent's tool calls appear as completed rows — 3 rows: write_file, write_file, write_file (594 ms)
+PASS  a tool row's output is inspectable, and opening it shows the tool's own result — first row: write_file ok
+PASS  the inspectable output carries the tool's result text — 40 chars: OutputWrote dist/index.html (219 bytes).…
+PASS  the assistant's own words are in the transcript — I will write a small site straight into dist/ so the preview has a real build to publish: an entry d
+PASS  the strip says what it is doing while the build runs — Installing dependencies in the guest…
+PASS  a cancelled build is not reported as a failure — No build has run yet.
+PASS  the control is usable again after the cancel — Install & build is enabled
+console.error: [net] wisp connected: wss://wisp.mercurywork.shop/ (handshake 492 ms, buffer 128 packets)
+build: Build build-mwsy7od0-1 succeeded in 41.5 s. (352031 ms, kind=ok)
+responsiveness during the build: 19277 frames, max gap 83 ms, 0 gaps over 250 ms, 53 long tasks (longest 74 ms)
+PASS  the build reached a verdict from the manager, not from a timer — Build build-mwsy7od0-1 succeeded in 41.5 s. (kind=ok)
+PASS  the main thread stayed responsive while the build ran — 19277 frames, max gap 83 ms, 0 gaps over 250 ms, 53 long tasks (longest 74 ms)
+preview: 8101 ms to a frame (published by the build)
+PASS  the preview renders the built starter, not a blank frame — 8101 ms to a frame; body: RUNS INSIDE LINUX, IN YOUR BROWSER Hello from Linux Built by Larpable inside Linux, in you…
+PASS  the build's own module runs inside the preview (the clock advances) — 08:33:33 AM -> 08:33:34 AM
+PASS  clicking the built page's counter changes it inside the preview — 0 -> 1
+PASS  the mobile viewport narrows the frame and marks itself selected — 714 px -> 390 px
+PASS  the split resizes by keyboard and stays inside 20-80 % — 50 % -> 48 %
+status bar: status-linux=LinuxReady | status-dot-linux= | status-runtime=Runtimenode (guest shim) | status-dot-runtime= | status-project=Project/workspace | status-dot-project= | status-build=Buildbuild-mwsy7od0-1 | status-dot-build= | status-netlify=Netlifynot validated | status-dot-netlify= | status-preview=Previewbuild-mwsy7od0-1 | status-dot-preview=
+PASS  the status bar's Build segment reports the build that actually ran — status-build=Buildbuild-mwsy7od0-1
+
+screenshot: /root/typescript_projects/larpable/docs/evidence/ui-acceptance.png
+
+
+--- chat transcript, as the page shows it ---
+Write the demo site into dist/ so the preview has something to publish.I will write a small site straight into dist/ so the preview has a real build to publish: an entry document, a stylesheet and one ES module.
+okWriting a filedist/index.html29 msOutputWrote dist/index.html (219 bytes).okWriting a filedist/assets/index-abc123.css64 msOutputWrote dist/assets/index-abc123.css (159 bytes).okWriting a filedist/assets/index-def456.js19 msOutputWrote dist/assets/index-def456.js (203 bytes).Done — dist/ holds the entry document, one stylesheet and one module. Press “Preview build” to publish it and the pane will render the real files.
+
+--- tool rows ---
+write_file ok: okWriting a filedist/index.html29 msOutputWrote dist/index.html (219 bytes).
+write_file ok: okWriting a filedist/assets/index-abc123.css64 msOutputWrote dist/assets/index-abc123.css (159 bytes).
+write_file ok: okWriting a filedist/assets/index-def456.js19 msOutputWrote dist/assets/index-def456.js (203 bytes).
+
