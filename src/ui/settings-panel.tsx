@@ -6,6 +6,13 @@
  * never reach the guest. So the copy under the fields says all three, and the key field is a
  * password input whose value is only ever echoed back as `redactKey()`.
  *
+ * It is now the **body** of a popover, not a band of its own: `Dashboard` wraps it in
+ * `Popover` (a labelled dialog anchored to the cog, dismissed by Escape or a press outside,
+ * with focus moved in on open and back to the cog on close). That is why this component paints
+ * no border, no padding and no accessible name of its own — the surface owns the frame and
+ * `aria-labelledby`s its own visible title, so the name "Provider settings" reaches a screen
+ * reader exactly once instead of once per wrapper.
+ *
  * The demo choice is first and needs nothing, which is the product's real default: a person
  * with no account can boot Linux, paint a site, build it and see it in the preview. That is
  * not a fallback — it is the path the acceptance run uses, so it has to be first-class here.
@@ -53,11 +60,7 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
   };
 
   return (
-    <section
-      data-testid="settings-panel"
-      aria-label="Provider settings"
-      className={cn("space-y-2 border-b px-3 py-2", className)}
-    >
+    <div data-testid="settings-panel" className={cn("space-y-2", className)}>
       <fieldset className="space-y-1.5">
         <legend className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
           Provider
@@ -156,6 +159,6 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
       >
         <RotateCcw aria-hidden="true" />
       </IconButton>
-    </section>
+    </div>
   );
 }

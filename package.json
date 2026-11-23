@@ -24,6 +24,7 @@
     "acceptance:preview": "bun scripts/preview-browser-acceptance.ts",
     "acceptance:ui": "bun scripts/ui-acceptance.ts",
     "acceptance:mobile": "bun scripts/mobile-acceptance.ts",
+    "acceptance:popover": "bun scripts/popover-acceptance.ts",
     "evidence:icons": "bun scripts/icon-buttons-evidence.ts"
   },
   "dependencies": {

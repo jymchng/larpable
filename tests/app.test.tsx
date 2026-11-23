@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Dashboard } from "../src/ui/dashboard";
+import { SettingsPanel } from "../src/ui/settings-panel";
+import { defaultSettings } from "../src/llm/settings";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
 import { PreviewPane } from "../src/ui/preview-pane";
 import { summarizeDistro, type DistroAssetStatus } from "../src/env/distro";
@@ -234,7 +236,7 @@ describe("Dashboard §13 layout", () => {
     );
   });
 
-  it("puts the provider behind a cog beside the Agent heading, closed until asked for", () => {
+  it("puts the provider in a popover beside the Agent heading, closed until asked for", () => {
     const html = renderToStaticMarkup(
       <Dashboard
         version="9.9.9"
@@ -246,7 +248,9 @@ describe("Dashboard §13 layout", () => {
       />,
     );
 
-    // A disclosure, not a banner: one icon button with a name, a state and a target.
+    // A disclosure, not a banner: one icon button with a name, a state and a target. The name
+    // does not change with the state — `aria-expanded` carries it — so the control can be
+    // asked for by the same words twice.
     expect(html).toContain('data-testid="settings-toggle"');
     expect(html).toContain('aria-label="Provider settings"');
     expect(html).toContain('title="Provider, model and API key"');
@@ -256,9 +260,41 @@ describe("Dashboard §13 layout", () => {
     expect(html.indexOf('data-testid="settings-toggle"')).toBeLessThan(
       html.indexOf('data-testid="injected-settings"'),
     );
-    expect(html).toMatch(/id="settings-region" class="hidden"/);
+    expect(html).toMatch(/id="settings-region"[^>]*data-state="closed"/);
+    expect(html).toMatch(/id="settings-region"[^>]*class="[^"]*\bhidden\b/);
+    // A labelled dialog whose name comes from its own visible title, so the words are painted
+    // once and announced once rather than twice through two wrappers.
+    expect(html).toMatch(/id="settings-region"[^>]*role="dialog"/);
+    expect(html).toMatch(/id="settings-region"[^>]*aria-labelledby="settings-region-heading"/);
+    expect(html).toContain('id="settings-region-heading"');
+    expect(html).toContain('aria-label="Close provider settings"');
     // The heading keeps naming the pane for a screen reader even where it is not painted.
     expect(html).toContain('id="agent-heading"');
+  });
+
+  it("renders the popover open, with the fields inside it, when it starts open", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        settings={<SettingsPanel settings={defaultSettings()} onChange={() => undefined} />}
+        chat={<div data-testid="injected-chat" />}
+        initialSettingsOpen
+      />,
+    );
+
+    expect(html).toMatch(/data-testid="settings-toggle"[^>]*aria-expanded="true"/);
+    expect(html).toMatch(/id="settings-region"[^>]*data-state="open"/);
+    expect(html).not.toMatch(/id="settings-region"[^>]*class="[^"]*\bhidden\b/);
+    // The provider, model and key fields are unchanged, and they are *inside* the dialog.
+    expect(html.indexOf('id="settings-region"')).toBeLessThan(
+      html.indexOf('data-testid="settings-panel"'),
+    );
+    for (const testId of ["settings-provider-demo", "settings-model", "settings-key"]) {
+      expect(html).toContain(`data-testid="${testId}"`);
+    }
   });
 
   it("offers a real separator with the split's own bounds announced", () => {

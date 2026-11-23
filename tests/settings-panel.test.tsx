@@ -4,6 +4,12 @@
  * The panel is the only place a secret is typed, so the tests assert the *safety* surface
  * rather than the layout: a password field, a demo option that needs nothing, a stated
  * destination for the key, and a problem sentence that names the fix.
+ *
+ * It is now the **body** of the provider popover, so the frame is not this component's job:
+ * the dialog, its position, Escape, click-outside and the focus round-trip live in
+ * `src/ui/components/popover.tsx` and are asserted in `tests/popover.test.ts` (the rules) and
+ * `tests/app.test.tsx` (closed by default, and the open surface with these fields inside it).
+ * A real click and a real Escape are measured in Chromium by `bun run acceptance:popover`.
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -27,6 +33,18 @@ describe("SettingsPanel", () => {
     expect(html).toContain('data-testid="settings-provider-demo" data-selected="true"');
     expect(html.indexOf("Demo (no key)")).toBeLessThan(html.indexOf("OpenAI"));
     expect(html).toContain('data-testid="settings-provider-openai" data-selected="false"');
+  });
+
+  it("is a body, not a surface: the dialog above it owns the frame and the name", () => {
+    const html = render(defaultSettings());
+    expect(html).toContain('data-testid="settings-panel"');
+    // One name for one thing. The popover's own title is the dialog's accessible name; a
+    // second `aria-label` here would make a screen reader announce "Provider settings" twice
+    // and could disagree with the heading.
+    expect(html).not.toContain('aria-label="Provider settings"');
+    expect(html).not.toContain('role="dialog"');
+    // The surface paints the border and the padding now.
+    expect(html).not.toContain("border-b");
   });
 
   it("needs nothing for the demo: the key field is disabled and says why", () => {

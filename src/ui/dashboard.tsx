@@ -7,6 +7,7 @@ import { describeEnvironment } from "@/env/status";
 import type { SupportReport } from "@/env/support";
 import { Badge } from "@/ui/components/badge";
 import { IconButton } from "@/ui/components/icon-button";
+import { Popover } from "@/ui/components/popover";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
 import { MIN_SPLIT, clampSplit, splitAfterKey, splitFromPointer } from "@/ui/split";
@@ -43,10 +44,21 @@ export interface DashboardProps {
    * "is the machine ready / has the build passed" is about the whole window, not one pane.
    */
   statusBar?: ReactNode;
-  /** Provider/model/key settings, shown above the conversation that uses them. */
+  /**
+   * Provider/model/key settings. They are the *body* of the popover the cog opens — the
+   * surface, its position, its dismissal and its focus behaviour belong to `Popover` here,
+   * because they are about the pane's chrome rather than about a provider.
+   */
   settings?: ReactNode;
   /** The starting split, in percent. A prop so a test can render a non-default layout. */
   initialSplit?: number;
+  /**
+   * Whether the provider popover is open on the first render. A prop for the same reason as
+   * `initialSplit` and `initialStage`: the *closed* state is the one the markup tests would
+   * otherwise only ever see, and the open surface (a labelled dialog with the fields inside it)
+   * has to be assertable without a DOM. It is the initial value only — the cog owns it after.
+   */
+  initialSettingsOpen?: boolean;
   /**
    * The pane a phone opens on. A prop (and a `?pane=` link) so the layout is a pure function of
    * its inputs: the switcher's state lives here, but every branch of it can be rendered in a
@@ -78,6 +90,7 @@ export function Dashboard({
   settings,
   initialSplit = 50,
   initialStage = DEFAULT_STAGE,
+  initialSettingsOpen = false,
 }: DashboardProps) {
   // The browser report is debugging, not product: it starts closed at every width now that it
   // lives behind the `d` glyph in the header instead of occupying a band above the footer.
@@ -87,11 +100,14 @@ export function Dashboard({
   // the user looks at the preview; the media query in `globals.css` is what hides one of them.
   const [stage, setStage] = useState<PaneStage>(initialStage);
   // The provider is chosen once and then read by every turn, so it does not deserve a permanent
-  // band across the conversation: it sits behind the cog in the pane's heading row and is
+  // band across the conversation: it is a popover hanging off the cog in the pane's heading row,
   // closed until asked for. Closed by default is the phone's answer too, where four provider
   // buttons and two fields were the most expensive vertical space in the app.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
   const splitContainer = useRef<HTMLDivElement | null>(null);
+  // The wrapper around the cog and its popover: it is both the "not outside" test for a press
+  // and the place focus returns to when the popover closes.
+  const settingsAnchor = useRef<HTMLDivElement | null>(null);
   // Publishes `--app-height` (the visual viewport, keyboard included) for the shell to read.
   const visibleHeight = useAppHeight();
 
@@ -299,31 +315,39 @@ export function Dashboard({
               Agent
             </h2>
             {settings ? (
-              <IconButton
-                testId="settings-toggle"
-                label={settingsOpen ? "Hide provider settings" : "Provider settings"}
-                hint="Provider, model and API key"
-                tone="nav"
-                aria-expanded={settingsOpen}
-                aria-controls="settings-region"
-                onClick={() => setSettingsOpen((open) => !open)}
-                className="ml-auto"
-              >
-                <Cog aria-hidden="true" />
-              </IconButton>
+              /*
+                The cog and its popover are one wrapper, and the wrapper is the anchor: the
+                surface is positioned against it (`top-full right-0`), a press inside it is not
+                a dismissal (so clicking the cog toggles rather than closes-then-reopens), and
+                focus returns to the cog when the popover closes from the keyboard. The label
+                stays "Provider settings" in both states — `aria-expanded` is what says
+                whether it is open, and a name that changes under a screen reader is a name
+                that cannot be used twice.
+              */
+              <div ref={settingsAnchor} className="relative ml-auto flex items-center">
+                <IconButton
+                  testId="settings-toggle"
+                  label="Provider settings"
+                  hint="Provider, model and API key"
+                  tone="nav"
+                  aria-expanded={settingsOpen}
+                  aria-controls="settings-region"
+                  onClick={() => setSettingsOpen((open) => !open)}
+                >
+                  <Cog aria-hidden="true" />
+                </IconButton>
+                <Popover
+                  id="settings-region"
+                  title="Provider settings"
+                  open={settingsOpen}
+                  onClose={() => setSettingsOpen(false)}
+                  anchorRef={settingsAnchor}
+                >
+                  {settings}
+                </Popover>
+              </div>
             ) : null}
           </div>
-          {/*
-            Kept mounted and hidden rather than conditionally rendered: `SettingsPanel` owns no
-            focus trap and no request, so unmounting buys nothing, while hiding keeps the
-            provider's `aria-pressed` state readable by anything that inspects the page. The
-            `hidden` class (not just the attribute) is what takes it out of the flex column.
-          */}
-          {settings === undefined ? null : (
-            <div id="settings-region" className={settingsOpen ? undefined : "hidden"}>
-              {settings}
-            </div>
-          )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chat}
             {terminal ? (
