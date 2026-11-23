@@ -312,9 +312,15 @@ describe("the touch floor the components apply", () => {
     expect(TOUCH_TARGET_MIN_PX).toBe(44);
   });
 
-  it("gives every worded button a 44 px height on a phone", () => {
+  it("gives every button a 44 px hit box on a phone without painting one", () => {
     const source = readFileSync(resolve(root, "src/ui/components/button.tsx"), "utf8");
-    expect(source).toContain("max-lg:min-h-11");
-    expect(source).toContain("size-9 max-lg:size-11");
+    // The base no longer forces a phone height: that `max-lg:min-h-11` is what made every row of
+    // controls 44 px of ink and every mobile toolbar look inflated. The icon size keeps the hit
+    // box by pairing a 36 px square with `tap-target`, and worded buttons take
+    // `TOUCH_TARGET_BLOCK` where they are used.
+    expect(source).not.toContain("max-lg:min-h-11");
+    expect(source).toContain("size-8 max-lg:size-9 tap-target");
+    expect(TOUCH_TARGET_ICON).toContain("tap-target");
+    expect(TOUCH_TARGET_BLOCK).toContain("tap-target");
   });
 });

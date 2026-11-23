@@ -227,6 +227,12 @@ export interface PreviewPanelProps {
   framePath?: string;
   /** The navigation nonce: bumping it is a reload. */
   reloads?: number;
+  /**
+   * Whether the bar's Reload is unavailable. Defaults to "there is no document yet" — the old
+   * rule — but the pane now publishes through that same button, so it passes `false` whenever a
+   * build *can* be published.
+   */
+  reloadDisabled?: boolean;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?: () => void;
@@ -259,6 +265,7 @@ export function PreviewPanel({
   path = "/",
   framePath,
   reloads = 0,
+  reloadDisabled,
   canGoBack = false,
   canGoForward = false,
   onBack,
@@ -294,8 +301,9 @@ export function PreviewPanel({
         onForward={() => onForward?.()}
         onReload={() => onReload?.(buildId)}
         // A browser with no document cannot reload one either; and a reload while a publish is
-        // in flight would ask two questions of the same guest at once.
-        reloadDisabled={!ready}
+        // in flight would ask two questions of the same guest at once. When the caller owns the
+        // decision (the pane publishes through this button), its answer wins.
+        reloadDisabled={reloadDisabled ?? !ready}
       />
 
       <PreviewDeviceToolbar viewport={viewport} onChange={onViewport} zoom={zoom} />

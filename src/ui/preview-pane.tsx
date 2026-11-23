@@ -174,9 +174,11 @@ export function describePreviewPhase(phase: PreviewPhase): string {
     case "publishing":
       return phase.detail;
     case "ready":
-      return phase.served === "worker"
-        ? `Serving ${String(phase.files)} file${phase.files === 1 ? "" : "s"} from the preview worker.`
-        : `Serving from the guest on demand: ${phase.files} file${phase.files === 1 ? "" : "s"}.`;
+      // Nothing. A published preview is the frame on screen; the line that used to say "Serving 3
+      // files from the preview worker." was a count nobody acts on, in the row that also carries
+      // the build id and the served-by badge (which is where "worker" or "guest" belongs, in one
+      // word instead of a sentence). Removed on request.
+      return "";
     case "failed":
       return "The preview could not be published.";
   }
@@ -279,8 +281,6 @@ export function PreviewPane({
         toolbar={
           <PreviewToolbar
             phase={phase}
-            onRefresh={() => onRefresh()}
-            available={available}
             app={app}
             ready={ready}
             url={url}
@@ -294,6 +294,11 @@ export function PreviewPane({
         reloads={browser.navigation.nonce}
         canGoBack={canGoBack(browser.history)}
         canGoForward={canGoForward(browser.history)}
+        // The bar's Reload button is what publishes a build now that the toolbar's own publish
+        // control is gone: it hands the build id to `onRefresh`, which is the same call the
+        // removed button made. So it is enabled when there is *something to publish*
+        // (`available`), not only when a document is already on screen.
+        reloadDisabled={!available || phase.kind === "starting" || phase.kind === "publishing"}
         onBack={() => dispatch({ type: "back" })}
         onForward={() => dispatch({ type: "forward" })}
         viewport={preset}
@@ -380,8 +385,6 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
 
 export interface PreviewToolbarProps {
   phase: PreviewPhase;
-  onRefresh: () => void;
-  available: boolean;
   app?: AppPreviewControl;
   /** True when a frame is actually rendered: fullscreen and "open in a new tab" need a URL. */
   ready?: boolean;
@@ -391,23 +394,21 @@ export interface PreviewToolbarProps {
 }
 
 /**
- * The pane's own controls: publish, run the app, the status sentence, the served-by badge.
+ * The pane's own controls: the status sentence and the served-by badge. The publish button and
+ * "Run the app" that used to lead this row were removed on request — publishing is the browser
+ * bar's Reload, and running the app had a second control in the same pane.
  *
- * It is deliberately *not* the browser chrome. Tabs, arrows, the address bar and the device
+ * Tabs, arrows, the address bar and the device
  * toolbar belong to `preview-chrome.tsx`, because those are a browser's words for a browser's
  * controls; this row is the app talking about what it did.
  */
 export function PreviewToolbar({
   phase,
-  onRefresh,
-  available,
   app,
   ready = phase.kind === "ready",
   url = phase.kind === "ready" ? previewUrlFor(phase.buildId) : null,
   onFullscreen,
 }: PreviewToolbarProps) {
-  const busy = phase.kind === "starting" || phase.kind === "publishing";
-  const label = phase.kind === "ready" ? "Rebuild preview" : "Preview build";
   const appNote = describeAppPreview(app?.state);
 
   return (
@@ -415,31 +416,13 @@ export function PreviewToolbar({
       data-testid="preview-toolbar"
       className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1.5"
     >
-      {/* Publish is the pane's primary action, so its pictogram is green: play to publish the
-          first build, a circling arrow to publish again. The words are the accessible name. */}
-      <IconButton
-        testId="preview-build"
-        label={label}
-        hint={
-          available
-            ? "Publish the finished dist/ and show it in the frame"
-            : "Boot the machine before publishing a build"
-        }
-        tone="run"
-        onClick={onRefresh}
-        disabled={!available || busy}
-      >
-        {busy ? (
-          <Loader2 aria-hidden="true" className="animate-spin" />
-        ) : phase.kind === "ready" ? (
-          <RotateCw aria-hidden="true" />
-        ) : (
-          <Play aria-hidden="true" />
-        )}
-      </IconButton>
-
-      {app !== undefined ? <RunAppButton app={app} available={available} /> : null}
-
+      {/*
+       * The publish button and "Run the app" used to sit here. Both are gone on request: the
+       * circling arrow in the browser bar (`preview-reload`) already publishes — it hands back the
+       * build id and the pane refreshes through `onReload` — and the terminal pictogram was a
+       * second, competing way to fill the same frame. One control per job, in the row that
+       * already owns it.
+       */}
       <div className="ml-auto flex items-center gap-1">
         {url !== null ? (
           // A real link, not a window.open call: a popup that the browser blocks would look
@@ -472,79 +455,34 @@ export function PreviewToolbar({
         ) : null}
       </div>
 
-      <p
-        data-testid="preview-status"
-        // The controller's own words for why the guest is answering. It used to reach the DOM
-        // nowhere at all, which made "served by the guest" an unexplained downgrade and hid
-        // the reason a publish failed from both the user and the acceptance run.
-        data-note={phase.kind === "ready" ? (phase.note ?? "") : ""}
-        title={phase.kind === "ready" ? (phase.note ?? undefined) : undefined}
-        aria-live="polite"
-        className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11.5px]"
-      >
-        {describePreviewPhase(phase)}
-        {appNote !== null ? (
-          <span data-testid="preview-app-status" className="block truncate">
-            {appNote}
-          </span>
-        ) : null}
-      </p>
+      {/*
+       * Only rendered when there is something to say. A ready preview used to fill this line with
+       * a file count ("Serving 3 files from the preview worker."), which is not a thing a person
+       * acts on and is already answered by the served-by badge beside it — removed on request, and
+       * with it the empty row that a silent phase would otherwise leave behind.
+       */}
+      {describePreviewPhase(phase).length > 0 || appNote !== null ? (
+        <p
+          data-testid="preview-status"
+          // The controller's own words for why the guest is answering. It used to reach the DOM
+          // nowhere at all, which made "served by the guest" an unexplained downgrade and hid
+          // the reason a publish failed from both the user and the acceptance run.
+          data-note={phase.kind === "ready" ? (phase.note ?? "") : ""}
+          title={phase.kind === "ready" ? (phase.note ?? undefined) : undefined}
+          aria-live="polite"
+          className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11.5px]"
+        >
+          {describePreviewPhase(phase)}
+          {appNote !== null ? (
+            <span data-testid="preview-app-status" className="block truncate">
+              {appNote}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
 
       <ServedBy phase={phase} app={app} />
     </div>
-  );
-}
-
-/**
- * The one control that runs `next start` — or whatever `scripts.start` is.
- *
- * The label switches to "Run the app again" after a failure, because the hook reads
- * `package.json` first and reports what it found: a project with no `start` script must not
- * have a button that can only fail silently.
- */
-function RunAppButton({ app, available }: { app: AppPreviewControl; available: boolean }): ReactNode {
-  if (app.state.kind === "running") {
-    return (
-      // A square in red: this ends a server, so it must not look like the green run control
-      // next to it. The words live in the accessible name ("Stop app").
-      <IconButton
-        testId="preview-stop-app"
-        label="Stop app"
-        hint="Stop the project's own start script and its server"
-        tone="stop"
-        onClick={app.stop}
-      >
-        <Square aria-hidden="true" />
-      </IconButton>
-    );
-  }
-
-  const starting = app.state.kind === "starting";
-  const failed = app.state.kind === "failed";
-
-  return (
-    <IconButton
-      testId="preview-run-app"
-      // The name says which question the button answers: a first run reads the project's
-      // `scripts.start`, so a project without one is told why rather than silently failing.
-      label={failed ? "Run the app again" : "Run the app"}
-      hint={
-        available
-          ? "Start the project's own start script and forward its requests to the guest"
-          : "Boot the machine before running the app"
-      }
-      tone="run"
-      onClick={app.run}
-      // A device that is booting has nothing to run yet, and a start in flight must not be
-      // started twice: both would spawn a second server on the same port.
-      disabled={!available || starting}
-    >
-      {starting ? (
-        <Loader2 aria-hidden="true" className="animate-spin" />
-      ) : (
-        <SquareTerminal aria-hidden="true" />
-      )}
-    </IconButton>
   );
 }
 

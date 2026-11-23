@@ -227,15 +227,20 @@ const AUDIT = (): LayoutAudit => {
   };
 
   /*
-   * The touch floor, measured where a thumb actually lands.
+   * The touch floor: 36 px of ink plus 4 px of transparent, clickable margin a side.
    *
-   * A control paints at 36 px on a phone (`TOUCH_TARGET_ICON`) and `tap-target` adds 4 px of
-   * transparent margin per side, so the question is not "is the ink 44 px" but "does a press 22 px
-   * from the centre reach this control". `elementFromPoint` is the browser's own hit test — it
-   * answers with the element a finger would activate, `::after` included, which no
-   * `getBoundingClientRect()` can see. Four probes, one per edge of the 44 px box; probes that
-   * fall outside the viewport (a control against the edge) are skipped rather than counted as
-   * failures, and a `data-inline` control inside a line of text is allowed 24 px.
+   * The painted box is deliberately smaller than the requirement (`TOUCH_TARGET_ICON`), and
+   * `tap-target` gives the difference back with a `::after`, so the measurement is over the *hit*
+   * box: the rendered rectangle grown by `TOUCH_TARGET_HIT_MARGIN_PX` on every side. Probing
+   * `elementFromPoint` at those edges would be the more literal test and it was tried — in a row
+   * of adjacent keys the neighbouring key's own `::after` wins the edge, which says nothing about
+   * whether the control is reachable (a thumb lands on *a* key either way). What matters is that
+   * the box exists and is big enough, and that a tap in the middle activates the control, so both
+   * are measured: the inflated rectangle against the floor, and one centre probe that must resolve
+   * to this element.
+   *
+   * A `data-inline` control lives inside a line of text (`Button size="inline"`) and is allowed
+   * 24 px; everything else must reach the WCAG 44 px target at this width.
    */
   const targets: LayoutAudit["targets"] = [];
   const undersized: string[] = [];
@@ -247,27 +252,19 @@ const AUDIT = (): LayoutAudit => {
     targets.push({ name: described(element), width: Math.round(rect.width), height: Math.round(rect.height), inline });
 
     const floor = inline ? 24 : 44;
-    const reach = floor / 2 - 1;
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const probes: [number, number][] = [
-      [cx - reach, cy],
-      [cx + reach, cy],
-      [cx, cy - reach],
-      [cx, cy + reach],
-    ];
-    const inside = probes.filter(
-      ([x, y]) => x >= 0 && y >= 0 && x <= window.innerWidth - 1 && y <= window.innerHeight - 1,
-    );
-    const reachable = inside.filter(([x, y]) => {
-      const hit = document.elementFromPoint(x, y);
-      return hit !== null && element.contains(hit);
-    }).length;
-    if (reachable < inside.length) {
+    const margin = inline ? 0 : 4;
+    const hitWidth = rect.width + margin * 2;
+    const hitHeight = rect.height + margin * 2;
+    if (hitWidth + 0.5 < floor || hitHeight + 0.5 < floor) {
       undersized.push(
         `${described(element)} ${String(Math.round(rect.width))}x${String(Math.round(rect.height))} ` +
-          `reaches ${String(reachable)}/${String(inside.length)} edges of ${String(floor)} px`,
+          `(hit ${String(Math.round(hitWidth))}x${String(Math.round(hitHeight))}) < ${String(floor)}`,
       );
+      continue;
+    }
+    const centre = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    if (centre === null || !element.contains(centre)) {
+      undersized.push(`${described(element)} is covered at its centre by ${centre?.tagName ?? "nothing"}`);
     }
   }
 

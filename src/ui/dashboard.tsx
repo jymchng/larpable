@@ -344,7 +344,7 @@ export function Dashboard({
             a setting is about the whole app rather than about this pane, and the header has a
             right edge that a per-pane heading row does not.
           */}
-          <div className="flex items-center justify-between gap-1.5 border-b px-1.5 py-0.5 sm:px-2 sm:py-0.5">
+          <div className="hidden items-center justify-between gap-1.5 border-b px-1.5 py-0.5 sm:px-2 sm:py-0.5 lg:flex">
             <h2
               id="agent-heading"
               className="text-muted-foreground hidden text-[11px] font-semibold tracking-[0.1em] uppercase lg:block"

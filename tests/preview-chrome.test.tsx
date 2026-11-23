@@ -146,8 +146,10 @@ describe("PreviewDeviceToolbar", () => {
     }
     expect(desktop).toMatch(/data-testid="preview-viewport-desktop"[^>]*aria-pressed="true"/);
     expect(desktop).toMatch(/data-testid="preview-viewport-mobile"[^>]*aria-pressed="false"/);
-    // Desktop is not a size: it follows the pane, and the readout says exactly that.
-    expect(desktop).toContain("full width");
+    // Desktop is not a size, so there is no size readout to print — removed on request:
+    // "full width", which repeated what the pressed Desktop button already said.
+    expect(desktop).not.toContain("full width");
+    expect(desktop).not.toContain('data-testid="preview-device-size"');
   });
 
   it("prints the exact size it is claiming, and the limit of that claim", () => {
@@ -155,9 +157,10 @@ describe("PreviewDeviceToolbar", () => {
 
     expect(mobile).toContain("390 × 844");
     expect(mobile).toMatch(/data-testid="preview-viewport-mobile"[^>]*aria-pressed="true"/);
-    // The honesty note travels with the control: sizes the frame only, no touch, no DPR.
+    // The honesty note still travels with the control, as the tooltip: sizes the frame only, no
+    // touch, no DPR. It left the visible row with the two spans removed on request.
     expect(mobile).toContain("no touch events or device pixel ratio");
-    expect(mobile).toContain('data-testid="preview-viewport-status"');
+    expect(mobile).not.toContain('data-testid="preview-viewport-status"');
   });
 });
 

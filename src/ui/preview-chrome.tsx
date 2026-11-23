@@ -318,22 +318,23 @@ export function PreviewDeviceToolbar({
         })}
       </div>
 
-      <span
-        data-testid="preview-device-size"
-        className="text-muted-foreground shrink-0 font-mono text-[10.5px]"
-        title={describeViewport(viewport)}
-      >
-        {viewport.width === null || viewport.height === null
-          ? "full width"
-          : `${String(viewport.width)} × ${String(viewport.height)}`}
-      </span>
-
-      <span
-        data-testid="preview-viewport-status"
-        className="text-muted-foreground/80 min-w-0 flex-1 truncate text-[10.5px]"
-      >
-        {describeViewport(viewport)}
-      </span>
+      {/*
+       * Two spans used to sit here: the current width ("full width" for the preset that follows
+       * the window, "390 × 844" for the others) and the note from `describeViewport`. Both were
+       * removed on request ("Remove: full width / Desktop: Fills the pane at your window's
+       * size"), and both were saying what the three buttons beside them already say — the active
+       * preset is the one with `aria-pressed="true"`. The note survives where it is still the only
+       * way to know something: the `title` on each button, which no layout has to pay for.
+       */}
+      {viewport.width === null || viewport.height === null ? null : (
+        <span
+          data-testid="preview-device-size"
+          className="text-muted-foreground shrink-0 font-mono text-[10.5px]"
+          title={describeViewport(viewport)}
+        >
+          {`${String(viewport.width)} × ${String(viewport.height)}`}
+        </span>
+      )}
     </div>
   );
 }

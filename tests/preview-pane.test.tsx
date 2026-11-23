@@ -62,14 +62,13 @@ describe("toPreviewState", () => {
 });
 
 describe("describePreviewPhase", () => {
-  it("says which build and how many files, not just \"ready\"", () => {
-    expect(describePreviewPhase(ready)).toBe("Serving 14 files from the preview worker.");
-  });
-
-  it("names the guest as the server when the worker is not holding the build", () => {
+  it("says nothing for a published preview: the frame is the message", () => {
+    // Removed on request: "Serving 3 files from the preview worker." — a file count nobody acts
+    // on, in a row that already carries the build id and the served-by badge.
+    expect(describePreviewPhase(ready)).toBe("");
     expect(
       describePreviewPhase({ ...ready, served: "guest", files: 1, note: "no worker" }),
-    ).toBe("Serving from the guest on demand: 1 file.");
+    ).toBe("");
   });
 
   it("repeats the controller's own detail while it works", () => {

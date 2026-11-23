@@ -11,8 +11,10 @@
  * sitting under it. The requirement is the *hit* area. So on a phone a control paints at 36 px
  * (`size-9`, `min-h-9`) and carries `tap-target` (`globals.css`), a `::after` that adds 4 px of transparent,
  * clickable margin on every side: 44 x 44 of live area, 36 x 36 of ink. `bun run acceptance:mobile` (`scripts/mobile-acceptance.ts`)
- * probes `document.elementFromPoint` at the edges of that 44 px box, so the claim is checked by a
- * browser rather than by this comment.
+ * re-measures the rendered rectangle plus that margin — and probes the centre — so the claim is
+ * checked by a browser rather than by this comment. The margin is per side, and in a row of
+ * adjacent keys the neighbour's margin overlaps it: a thumb lands on *a* key either way, which is
+ * why the audit measures the box rather than who wins the hit test at its edge.
  *
  * Why a constant instead of writing the classes in nine components: the number is a requirement,
  * and a requirement that is copied is a requirement that drifts.

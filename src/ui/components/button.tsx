@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 max-lg:min-h-11",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20",
   {
     variants: {
       variant: {
@@ -22,9 +22,9 @@ const buttonVariants = cva(
         default: "h-8 px-3 py-1 has-[>svg]:px-2.5",
         sm: "h-7 gap-1 rounded-md px-2.5 has-[>svg]:px-2",
         lg: "h-9 rounded-md px-4 has-[>svg]:px-3",
-        // `max-lg:min-h-11` in the base already lifts this to 44 px on a phone; the width has to
-        // be lifted too, or a square becomes a tall rectangle.
-        icon: "size-9 max-lg:size-11",
+        // A phone gets 36 px of ink and 44 px of hit area (`TOUCH_TARGET_ICON`), not a 44 px
+        // painted square: the base no longer forces a phone height, so this is the size that shows.
+        icon: "size-8 max-lg:size-9 tap-target",
       },
     },
     defaultVariants: {

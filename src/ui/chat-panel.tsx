@@ -140,7 +140,7 @@ export function ChatPanel({
             onFocus={(event) => {
               event.currentTarget.scrollIntoView({ block: "nearest" });
             }}
-            rows={2}
+            rows={1}
             disabled={blocked}
             // The keyboard's action key says "send" instead of "return", which is the one label
             // that makes Enter-to-send discoverable without the tooltip nobody has on a phone.

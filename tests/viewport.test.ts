@@ -69,6 +69,8 @@ describe("describeViewport", () => {
   });
 
   it("does not disclaim emulation for a preset that emulates nothing", () => {
-    expect(describeViewport(viewportFor("desktop"))).toBe("Desktop: Fills the pane at your window's size.");
+    // Shortened on request ("Remove: Desktop: Fills the pane at your window's size"): the note is
+    // only reachable as a tooltip now, so it is one clause rather than a sentence.
+    expect(describeViewport(viewportFor("desktop"))).toBe("Desktop: Follows your window.");
   });
 });

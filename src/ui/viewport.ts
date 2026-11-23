@@ -40,7 +40,7 @@ export const VIEWPORTS: readonly ViewportPreset[] = [
     label: "Desktop",
     width: null,
     height: null,
-    note: "Fills the pane at your window's size.",
+    note: "Follows your window.",
   },
   {
     name: "tablet",

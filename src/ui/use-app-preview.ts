@@ -112,7 +112,7 @@ export async function readStartScript(
     packageManager: manager,
     problem:
       start === null
-        ? "package.json has no `start` script, so there is no app to run. Add one (Next.js projects have `next start`)."
+        ? "No `start` script in package.json."
         : null,
   };
 }
