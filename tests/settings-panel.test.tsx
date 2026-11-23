@@ -139,7 +139,7 @@ describe("SettingsPanel: the preview half", () => {
   it("says what the pair means in the guest, in the settings actually in use", () => {
     const html = renderWithPreview(
       previewFields({
-        settings: { port: 8080, buildDirectory: "build" },
+        settings: { port: 8080, buildDirectory: "build", prod: true },
         draft: { port: "80", buildDirectory: "build" },
       }),
     );
@@ -147,7 +147,7 @@ describe("SettingsPanel: the preview half", () => {
     // server would be started with right now.
     expect(html).toContain('data-testid="settings-preview-note"');
     expect(html).toContain("http://localhost:8080");
-    expect(html).toContain("read from build");
+    expect(html).toContain("build/ out of the guest and serves it statically");
     expect(html).not.toContain("http://localhost:80<");
   });
 

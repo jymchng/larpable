@@ -71,8 +71,8 @@ describe("the port", () => {
     // A valid number replaces it, including a valid prefix: `5` *is* a port, and a field that
     // says 5 should not quietly mean 5173.
     expect(withPort(defaults, "5173")).toBe(defaults);
-    expect(withPort(defaults, "8080")).toEqual({ port: 8080, buildDirectory: "dist" });
-    expect(withPort(defaults, "5")).toEqual({ port: 5, buildDirectory: "dist" });
+    expect(withPort(defaults, "8080")).toEqual({ port: 8080, buildDirectory: "dist", prod: false });
+    expect(withPort(defaults, "5")).toEqual({ port: 5, buildDirectory: "dist", prod: false });
   });
 });
 
@@ -100,6 +100,7 @@ describe("the build directory", () => {
     expect(withBuildDirectory(defaults, "build/")).toEqual({
       port: 5173,
       buildDirectory: "build",
+      prod: false,
     });
   });
 });
@@ -107,10 +108,10 @@ describe("the build directory", () => {
 describe("the draft and the settings are different things", () => {
   it("adopts each field independently, so fixing one keeps the other", () => {
     const next = settingsFromDraft(defaults, { port: "8080", buildDirectory: "build" });
-    expect(next).toEqual({ port: 8080, buildDirectory: "build" });
+    expect(next).toEqual({ port: 8080, buildDirectory: "build", prod: false });
 
     const halfTyped = settingsFromDraft(defaults, { port: "", buildDirectory: "build" });
-    expect(halfTyped).toEqual({ port: 5173, buildDirectory: "build" });
+    expect(halfTyped).toEqual({ port: 5173, buildDirectory: "build", prod: false });
   });
 
   it("says what is wrong in the panel's own words, and nothing when it is right", () => {
@@ -142,10 +143,12 @@ describe("storage", () => {
     expect(parseStoredPreviewSettings('{"port":0,"buildDirectory":"build"}')).toEqual({
       port: 5173,
       buildDirectory: "build",
+      prod: false,
     });
     expect(parseStoredPreviewSettings('{"port":8080,"buildDirectory":"../escape"}')).toEqual({
       port: 8080,
       buildDirectory: "dist",
+      prod: false,
     });
   });
 

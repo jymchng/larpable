@@ -56,7 +56,6 @@ import {
   Maximize2,
   Play,
   RotateCw,
-  Server,
   Square,
   SquareTerminal,
 } from "lucide-react";
@@ -580,10 +579,11 @@ export interface PreviewToolbarProps {
  * The row's other sentence was a green `worker` badge, removed on request: a published build held
  * by the preview worker is the *normal* outcome, so the badge said "as expected" in the colour
  * reserved for news — and the debug popover's `Preview` segment already states who holds the
- * build. What stays is the case a person debugging needs — the guest answering on demand instead
- * of the worker — and the app server, which is a different server, not a different worker. When
- * neither is true the row is not rendered at all: an empty bordered strip is height that says
- * nothing.
+ * build. The `guest` badge followed it (removed on request): in dev mode every request is answered
+ * by the guest, so a warning-coloured badge was the pane complaining about the mode the switch
+ * exists to provide. What stays is the app server, which is a different server, not a different
+ * worker. When it is not running the row is not rendered at all: an empty bordered strip is height
+ * that says nothing.
  *
  * Tabs, arrows, the address bar and the device toolbar belong to `preview-chrome.tsx`, because
  * those are a browser's words for a browser's controls.
@@ -609,12 +609,14 @@ export function PreviewToolbar({ phase, app }: PreviewToolbarProps) {
  * Which answer about the served bytes is worth showing, or null when there is nothing to add.
  *
  * `worker` is deliberately null: it is what a published build is supposed to be, so a badge for it
- * is the pane repeating the frame. `guest` is the fallback a debugging user needs to know about.
+ * is the pane repeating the frame. `guest` is deliberately null too (removed on request): a dev
+ * preview is *always* answered by the guest, so the badge appeared on every attach — a warning
+ * colour for the normal state of the mode the switch is meant to make ordinary. What is left is
+ * the app server, which really is a different server rather than a different worker.
  */
-function servedByFact(phase: PreviewPhase, app?: AppPreviewControl): "app" | "guest" | null {
+function servedByFact(phase: PreviewPhase, app?: AppPreviewControl): "app" | null {
   if (app?.state.kind === "running") return "app";
-  if (phase.kind !== "ready") return null;
-  return phase.served === "worker" ? null : "guest";
+  return null;
 }
 
 /** How the bytes reach the iframe, stated only where the answer is not the expected one. */
@@ -625,24 +627,13 @@ function ServedBy({
   phase: PreviewPhase;
   app?: AppPreviewControl;
 }): ReactNode {
-  const fact = servedByFact(phase, app);
-
   // The app preview is a different server, not a different worker, so it keeps its own badge.
-  if (fact === "app") {
-    return (
-      <Badge variant="success" data-testid="preview-served-by" className="gap-1 font-mono text-[10px]">
-        <SquareTerminal aria-hidden="true" className="size-3" />
-        app
-      </Badge>
-    );
-  }
-
-  if (fact !== "guest") return null;
+  if (servedByFact(phase, app) !== "app") return null;
 
   return (
-    <Badge variant="warning" data-testid="preview-served-by" className="gap-1 font-mono text-[10px]">
-      <Server aria-hidden="true" className="size-3" />
-      guest
+    <Badge variant="success" data-testid="preview-served-by" className="gap-1 font-mono text-[10px]">
+      <SquareTerminal aria-hidden="true" className="size-3" />
+      app
     </Badge>
   );
 }
