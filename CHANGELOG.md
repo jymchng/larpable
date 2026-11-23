@@ -67,6 +67,18 @@ All notable changes to Larpable are documented here. The format follows
 
 ### Changed
 
+- **The provider settings are a popover, not a band.** The cog beside the Agent heading now
+  opens a labelled dialog anchored to itself (`src/ui/components/popover.tsx`), carrying the
+  same provider buttons, model field, key field and reset — so configuring the provider no
+  longer pushes the prompt box down, which on a 360 px phone it always did. It starts closed,
+  closes on Escape (returning focus to the cog) and on a press outside, and moves focus into
+  the surface on open; the trigger's name stays "Provider settings" in both states and
+  `aria-expanded` carries the state instead. The rules are pure functions
+  (`src/ui/popover.ts`) asserted by `tests/popover.test.ts`; the markup by `tests/app.test.tsx`
+  and `tests/settings-panel.test.tsx`; and the real events by `bun run acceptance:popover`,
+  which measures them in Chromium at 390 × 844 (measured: 8/8 checks, surface 352 px wide
+  inside a 390 px viewport, dialog right edge equal to the cog's, `scrollWidth - clientWidth` =
+  0) and writes `docs/evidence/provider-popover-390.png` — see `docs/provider-popover.md`.
 - **Controls are pictograms, not sentences.** Every button in the chat box, the environment
   card, the build strip, the preview toolbar, the browser chrome, the settings panel and the
   terminal is now a lucide icon whose colour states what kind of action it is — green to run,
