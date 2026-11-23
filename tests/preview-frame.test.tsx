@@ -87,7 +87,6 @@ describe("PreviewFrame", () => {
 
 describe("PreviewPanel", () => {
   const cases: { state: PreviewState; text: string }[] = [
-    { state: { kind: "idle" }, text: "No production build yet." },
     { state: { kind: "building", buildId: "b-17" }, text: "Building the site…" },
   ];
 
@@ -98,6 +97,17 @@ describe("PreviewPanel", () => {
       expect(html).not.toContain("<iframe");
     });
   }
+
+  it("renders no placeholder at all before the first build", () => {
+    // "No production build yet." and the copy under it were removed on request: an idle pane is
+    // the browser chrome and nothing else, so there is no div to leave behind either.
+    const html = render(<PreviewPanel state={{ kind: "idle" }} />);
+
+    expect(html).not.toContain("No production build yet.");
+    expect(html).not.toContain("never a mock page");
+    expect(html).not.toContain('data-testid="preview-placeholder"');
+    expect(html).not.toContain("<iframe");
+  });
 
   it("renders the frame and a reload control once a build is ready", () => {
     const html = render(<PreviewPanel state={{ kind: "ready", buildId: "b-17" }} />);
