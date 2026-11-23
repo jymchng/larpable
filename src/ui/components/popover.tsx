@@ -135,12 +135,12 @@ export function Popover({
         // Bounded in both axes so a phone shows a scrollable sheet instead of a surface that
         // runs off the bottom of the screen, and never wider than the viewport.
         "max-h-[min(70dvh,26rem)] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto",
-        "rounded-lg border p-2.5 shadow-xl outline-none",
+        "rounded-lg border p-2 shadow-xl outline-none",
         visibility.hidden ? "hidden" : undefined,
         className,
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2 border-b pb-1">
+      <div className="mb-1 flex items-center justify-between gap-1.5 border-b pb-0.5">
         <h2
           id={headingId}
           className="text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase"

@@ -169,7 +169,7 @@ export function Dashboard({
       className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip pb-[max(0.35rem,var(--safe-bottom))]"
     >
       <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 pt-[max(0.35rem,var(--safe-top))] pb-1.5 sm:px-3 sm:py-1.5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
             className="size-3.5 rounded-[4px] bg-gradient-to-br from-primary via-chart-5 to-primary shadow-[0_0_18px_-2px] shadow-primary/60"
@@ -315,7 +315,7 @@ export function Dashboard({
             because the stage switcher already says "Agent", but the *setting* would otherwise
             become unreachable on exactly the screens that need it most.
           */}
-          <div className="flex items-center justify-between gap-2 border-b px-1.5 py-0.5 sm:px-4 sm:py-1">
+          <div className="flex items-center justify-between gap-1.5 border-b px-1.5 py-0.5 sm:px-2 sm:py-0.5">
             <h2
               id="agent-heading"
               className="text-muted-foreground hidden text-[11px] font-semibold tracking-[0.1em] uppercase lg:block"
@@ -361,7 +361,7 @@ export function Dashboard({
             {terminal ? (
               <div className="flex min-h-0 flex-1 flex-col p-1 sm:p-1.5">{terminal}</div>
             ) : (
-              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1.5 overflow-y-auto px-3 py-4 text-center">
+              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-3 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
                 <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -402,7 +402,7 @@ export function Dashboard({
         >
           <h2
             id="preview-heading"
-            className="text-muted-foreground hidden border-b px-3 py-1 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-4 lg:block"
+            className="text-muted-foreground hidden border-b px-2 py-0.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-4 lg:block"
           >
             Preview
           </h2>
@@ -417,7 +417,7 @@ export function Dashboard({
               clipped and unreachable rather than scrolled — measured as a 574 px document in a
               390 px window.
             */
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 overflow-y-auto px-3 py-4 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-3 text-center">
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
               <p className="text-sm font-medium">No production build yet.</p>
               <p className="text-muted-foreground max-w-[42ch] text-[13px]">

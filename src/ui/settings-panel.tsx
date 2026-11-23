@@ -60,8 +60,8 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
   };
 
   return (
-    <div data-testid="settings-panel" className={cn("space-y-2", className)}>
-      <fieldset className="space-y-1.5">
+    <div data-testid="settings-panel" className={cn("space-y-1.5", className)}>
+      <fieldset className="space-y-1">
         <legend className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
           Provider
         </legend>
@@ -96,7 +96,7 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
         </p>
       </fieldset>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-end gap-1.5">
         <label className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
             Model

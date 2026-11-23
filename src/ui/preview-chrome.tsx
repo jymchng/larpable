@@ -62,7 +62,7 @@ export function PreviewTabStrip({
       data-testid="preview-tab-strip"
       role="tablist"
       aria-label="Preview tabs"
-      className="bg-muted/40 flex h-8 items-end gap-1 border-b px-2"
+      className="bg-muted/40 flex h-8 items-end gap-1 border-b px-1.5"
     >
       <div
         role="tab"
@@ -72,7 +72,7 @@ export function PreviewTabStrip({
         data-build-id={buildId ?? ""}
         data-loaded={loaded ? "true" : "false"}
         className={cn(
-          "flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-t-md border border-b-0 px-2.5 sm:max-w-[22rem]",
+          "flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-t-md border border-b-0 px-2 sm:max-w-[22rem]",
           loaded ? "bg-background" : "bg-muted/60 text-muted-foreground",
         )}
       >
@@ -173,7 +173,7 @@ export function PreviewBrowserBar({
   return (
     <div
       data-testid="preview-browser-bar"
-      className="bg-muted/40 flex items-center gap-1 border-b px-1.5 py-1"
+      className="bg-muted/40 flex items-center gap-1 border-b px-1 py-0.5"
     >
       <NavButton
         testId="preview-back"
@@ -210,7 +210,7 @@ export function PreviewBrowserBar({
           from the build and the frame's own path, never from typed text. */}
       <div
         className={cn(
-          "bg-background mx-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-full border px-2.5",
+          "bg-background mx-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-full border px-2",
           empty && "text-muted-foreground",
         )}
       >
@@ -284,7 +284,7 @@ export function PreviewDeviceToolbar({
       data-testid="preview-device-toolbar"
       role="group"
       aria-label="Preview device"
-      className="bg-muted/20 flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1"
+      className="bg-muted/20 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 border-b px-1.5 py-0.5"
     >
       <div
         data-testid="preview-viewports"

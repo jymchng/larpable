@@ -326,7 +326,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
     <div
       data-testid="preview-build-strip"
       data-kind={status.kind}
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5"
+      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 py-1"
     >
       <IconButton
         testId="preview-install-build"
@@ -413,7 +413,7 @@ export function PreviewToolbar({
   return (
     <div
       data-testid="preview-toolbar"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-2"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1.5"
     >
       {/* Publish is the pane's primary action, so its pictogram is green: play to publish the
           first build, a circling arrow to publish again. The words are the accessible name. */}

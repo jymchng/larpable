@@ -70,7 +70,7 @@ export function ChatPanel({
       aria-label="Agent conversation"
       className={cn("flex min-h-0 flex-1 flex-col", className)}
     >
-      <div className="flex items-center gap-2 border-b px-3 py-1.5">
+      <div className="flex items-center gap-1.5 border-b px-2 py-1">
         <p
           data-testid="chat-status"
           aria-live="polite"
@@ -94,10 +94,10 @@ export function ChatPanel({
       <ol
         data-testid="chat-transcript"
         aria-label="Transcript"
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2"
+        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-1.5"
       >
         {state.entries.length === 0 ? (
-          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-4 text-[13px]">
+          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-1.5 text-[13px]">
             {emptyHint}
           </li>
         ) : (
@@ -111,12 +111,12 @@ export function ChatPanel({
           event.preventDefault();
           submit();
         }}
-        className="border-t p-2"
+        className="border-t p-1.5"
       >
         <label htmlFor="chat-prompt" className="sr-only">
           Ask the agent to build or change something
         </label>
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1.5">
           <textarea
             id="chat-prompt"
             data-testid="chat-input"
@@ -149,7 +149,7 @@ export function ChatPanel({
             // 16 px below `lg` is not a style choice: iOS Safari zooms the page when a focused
             // field's text is smaller than that, and a zoomed app is a broken app. The laptop
             // size stays 12.5 px, where density is worth more than a magnifier.
-            className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2.5 py-2 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
+            className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2 py-1.5 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
           />
           {/* Send is the prompt's primary action, so it keeps the filled (primary) variant
               rather than the ghost one: the pictogram is the label, the fill is the emphasis. */}
@@ -172,7 +172,7 @@ export function ChatPanel({
         {blocked ? (
           <p
             data-testid="chat-unavailable"
-            className="text-muted-foreground mt-1.5 flex items-start gap-1.5 text-[11.5px]"
+            className="text-muted-foreground mt-1 flex items-start gap-1 text-[11.5px]"
           >
             <Info aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
             {unavailableReason}
@@ -188,7 +188,7 @@ function ChatRow({ entry }: { entry: ChatEntry }): ReactNode {
     case "user":
       return (
         <li data-testid="chat-user" className="flex justify-end">
-          <p className="bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5 text-[13px] break-words whitespace-pre-wrap">
+          <p className="bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2 py-1 text-[13px] break-words whitespace-pre-wrap">
             {entry.text}
           </p>
         </li>
@@ -220,7 +220,7 @@ function ChatRow({ entry }: { entry: ChatEntry }): ReactNode {
           data-testid="chat-notice"
           data-tone={entry.tone}
           className={cn(
-            "flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-[12px]",
+            "flex items-start gap-1.5 rounded-md border px-1.5 py-1 text-[12px]",
             entry.tone === "error"
               ? "border-destructive/30 bg-destructive/10 text-destructive"
               : entry.tone === "warn"
@@ -246,7 +246,7 @@ function ToolRow({ entry }: { entry: ChatToolEntry }): ReactNode {
       data-tool={entry.name}
       data-status={entry.status}
       data-parallel={entry.parallel ? "true" : "false"}
-      className="border-border/70 rounded-md border px-2 py-1.5"
+      className="border-border/70 rounded-md border px-1.5 py-1"
     >
       <div className="flex items-center gap-1.5">
         {entry.status === "running" ? (

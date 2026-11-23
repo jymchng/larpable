@@ -139,8 +139,9 @@ describe("Dashboard", () => {
 
       expect(html).not.toContain('data-testid="boot-spinner"');
       expect(html).not.toContain('data-testid="boot-failed"');
-      // The existing, honest answer is still there: the footer and the requirements dot.
-      expect(html).toContain("Kernel cannot boot here");
+      // The existing, honest answer is still there: the requirements dot and its count, which now
+      // carry the verdict in words instead of repeating it in a second footer line.
+      expect(html).toContain("this browser cannot boot the kernel");
     });
 
     it("draws no boot chrome when the dashboard was not given a boot action", () => {
@@ -159,7 +160,7 @@ describe("Dashboard", () => {
     });
     const html = renderDashboard({ support: unsupported });
 
-    expect(html).toContain("Kernel cannot boot here");
+    expect(html).toContain("this browser cannot boot the kernel");
     expect(html).toContain("WebAssembly JSPI");
     expect(html).toContain("Chrome/Edge 137+");
   });

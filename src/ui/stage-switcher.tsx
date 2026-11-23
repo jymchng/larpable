@@ -61,7 +61,7 @@ export function StageSwitcher({ stage, onChange, previewReady = false }: StageSw
       data-testid="stage-switcher"
       role="group"
       aria-label="Which pane to show"
-      className="bg-card/60 flex items-stretch gap-1 border-b p-1.5 lg:hidden"
+      className="bg-card/60 flex items-stretch gap-1 border-b p-1 lg:hidden"
     >
       {PANE_STAGES.map((pane) => {
         const selected = pane === stage;

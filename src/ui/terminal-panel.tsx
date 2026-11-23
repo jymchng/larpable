@@ -395,7 +395,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 px-2 py-1">
         <SquareTerminal aria-hidden="true" className="size-3.5 text-slate-400" />
         <span className="font-mono text-[11px] text-slate-200">{cwd}</span>
         <StatusDot testId="terminal-status" tone={badge.tone} label={badge.label} className="ml-auto" />
@@ -504,7 +504,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
           data-kind={notice.kind}
           role="status"
           className={cn(
-            "px-3 py-1 font-mono text-[11px]",
+            "px-2 py-0.5 font-mono text-[11px]",
             notice.kind === "error" ? "bg-red-950/60 text-red-200" : "bg-slate-900/80 text-slate-300",
           )}
         >
@@ -765,11 +765,11 @@ function ShellTab({
       <div
         ref={containerRef}
         data-testid="terminal-screen"
-        className="absolute inset-0 px-2 py-1.5"
+        className="absolute inset-0 px-1.5 py-1"
       />
 
       {connection !== "connected" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-3 py-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-2 py-1.5">
           <p
             className={cn(
               "font-mono text-[11.5px]",
@@ -788,7 +788,7 @@ function ShellTab({
       )}
 
       {error && connection === "connected" && (
-        <p className="absolute inset-x-0 bottom-0 bg-red-950/70 px-3 py-1 font-mono text-[11px] text-red-200">
+        <p className="absolute inset-x-0 bottom-0 bg-red-950/70 px-2 py-0.5 font-mono text-[11px] text-red-200">
           <TriangleAlert aria-hidden="true" className="mr-1 inline size-3" />
           {error}
         </p>
