@@ -148,6 +148,22 @@ export interface PersistenceFacts {
   /** What `wc -c` printed inside the guest for each file, keyed by path; null when unanswered. */
   guestBytes: Readonly<Record<string, number | null>>;
   /**
+   * The transcript tail after each write attempt, keyed by path.
+   *
+   * Only used to explain a failure: "the guest never answered" on its own does not say whether
+   * the terminal showed a prompt, an error, or nothing at all, and that difference is the whole
+   * diagnosis. Optional so a test can state the facts without inventing a transcript.
+   */
+  guestTails?: Readonly<Record<string, string>>;
+  /**
+   * Whether the panel ever reported a save younger than the writes (`isFreshSave`).
+   *
+   * Measured separately from the read-back because it is a different claim: the files came back
+   * *because* a save stored them, and a run that reloads on a creation save would be testing
+   * luck. Reported in the table either way, but a false here has to fail the run.
+   */
+  saveConfirmed: boolean;
+  /**
    * The transcript captured immediately after each read-back, keyed by path, taken *after* the
    * reload. A file missing from this map was never read back.
    */
@@ -159,8 +175,8 @@ export interface PersistenceFacts {
 }
 
 /**
- * The verdicts, in the order a reader needs them: it was created, it reached the disk, it came
- * back twice, and the panel still says it is open.
+ * The verdicts, in the order a reader needs them: it was created, it reached the disk, it was
+ * saved, it came back twice, and the panel still says it is open.
  */
 export function persistenceChecks(facts: PersistenceFacts): PersistenceCheck[] {
   const checks: PersistenceCheck[] = [];
@@ -173,12 +189,26 @@ export function persistenceChecks(facts: PersistenceFacts): PersistenceCheck[] {
 
   for (const file of facts.files) {
     const reported = facts.guestBytes[file.path] ?? null;
+    const tail = facts.guestTails?.[file.path] ?? "";
     checks.push({
       name: `persistence: /workspace/${file.path} holds the bytes the host sent`,
       ok: reported === file.bytes,
-      detail: `guest reported ${reported === null ? "nothing" : `${String(reported)} bytes`}, host sent ${String(file.bytes)}`,
+      // "never answered" and "reported 12 bytes" are different failures - a lost command is not a
+      // truncated write - so the two cases read differently rather than both saying "nothing".
+      detail:
+        reported === null
+          ? `the guest never answered; host sent ${String(file.bytes)} bytes; transcript tail: ${tailOf(tail)}`
+          : `guest reported ${String(reported)} bytes, host sent ${String(file.bytes)} bytes`,
     });
   }
+
+  checks.push({
+    name: "persistence: a save finished after the guest's writes",
+    ok: facts.saveConfirmed,
+    detail: facts.saveConfirmed
+      ? "the panel reported a fresh save before the reload"
+      : "no save finished after the writes, so the reload could only find what the creation save stored",
+  });
 
   for (const file of facts.files) {
     const seen = facts.readAfterReload[file.path] ?? "";

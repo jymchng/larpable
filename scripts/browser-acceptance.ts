@@ -135,6 +135,7 @@ interface UnsupportedMeasurement {
 interface PersistenceMeasurement extends PersistenceFacts {
   files: PersistedFile[];
   guestBytes: Record<string, number | null>;
+  guestTails: Record<string, string>;
   rowsBeforeReload: string[];
   readAfterReload: Record<string, string>;
   rowsAfterReload: string[];
@@ -363,16 +364,21 @@ async function openProjectName(page: Page): Promise<string | null> {
  * assertion — a dropped character produces a short file and a different count, and the retry is
  * for the dropped character `typeLine` did not catch.
  */
-async function writesInGuest(page: Page, file: PersistedFile): Promise<number | null> {
+async function writesInGuest(
+  page: Page,
+  file: PersistedFile,
+): Promise<{ reported: number | null; tail: string }> {
   const commands = [writeFileCommand(file.path, file.content), sizeCommand(file.path)];
+  let tail = "";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const answer = await runInTerminal(page, commands, sizeLine(file.path, file.bytes), 60_000);
     const seen = await transcript(page);
     const reported = sizeFromTranscript(seen, file.path, commands);
-    if (answer.answered && reported !== null) return reported;
+    tail = answer.tail;
+    if (answer.answered && reported !== null) return { reported, tail };
     console.log(`[acceptance] retrying the write of ${file.path} (attempt ${attempt})`);
   }
-  return null;
+  return { reported: null, tail };
 }
 
 /**
@@ -416,8 +422,11 @@ async function measuresPersistence(
 
   // ---- write both files inside Linux, and have Linux count them
   const guestBytes: Record<string, number | null> = {};
+  const guestTails: Record<string, string> = {};
   for (const file of files) {
-    guestBytes[file.path] = await writesInGuest(page, file);
+    const written = await writesInGuest(page, file);
+    guestBytes[file.path] = written.reported;
+    guestTails[file.path] = written.tail;
   }
 
   // ---- wait for the manager's own save, judged by the panel's sentence
@@ -463,6 +472,7 @@ async function measuresPersistence(
       projectName: project,
       files,
       guestBytes,
+      guestTails,
       rowsBeforeReload,
       readAfterReload,
       rowsAfterReload,

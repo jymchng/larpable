@@ -42,6 +42,7 @@ function facts(overrides: Partial<PersistenceFacts> = {}): PersistenceFacts {
     files,
     rowsBeforeReload: ["my-site", "persist-abc123"],
     guestBytes,
+    saveConfirmed: true,
     readAfterReload,
     rowsAfterReload: ["my-site", "persist-abc123"],
     activeAfterReload: "persist-abc123",
@@ -51,7 +52,8 @@ function facts(overrides: Partial<PersistenceFacts> = {}): PersistenceFacts {
 
 describe("the token and the fixture", () => {
   it("builds a lower-case token that is safe in a shell word, a file name and a TOML comment", () => {
-    expect(TOKEN).toBe("larpable-persist-1a1q5n1s");
+    // 1_700_000_000_000 in base36, pinned so a change of radix or case is a failing test.
+    expect(TOKEN).toBe("larpable-persist-loyw3v28");
     expect(TOKEN).toMatch(/^[a-z0-9-]+$/);
   });
 
@@ -120,6 +122,7 @@ describe("persistenceChecks", () => {
       "persistence: project created through the panel",
       "persistence: /workspace/persist-check.txt holds the bytes the host sent",
       "persistence: /workspace/netlify.toml holds the bytes the host sent",
+      "persistence: a save finished after the guest's writes",
       "persistence: /workspace/persist-check.txt survived a full page reload",
       "persistence: /workspace/netlify.toml survived a full page reload",
       "persistence: the reloaded app still lists the project, and it is the open one",
@@ -132,6 +135,15 @@ describe("persistenceChecks", () => {
     const created = checks[0]!;
     expect(created.ok).toBe(false);
     expect(created.detail).toContain("my-site");
+  });
+
+  it("fails when no save finished after the writes, even though the project was created", () => {
+    // The creation save lists the project, so every other check can be satisfied by writing the
+    // bytes into a workspace the reload throws away. This check is what says so.
+    const stale = persistenceChecks(facts({ saveConfirmed: false }));
+    const saved = stale.find((check) => check.name.includes("a save finished"))!;
+    expect(saved.ok).toBe(false);
+    expect(saved.detail).toContain("no save finished after the writes");
   });
 
   it("fails when the guest stored a truncated file, quoting both counts", () => {
