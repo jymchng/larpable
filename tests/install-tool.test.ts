@@ -20,6 +20,10 @@
  * scripted guest, so a lockfile in the tree is what makes the frozen flag appear.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { BuildManager } from "@/build/manager";
@@ -189,5 +193,48 @@ describe("install_dependencies", () => {
     if (parameters.type !== "object") throw new Error("install_dependencies must take an object");
     expect(Object.keys(parameters.properties)).toEqual([]);
     expect(parameters.required ?? []).toEqual([]);
+  });
+});
+
+/**
+ * The rest of the tree's claims about this tool, held to the tool.
+ *
+ * The tool was once removed on purpose, and the sentence saying so outlived the code that
+ * justified it: `src/agent/tools/build.ts` still read "there is deliberately no
+ * `install_dependencies` beside it" while the line below it registered one. A comment that
+ * contradicts its own file is worse than no comment, and the pane's tooltip was telling the
+ * user to run npm. These are cheap greps because the claims are prose; they fail on the
+ * sentence, not on the formatting.
+ */
+describe("what the code claims about installing", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+
+  it("no module still says there is deliberately no install tool", () => {
+    const files = [
+      "src/agent/tools/build.ts",
+      "src/agent/tools/index.ts",
+      "src/agent/prompt.ts",
+      "src/ui/use-build.ts",
+    ];
+    const offenders = files.filter((file) => {
+      const text = readFileSync(join(root, file), "utf8");
+      return (
+        /deliberately no `install_dependencies`/.test(text) ||
+        /installing is a command, not a capability/i.test(text)
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("build.ts explains why the tool is back, and that it is Bun only", () => {
+    const text = readFileSync(join(root, "src/agent/tools/build.ts"), "utf8");
+    expect(text).toContain("`install_dependencies` sits beside it");
+    expect(text).toContain("Bun only");
+  });
+
+  it("the pane's own button hint says Bun, not npm", () => {
+    const text = readFileSync(join(root, "src/ui/preview-pane.tsx"), "utf8");
+    expect(text).not.toContain("Run npm install");
+    expect(text).toContain("Run bun install");
   });
 });

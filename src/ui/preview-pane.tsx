@@ -333,7 +333,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
         label={status.kind === "ok" ? "Rebuild" : "Install & build"}
         hint={
           build.problem ??
-          "Run npm install and npm run build inside the guest, then publish the result"
+          "Run bun install and bun run build inside the guest, then publish the result"
         }
         tone="run"
         onClick={build.run}
