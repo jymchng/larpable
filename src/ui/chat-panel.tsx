@@ -149,7 +149,7 @@ export function ChatPanel({
             // 16 px below `lg` is not a style choice: iOS Safari zooms the page when a focused
             // field's text is smaller than that, and a zoomed app is a broken app. The laptop
             // size stays 12.5 px, where density is worth more than a magnifier.
-            className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2 py-1.5 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
+            className="border-input bg-background focus-visible:ring-ring min-h-[36px] flex-1 resize-none rounded-md border px-1.5 py-1 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
           />
           {/* Send is the prompt's primary action, so it keeps the filled (primary) variant
               rather than the ghost one: the pictogram is the label, the fill is the emphasis. */}

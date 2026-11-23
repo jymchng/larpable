@@ -168,7 +168,7 @@ export function Dashboard({
       style={{ height: visibleHeight === null ? "100dvh" : `${String(visibleHeight)}px` }}
       className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip pb-[max(0.35rem,var(--safe-bottom))]"
     >
-      <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 pt-[max(0.35rem,var(--safe-top))] pb-1.5 sm:px-3 sm:py-1.5">
+      <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-1.5 pt-[max(0.35rem,var(--safe-top))] pb-1 sm:px-2.5 sm:py-1">
         <div className="flex items-center gap-1.5">
           <span
             aria-hidden="true"

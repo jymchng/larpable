@@ -226,8 +226,17 @@ const AUDIT = (): LayoutAudit => {
     ),
   };
 
-  // The touch floor. A `data-inline` control lives inside a line of text (`Button size="inline"`)
-  // and is allowed 24 px; everything else must reach the WCAG 44 px target at this width.
+  /*
+   * The touch floor, measured where a thumb actually lands.
+   *
+   * A control paints at 36 px on a phone (`TOUCH_TARGET_ICON`) and `tap-target` adds 4 px of
+   * transparent margin per side, so the question is not "is the ink 44 px" but "does a press 22 px
+   * from the centre reach this control". `elementFromPoint` is the browser's own hit test — it
+   * answers with the element a finger would activate, `::after` included, which no
+   * `getBoundingClientRect()` can see. Four probes, one per edge of the 44 px box; probes that
+   * fall outside the viewport (a control against the edge) are skipped rather than counted as
+   * failures, and a `data-inline` control inside a line of text is allowed 24 px.
+   */
   const targets: LayoutAudit["targets"] = [];
   const undersized: string[] = [];
   for (const element of Array.from(document.querySelectorAll<HTMLElement>("button"))) {
@@ -236,9 +245,29 @@ const AUDIT = (): LayoutAudit => {
     if (style.display === "none" || style.visibility === "hidden" || rect.height <= 0) continue;
     const inline = element.getAttribute("data-inline") === "true";
     targets.push({ name: described(element), width: Math.round(rect.width), height: Math.round(rect.height), inline });
+
     const floor = inline ? 24 : 44;
-    if (rect.width + 0.5 < floor || rect.height + 0.5 < floor) {
-      undersized.push(`${described(element)} ${String(Math.round(rect.width))}x${String(Math.round(rect.height))} < ${String(floor)}`);
+    const reach = floor / 2 - 1;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const probes: [number, number][] = [
+      [cx - reach, cy],
+      [cx + reach, cy],
+      [cx, cy - reach],
+      [cx, cy + reach],
+    ];
+    const inside = probes.filter(
+      ([x, y]) => x >= 0 && y >= 0 && x <= window.innerWidth - 1 && y <= window.innerHeight - 1,
+    );
+    const reachable = inside.filter(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit !== null && element.contains(hit);
+    }).length;
+    if (reachable < inside.length) {
+      undersized.push(
+        `${described(element)} ${String(Math.round(rect.width))}x${String(Math.round(rect.height))} ` +
+          `reaches ${String(reachable)}/${String(inside.length)} edges of ${String(floor)} px`,
+      );
     }
   }
 

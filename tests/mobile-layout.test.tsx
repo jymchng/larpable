@@ -139,7 +139,7 @@ describe("the phone opens on one pane, with a switcher above it", () => {
     expect(html).toContain("lg:hidden");
     // `max-lg:min-h-11` on both buttons: the block target constant, not a copy of it.
     expect(html.split(TOUCH_TARGET_BLOCK).length - 1).toBe(2);
-    expect(TOUCH_TARGET_BLOCK).toBe("max-lg:min-h-11");
+    expect(TOUCH_TARGET_BLOCK).toBe("max-lg:min-h-9 tap-target");
   });
 
   it("advertises a published build on the Preview tab without jumping panes", () => {
@@ -308,7 +308,7 @@ describe("the touch floor the components apply", () => {
     const source = readFileSync(resolve(root, "src/ui/components/icon-button.tsx"), "utf8");
     expect(source).toContain("TOUCH_TARGET_ICON");
     expect(source).toContain("size-8");
-    expect(TOUCH_TARGET_ICON).toBe("max-lg:size-11");
+    expect(TOUCH_TARGET_ICON).toBe("max-lg:size-9 tap-target");
     expect(TOUCH_TARGET_MIN_PX).toBe(44);
   });
 

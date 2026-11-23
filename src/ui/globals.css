@@ -235,3 +235,30 @@
     min-height: 11rem;
   }
 }
+
+/*
+ * `tap-target`: a compact control that still answers a thumb.
+ *
+ * The old rule was `max-lg:size-11` — a 44 px *visual* box on every phone control — and it
+ * is why the toolbar rows on a 390 px screen looked inflated: the paint was as big as the
+ * requirement. The requirement is about the *hit* area, not the ink, so the visual box is now
+ * 36 px (`size-9` / `min-h-9`) and this utility grows the live area by 4 px on each side with
+ * a transparent `::after`, which is 44 x 44 without spending a single pixel of layout.
+ *
+ * Why a pseudo-element rather than a wrapper: a wrapper would have to be as large as the hit
+ * area, so it would either eat the layout or need `negative margin` arithmetic at every call
+ * site. `::after` is out of flow, inherits the button's radius, and — because it belongs to the
+ * button — a press inside it is a press on the button. `scripts/mobile-acceptance.ts` proves
+ * that with `document.elementFromPoint` probes at the edges of a 44 px box, rather than by
+ * trusting this comment.
+ */
+@utility tap-target {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -0.25rem;
+    border-radius: inherit;
+  }
+}

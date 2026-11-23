@@ -30,8 +30,12 @@ import {
 } from "../src/ui/stage";
 import {
   TOUCH_TARGET_BLOCK,
+  TOUCH_TARGET_HIT_AREA,
+  TOUCH_TARGET_HIT_MARGIN_PX,
   TOUCH_TARGET_ICON,
   TOUCH_TARGET_MIN_PX,
+  TOUCH_TARGET_VISUAL_PX,
+  TOUCH_TARGET_VISUAL_UNITS,
   TOUCH_TARGET_SPACING_UNITS,
   meetsTouchTarget,
 } from "../src/ui/touch";
@@ -149,11 +153,20 @@ describe("the preview's fit-to-width scale", () => {
 });
 
 describe("the touch target", () => {
-  it("is WCAG's 44 px, which is Tailwind's 11 spacing units", () => {
+  it("is WCAG's 44 px of *hit* area, painted at 36 px plus 4 px of margin a side", () => {
     expect(TOUCH_TARGET_MIN_PX).toBe(44);
     expect(TOUCH_TARGET_SPACING_UNITS * 4).toBe(TOUCH_TARGET_MIN_PX);
-    expect(TOUCH_TARGET_ICON).toContain(`size-${String(TOUCH_TARGET_SPACING_UNITS)}`);
-    expect(TOUCH_TARGET_BLOCK).toContain(`min-h-${String(TOUCH_TARGET_SPACING_UNITS)}`);
+    // The ink is smaller than the requirement on purpose, and the gap is exactly what the
+    // transparent `::after` gives back. A phone control that *painted* at 44 px is what made
+    // every toolbar on a 390 px screen look inflated.
+    expect(TOUCH_TARGET_VISUAL_PX).toBe(36);
+    expect(TOUCH_TARGET_VISUAL_PX + TOUCH_TARGET_HIT_MARGIN_PX * 2).toBe(TOUCH_TARGET_MIN_PX);
+    expect(TOUCH_TARGET_VISUAL_UNITS * 4).toBe(TOUCH_TARGET_VISUAL_PX);
+    expect(TOUCH_TARGET_ICON).toContain(`size-${String(TOUCH_TARGET_VISUAL_UNITS)}`);
+    expect(TOUCH_TARGET_BLOCK).toContain(`min-h-${String(TOUCH_TARGET_VISUAL_UNITS)}`);
+    // The margin is not a class the caller can forget: both strings carry the utility.
+    expect(TOUCH_TARGET_ICON).toContain(TOUCH_TARGET_HIT_AREA);
+    expect(TOUCH_TARGET_BLOCK).toContain(TOUCH_TARGET_HIT_AREA);
   });
 
   it("is applied below the laptop breakpoint, not above it", () => {

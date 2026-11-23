@@ -62,7 +62,7 @@ export function PreviewTabStrip({
       data-testid="preview-tab-strip"
       role="tablist"
       aria-label="Preview tabs"
-      className="bg-muted/40 flex h-8 items-end gap-1 border-b px-1.5"
+      className="bg-muted/40 flex h-7 items-end gap-0.5 border-b px-1"
     >
       <div
         role="tab"
@@ -72,7 +72,7 @@ export function PreviewTabStrip({
         data-build-id={buildId ?? ""}
         data-loaded={loaded ? "true" : "false"}
         className={cn(
-          "flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-t-md border border-b-0 px-2 sm:max-w-[22rem]",
+          "flex h-6 max-w-full min-w-0 items-center gap-1 rounded-t-md border border-b-0 px-1.5 sm:max-w-[22rem]",
           loaded ? "bg-background" : "bg-muted/60 text-muted-foreground",
         )}
       >
@@ -210,7 +210,7 @@ export function PreviewBrowserBar({
           from the build and the frame's own path, never from typed text. */}
       <div
         className={cn(
-          "bg-background mx-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-full border px-2",
+          "bg-background mx-0.5 flex h-6 min-w-0 flex-1 items-center gap-1 rounded-full border px-1.5",
           empty && "text-muted-foreground",
         )}
       >

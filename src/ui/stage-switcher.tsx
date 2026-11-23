@@ -61,7 +61,7 @@ export function StageSwitcher({ stage, onChange, previewReady = false }: StageSw
       data-testid="stage-switcher"
       role="group"
       aria-label="Which pane to show"
-      className="bg-card/60 flex items-stretch gap-1 border-b p-1 lg:hidden"
+      className="bg-card/60 flex items-stretch gap-0.5 border-b p-0.5 lg:hidden"
     >
       {PANE_STAGES.map((pane) => {
         const selected = pane === stage;
@@ -77,7 +77,7 @@ export function StageSwitcher({ stage, onChange, previewReady = false }: StageSw
             onClick={() => onChange(pane)}
             className={cn(
               TOUCH_TARGET_BLOCK,
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[13px] font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 text-[12.5px] font-medium transition-colors",
               selected
                 ? "bg-primary/15 text-foreground shadow-xs"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",

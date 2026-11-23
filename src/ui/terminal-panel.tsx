@@ -330,7 +330,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         data-testid="terminal-tabs"
         role="tablist"
         aria-label="Shells"
-        className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 px-2 py-1"
+        className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-800 px-1.5 py-0.5"
       >
         {tabs.map((tab) => {
           const selected = tab.id === active?.id;
@@ -339,7 +339,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             <span
               key={tab.id}
               className={cn(
-                "flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5",
+                "flex shrink-0 items-center gap-0.5 rounded-md border px-1 py-0",
                 selected
                   ? "border-slate-600 bg-slate-800/80 text-slate-100"
                   : "border-transparent bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -357,7 +357,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
                 onClick={() => selectTab(tab.id)}
                 // A tab is a word, not a pictogram, so it takes the block floor: 44 px tall below
                 // `lg` (a 17 px baseline is a thumb miss), its own text height above it.
-                className={cn("font-mono text-[11px]", TOUCH_TARGET_BLOCK)}
+                className={cn("font-mono text-[10.5px]", TOUCH_TARGET_BLOCK)}
               >
                 {tab.label}
               </button>
@@ -370,9 +370,9 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
                 aria-label={`Close ${tab.label}`}
                 title={`Close ${tab.label}`}
                 onClick={() => closeShell(tab.id)}
-                className="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 outline-none hover:bg-slate-700 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70"
+                className="flex size-5 shrink-0 items-center justify-center rounded text-slate-500 outline-none hover:bg-slate-700 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70"
               >
-                <X aria-hidden="true" className="size-3" />
+                <X aria-hidden="true" className="size-2.5" />
               </button>
             </span>
           );
@@ -387,15 +387,15 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
           // 32 px is a pointer's size; a thumb gets the 44 px floor below `lg`, same as every
           // other icon button in the app.
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded text-slate-400 outline-none hover:bg-slate-800 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70 disabled:opacity-40",
+            "flex size-6 shrink-0 items-center justify-center rounded text-slate-400 outline-none hover:bg-slate-800 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70 disabled:opacity-40",
             TOUCH_TARGET_ICON,
           )}
         >
-          <Plus aria-hidden="true" className="size-4" />
+          <Plus aria-hidden="true" className="size-3.5" />
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 px-2 py-1">
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-800 px-1.5 py-0.5">
         <SquareTerminal aria-hidden="true" className="size-3.5 text-slate-400" />
         <span className="font-mono text-[11px] text-slate-200">{cwd}</span>
         <StatusDot testId="terminal-status" tone={badge.tone} label={badge.label} className="ml-auto" />
@@ -408,7 +408,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             testId="terminal-copy"
             label="Copy the selection"
             hint="Copy the terminal's selection, not the page's"
-            className="size-8 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
+            className="size-7 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
             onClick={() => void copySelection()}
             disabled={!attached}
           >
@@ -418,7 +418,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             testId="terminal-paste"
             label="Paste from the clipboard"
             hint="Paste into the shell at the cursor"
-            className="size-8 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
+            className="size-7 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
             onClick={() => void paste()}
             disabled={!attached}
           >
@@ -429,7 +429,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             label="Cut: copy the selection and clear the highlight"
             hint="Copy the selection and clear the highlight (a shell's scrollback cannot be removed)"
             tone="stop"
-            className="size-8 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
+            className="size-7 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
             onClick={() => void cut()}
             disabled={!attached}
           >
@@ -440,7 +440,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
             label="Clear the terminal"
             hint="Clear the terminal's scrollback"
             tone="stop"
-            className="size-8 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
+            className="size-7 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
             onClick={clearScreen}
             disabled={!attached}
           >
@@ -457,7 +457,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         // One row that must stay on one line, so the keys share the width: at 44 px per key
         // eight keys plus 2 px gaps fit 390 px exactly, and a wider set scrolls in place rather
         // than pushing the page sideways.
-        className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 px-2 py-1 max-lg:gap-0.5 max-lg:px-1"
+        className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-800 px-1.5 py-0.5 max-lg:px-1"
       >
         {TERMINAL_KEYS.map((key) => {
           const armed =
@@ -473,7 +473,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
               disabled={!attached}
               onClick={() => pressKey(key)}
               className={cn(
-                "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] leading-4 transition-colors",
+                "shrink-0 rounded border px-1 py-0 font-mono text-[10.5px] leading-4 transition-colors",
                 "disabled:opacity-40",
                 // A keycap is 22 px tall, which is right for a hardware keyboard's row and wrong
                 // for a thumb: below `lg` each key is a 44 x 44 target, still in one row.
@@ -769,7 +769,7 @@ function ShellTab({
       />
 
       {connection !== "connected" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-2 py-1.5">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-1.5 py-1">
           <p
             className={cn(
               "font-mono text-[11.5px]",
