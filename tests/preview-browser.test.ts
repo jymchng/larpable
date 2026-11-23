@@ -71,23 +71,48 @@ describe("pathFromFrameUrl", () => {
   it("reads the path inside the build from a full URL or a pathname", () => {
     expect(pathFromFrameUrl(`http://127.0.0.1:5173${PREVIEW_PREFIX}/${BUILD}/`, BUILD)).toBe("/");
     expect(pathFromFrameUrl(`${PREVIEW_PREFIX}/${BUILD}/app/editor`, BUILD)).toBe("/app/editor");
+    // A browser's address bar keeps the query and the fragment, so this one does too.
     expect(pathFromFrameUrl(`http://host${PREVIEW_PREFIX}/${BUILD}/app/editor?x=1#h`, BUILD)).toBe(
-      "/app/editor",
+      "/app/editor?x=1#h",
     );
   });
 
   it("decodes an escaped path, so the address bar shows what a browser would", () => {
     expect(pathFromFrameUrl(`${PREVIEW_PREFIX}/${BUILD}/a%20b`, BUILD)).toBe("/a b");
+    expect(pathFromFrameUrl(`http://host/a%20b`, BUILD)).toBe("/a b");
   });
 
-  it("returns null for a document this build never served", () => {
-    // The measured blank-pane failure: the frame's request was answered by the dev server with
-    // the app's own HTML at `/`. Recording that as the address would print a URL for a page no
-    // preview served.
-    expect(pathFromFrameUrl("http://host/", BUILD)).toBeNull();
+  it("follows a site that routed itself to its own root-absolute path", () => {
+    // The reported bug, exactly: a previewed SPA pushes `/blogs` into its own history, the frame
+    // keeps rendering it, and the omnibox used to sit on the build's root for ever because the
+    // path no longer carried the preview prefix. The path is rebased into the build's space.
+    expect(pathFromFrameUrl("http://127.0.0.1:5173/blogs", BUILD)).toBe("/blogs");
+    expect(pathFromFrameUrl("http://127.0.0.1:5173/app/editor/", BUILD)).toBe("/app/editor");
+    expect(pathFromFrameUrl("http://host/blogs?page=2", BUILD)).toBe("/blogs?page=2");
+    // What the bar then *says*: the same URL every other page in this pane is shown as.
+    expect(addressFor(BUILD, "/blogs")).toBe(`${PREVIEW_PREFIX}/${BUILD}/blogs`);
+  });
+
+  it("follows a hash route, which never changes the pathname at all", () => {
+    // A hash router's whole vocabulary is in the fragment: `/` with `#/blogs` is the blogs page.
+    expect(pathFromFrameUrl(`http://host${PREVIEW_PREFIX}/${BUILD}/#/blogs`, BUILD)).toBe("/#/blogs");
+    expect(pathFromFrameUrl("http://host/#/blogs", BUILD)).toBe("/#/blogs");
+  });
+
+  it("returns null for a document that is not a page of any build", () => {
     expect(pathFromFrameUrl(`http://host${PREVIEW_PREFIX}/other-build/`, BUILD)).toBeNull();
+    expect(pathFromFrameUrl(`http://host${PREVIEW_PREFIX}/other-build/blogs`, BUILD)).toBeNull();
     expect(pathFromFrameUrl("about:blank", BUILD)).toBeNull();
     expect(pathFromFrameUrl(null, BUILD)).toBeNull();
+    expect(pathFromFrameUrl("", BUILD)).toBeNull();
+  });
+
+  it("reads the app's own root as the build's root, so the blank-pane case does not move the bar", () => {
+    // The measured blank-pane failure \u2014 the frame's request answered by the dev server with the
+    // app's own HTML at `/` \u2014 now reads as `/`, which is the entry a fresh history already
+    // holds: no move, no invented URL. What it must never do is claim a *deeper* path.
+    expect(pathFromFrameUrl("http://host/", BUILD)).toBe("/");
+    expect(visit(beginHistory(), pathFromFrameUrl("http://host/", BUILD) ?? "/").index).toBe(0);
   });
 });
 

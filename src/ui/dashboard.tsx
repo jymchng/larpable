@@ -239,14 +239,25 @@ export function Dashboard({
           <div className="space-y-1.5">
             <DebugSection label="Status">
               {/*
-               * The facts list, and *only* the facts list. A one-line `Linux: Ready | Distro:
-               * debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB` used to sit
-               * above it, and every clause of it was already on this surface: the facts row
-               * below names Linux and the runtime, the Machine section badges the distro, the
-               * CPUs and the memory. The sentence is not gone from the app — it is the shell's
-               * `sr-only` live region (`environment-summary`), because a screen reader needs the
-               * whole status in one announcement even though an eye can read a list.
+               * Two statements, then the facts list.
+               *
+               * The sentence (`Linux: Ready | Distro: debian | …`) is the shape the user
+               * quoted when they asked for it here — "Linux: Ready | Distro: debian | Runtime:
+               * node (guest shim) | CPUs: 2 | Memory: 1024 MiB … put all these into the debug
+               * popover" — so it is rendered for real rather than only living in the shell's
+               * `sr-only` live region. It overlaps the facts list below on purpose: the list
+               * adds the four facts the sentence has never carried (project, build, Netlify,
+               * preview) and a dot per fact, and a reader who wants the whole status in one
+               * glance gets it from one line instead of assembling five rows.
+               *
+               * The verdict is the other half: "Kernel can boot" used to be a `Badge` in the
+               * footer band, and the requirement count alone cannot say it (3/3 met *implies*
+               * it, which is not the same as saying it).
                */}
+              <EnvironmentVerdict
+                sentence={describeEnvironment(environment)}
+                support={support}
+              />
               {statusFacts}
             </DebugSection>
             <DebugSection label="Requirements">
@@ -537,19 +548,60 @@ function RequirementsLine({ support, passed }: { support: SupportReport; passed:
         label={`Requirements: ${String(passed)}/3 met`}
       />
       <span className="font-mono">{passed}/3 met</span>
-      {/*
-       * The words the footer used to carry ("Kernel can boot" / "Kernel cannot boot here"),
-       * moved to the count they describe. Only the failing half is painted: with everything met,
-       * `3/3 met` beside a green dot already says it, and a second sentence repeating the same
-       * verdict in a popover whose whole complaint was duplication is exactly what not to do.
-       */}
-      {support.ok ? null : (
-        <span className="text-destructive">— this browser cannot boot the kernel</span>
-      )}
+      {/* The verdict itself ("Kernel can boot" / "this browser cannot boot the kernel") is the
+          Support row at the top of the Status section: one owner, so a failing browser reads it
+          once instead of twice in the same popover. */}
       {support.simulated && (
         <span className="text-muted-foreground italic">(simulated probe)</span>
       )}
     </div>
+  );
+}
+
+/**
+ * The environment sentence and the support verdict, as the two labelled rows that replaced the
+ * footer band and the header's `Kernel can boot` badge.
+ *
+ * Both were always-visible chrome: the footer printed the sentence under the panes and the badge
+ * sat beside the wordmark. Neither is product chrome — a person writing a website does not need
+ * to know the CPU count — so both live here now, in the same `<dl>` shape as the facts list
+ * below them (user request: "Linux: Ready | Distro: debian | Runtime: node (guest shim) |
+ * CPUs: 2 | Memory: 1024 MiB / Kernel can boot -> put all these into the debug popover").
+ *
+ * The sentence is *also* the shell's `sr-only` live region (`environment-summary`), and that is
+ * not a duplicate to be tidied away: the row is what an eye reads once the popover is open, the
+ * live region is what a screen reader hears while it is closed, and a boot failure has to be
+ * announced without anyone pressing anything.
+ *
+ * The verdict's wording is the footer's own ("Kernel can boot" / "this browser cannot boot the
+ * kernel"), kept verbatim so the same sentence a person learned in the old layout still answers
+ * the same question.
+ */
+function EnvironmentVerdict({ sentence, support }: { sentence: string; support: SupportReport }) {
+  return (
+    <dl data-testid="environment-verdict" className="font-mono text-[11px] leading-tight">
+      <div data-testid="environment-sentence" title={sentence} className="flex min-w-0 gap-1.5">
+        <dt className="text-muted-foreground w-[4.75rem] shrink-0">Environment</dt>
+        {/* `break-words`, not `truncate`: the sentence is the whole status, so a narrow popover
+            wraps it rather than hiding the memory figure behind an ellipsis. */}
+        <dd className="text-foreground min-w-0 flex-1 break-words">{sentence}</dd>
+      </div>
+      <div
+        data-testid="support-verdict"
+        data-ok={support.ok ? "true" : "false"}
+        className="flex min-w-0 gap-1.5"
+      >
+        <dt className="text-muted-foreground w-[4.75rem] shrink-0">Support</dt>
+        <dd
+          className={cn(
+            "min-w-0 flex-1",
+            support.ok ? "text-emerald-300" : "text-destructive",
+          )}
+        >
+          {support.ok ? "Kernel can boot" : "this browser cannot boot the kernel"}
+        </dd>
+      </div>
+    </dl>
   );
 }
 

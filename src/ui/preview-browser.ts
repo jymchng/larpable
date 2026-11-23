@@ -58,35 +58,85 @@ export function normalisePath(path: string): string {
 }
 
 /**
- * The path inside a build for a URL the frame is showing, or null when the URL is not this
- * build's.
+ * The URL the frame is on, as a URL object, or null when it is not a page at all.
  *
- * Null is the honest answer for a frame showing something else \u2014 which is exactly the failure
- * users reported as a blank pane: the frame's `/__preview__/<id>/` request was answered by the
- * dev server, so the document inside the frame was the app's own page at `/`. Recording that as
- * the address would print a URL for a document no preview ever served.
+ * `about:blank` \u2014 which is what a frame holds before its document arrives \u2014 parses with an
+ * `about:` protocol and a pathname of `blank`; reading that as a path would print a URL for a
+ * page no preview ever served. Only HTTP(S) documents are pages of a build.
  */
-export function pathFromFrameUrl(url: string | null, buildId: string): string | null {
+function parseFrameUrl(url: string | null): URL | null {
   if (url === null || url.length === 0) return null;
-  let pathname: string;
+  let parsed: URL;
   try {
     // A relative base only needs to exist: every value read here is a path, never an origin.
-    pathname = new URL(url, "http://preview.invalid").pathname;
+    parsed = new URL(url, "http://preview.invalid");
   } catch {
     return null;
   }
+  return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
+}
 
-  const prefix = `${PREVIEW_PREFIX}/${encodeURIComponent(buildId)}`;
-  if (pathname === prefix) return "/";
-  if (!pathname.startsWith(`${prefix}/`)) return null;
-
-  const rest = pathname.slice(prefix.length + 1);
+/** A percent-encoded path as the path itself: what a browser's address bar would show. */
+function decodePath(encoded: string): string {
   try {
-    return normalisePath(decodeURIComponent(rest));
+    return normalisePath(decodeURIComponent(encoded));
   } catch {
     // A malformed escape is still a path; showing it verbatim beats hiding the page.
-    return normalisePath(rest);
+    return normalisePath(encoded);
   }
+}
+
+/** The query and the fragment, verbatim: a browser keeps them, so this pane keeps them too. */
+function suffixOf(parsed: URL): string {
+  return `${parsed.search}${parsed.hash}`;
+}
+
+/**
+ * The path inside a build for a URL the frame is showing, or null when the URL is not a page.
+ *
+ * Two spellings of the same build's page exist, and both are followed:
+ *
+ * - **The build's own URLs** \u2014 `/__preview__/<buildId>/<path>` \u2014 which a rebased link, a
+ *   back/forward or a reload put in the frame. The prefix is stripped, and what is left is the
+ *   path (`pathFromFrameUrl` has always done this part).
+ * - **The site's own root-absolute paths** \u2014 `/blogs` \u2014 which a client-side router wrote with
+ *   `history.pushState`. The document in the frame is still this build's document; only the
+ *   path stopped carrying the prefix, because an SPA routes against its own root and cannot
+ *   know it is being previewed under one. Returning null here (what this function used to do)
+ *   is precisely the bug users report as "the address bar does not follow the nav": the site
+ *   moves to `/blogs`, the frame keeps rendering it, and the omnibox sits on the build root
+ *   for ever. So the path is *rebased* into the build's space \u2014 `.../__preview__/<buildId>/blogs`
+ *   \u2014 which is the URL the same page is shown at everywhere else in this pane, and the URL the
+ *   build really answers that path with (the SPA fallback).
+ *
+ * Still null, because it is the honest answer: a *different* build's document
+ * (`/__preview__/other-build/\u2026`) is a page this build never served, a non-HTTP document is not a
+ * page, and an empty URL is nothing at all.
+ *
+ * The limit of the rebase is stated rather than hidden: a previewed document served by the dev
+ * server or by the host's SPA redirect (the blank-pane failure) is the *app's* page, and its
+ * path would be rebased too. That is a preview that is not rendering at all \u2014 the frame shows
+ * the app inside itself \u2014 and no address bar can make it honest; the pane's own tab, which
+ * names the build, is the part that stays true.
+ */
+export function pathFromFrameUrl(url: string | null, buildId: string): string | null {
+  const parsed = parseFrameUrl(url);
+  if (parsed === null) return null;
+  const { pathname } = parsed;
+  const suffix = suffixOf(parsed);
+
+  const prefix = `${PREVIEW_PREFIX}/${encodeURIComponent(buildId)}`;
+  if (pathname === prefix) return `/${suffix}`;
+  if (pathname.startsWith(`${prefix}/`)) {
+    return `${decodePath(pathname.slice(prefix.length + 1))}${suffix}`;
+  }
+
+  // Another build's preview is a different document: `/__preview__/<other>/...` is not this
+  // build's page, and reading a path out of it would claim it for this one.
+  if (pathname === PREVIEW_PREFIX || pathname.startsWith(`${PREVIEW_PREFIX}/`)) return null;
+
+  // Anything else on this origin is this build's document routing itself (see above).
+  return `${decodePath(pathname)}${suffix}`;
 }
 
 /**

@@ -142,6 +142,55 @@ describe("the debug popover", () => {
     expect(html).not.toContain('data-testid="status-bar"');
   });
 
+  it("shows the environment sentence and the support verdict as rows inside the surface", () => {
+    const html = render();
+    const panel = surface(html);
+    const sentence = describeEnvironment(FACTS.environment);
+
+    // The sentence the user quoted ("Linux: Ready | Distro: debian | Runtime: … | CPUs: 2 |
+    // Memory: 1024 MiB") is rendered for real, not only in the hidden live region.
+    expect(panel).toContain(">Environment<");
+    expect(panel).toContain(sentence);
+    expect(panel).toMatch(/data-testid="environment-sentence"[^>]*title="[^"]*Linux: Ready/);
+    // The verdict the header badge used to carry, in words, with its tone as data.
+    expect(panel).toContain('data-testid="support-verdict" data-ok="true"');
+    expect(panel).toContain("Kernel can boot");
+    // The version and the requirements dot live here too.
+    expect(panel).toContain('data-testid="app-version">v9.9.9<');
+    expect(panel).toContain('data-testid="requirements-status"');
+  });
+
+  it("says the kernel cannot boot, in the same row, when a requirement is missing", () => {
+    const partial = evaluateSupport({
+      crossOriginIsolated: false,
+      jspi: true,
+      sharedArrayBuffer: false,
+    });
+    const panel = surface(render({ support: partial }));
+
+    expect(panel).toContain('data-testid="support-verdict" data-ok="false"');
+    expect(panel).toContain("this browser cannot boot the kernel");
+    // Said once: the requirements line no longer repeats the verdict beside the count.
+    expect(panel.match(/this browser cannot boot the kernel/g)).toHaveLength(1);
+  });
+
+  it("keeps the sentence out of the layout: the only other copy is the sr-only live region", () => {
+    const html = render();
+    const sentence = describeEnvironment(FACTS.environment);
+
+    // Two copies exist, and both are accounted for: the popover row above, and the hidden
+    // region a screen reader hears while the popover is closed.
+    expect(html.match(new RegExp(escapeRegExp(sentence), "g"))).toHaveLength(2);
+    expect(html).toMatch(
+      /<span data-testid="environment-summary" aria-live="polite" class="sr-only">/,
+    );
+    const summary = html.slice(html.indexOf('data-testid="environment-summary"'));
+    expect(summary).toContain(sentence);
+    // Nothing visible outside the header: no footer band, no status bar.
+    expect(html).not.toContain("<footer");
+    expect(html).not.toContain('data-testid="status-bar"');
+  });
+
   it("keeps the Boot, self-test and Shut down controls reachable inside it", () => {
     const panel = surface(render());
 
