@@ -220,7 +220,7 @@ describe("what a phone sees inside the panes", () => {
     // (The legacy server renderer preserves the camelCase prop name; the DOM attribute is
     // lower-case, which is why this compares case-insensitively.)
     expect(html.toLowerCase()).toContain('enterkeyhint="send"');
-    expect(html).toContain("min-h-[44px]");
+    expect(html).toContain("min-h-[38px]");
   });
 
   it("shows every status label on its own row, so nothing has to collapse to fit 390 px", () => {

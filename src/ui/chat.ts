@@ -367,7 +367,11 @@ export function describeChat(state: ChatState): string {
       ? `Working — ${String(state.toolsRunning)} tool call${state.toolsRunning === 1 ? "" : "s"} running.`
       : "Thinking…";
   }
-  if (state.entries.length === 0) return "No messages yet.";
+  // Nothing to report on an empty, idle conversation: the pane already says what to do
+  // (`chat-empty`), and a status line repeating "No messages yet." was the one piece of chrome
+  // the transcript did not need (user request: "Remove: No messages yet."). The caller renders
+  // no row at all for `""`, so the transcript starts at the top of the pane.
+  if (state.entries.length === 0) return "";
   switch (state.lastStop) {
     case "complete":
       return "Ready for the next instruction.";

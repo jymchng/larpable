@@ -135,7 +135,7 @@ export function Popover({
         // Bounded in both axes so a phone shows a scrollable sheet instead of a surface that
         // runs off the bottom of the screen, and never wider than the viewport.
         "max-h-[min(70dvh,26rem)] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto",
-        "rounded-lg border p-2 shadow-xl outline-none",
+        "rounded-lg border px-2 py-1.5 shadow-xl outline-none",
         visibility.hidden ? "hidden" : undefined,
         className,
       )}

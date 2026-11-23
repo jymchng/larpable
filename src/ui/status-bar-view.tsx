@@ -65,7 +65,7 @@ function StatusRow({ segment }: { segment: StatusSegment }): ReactNode {
       data-tone={segment.tone}
       data-value={segment.value}
       title={segment.detail}
-      className="flex min-w-0 items-center gap-1.5 py-[3px]"
+      className="flex min-w-0 items-center gap-1.5"
     >
       <StatusDot testId={`status-dot-${segment.key}`} tone={segment.tone} label={segment.detail} />
       {/* The label is the reason this is a list and not a bar: at 390 px a horizontal bar had

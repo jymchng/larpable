@@ -9,8 +9,8 @@
  * What was *wrong* — and made every phone toolbar look inflated — is that the old rule grew the
  * painted box to 44 px (`max-lg:size-11`), so the visual size idled at the requirement instead of
  * sitting under it. The requirement is the *hit* area. So on a phone a control paints at 36 px
- * (`size-9`, `min-h-9`) and carries `tap-target`, a `::after` that adds 4 px of transparent,
- * clickable margin on every side: 44 x 44 of live area, 36 x 36 of ink. `bun run acceptance:mobile`
+ * (`size-9`, `min-h-9`) and carries `tap-target` (`globals.css`), a `::after` that adds 4 px of transparent,
+ * clickable margin on every side: 44 x 44 of live area, 36 x 36 of ink. `bun run acceptance:mobile` (`scripts/mobile-acceptance.ts`)
  * probes `document.elementFromPoint` at the edges of that 44 px box, so the claim is checked by a
  * browser rather than by this comment.
  *

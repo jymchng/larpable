@@ -327,9 +327,13 @@ describe("Dashboard §13 layout", () => {
     expect(html.indexOf('data-testid="injected-status-facts"')).toBeLessThan(
       html.indexOf('data-testid="main-panes"'),
     );
-    // Settings are part of the agent pane: they are the provider the conversation uses.
+    // Settings moved to the header's right edge (user request: "Put the Provider Settings under
+    // Header at the most Right"), so they render above the panes rather than inside the agent one.
     expect(html.indexOf('data-testid="injected-settings"')).toBeGreaterThan(
-      html.indexOf('data-testid="agent-pane"'),
+      html.indexOf('data-testid="diagnostics-toggle"'),
+    );
+    expect(html.indexOf('data-testid="injected-settings"')).toBeLessThan(
+      html.indexOf('data-testid="main-panes"'),
     );
     expect(html.indexOf('data-testid="injected-chat"')).toBeGreaterThan(
       html.indexOf('data-testid="injected-settings"'),

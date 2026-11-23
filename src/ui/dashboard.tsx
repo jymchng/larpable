@@ -289,6 +289,35 @@ export function Dashboard({
             </div>
           </div>
         </Popover>
+        {/* The cog, at the header's right edge. `ml-auto` is what pins it there: the header is
+            `flex flex-wrap`, so the trigger takes the remaining space on the first row and the
+            popover hangs off it (`top-full right-0`) with its right edge on the window's. The
+            wrapper is the anchor — a press on the cog is not a dismissal, so it toggles instead
+            of closing then reopening, and focus returns to it when the surface closes. */}
+        {settings ? (
+          <div ref={settingsAnchor} className="relative ml-auto flex items-center">
+            <IconButton
+              testId="settings-toggle"
+              label="Provider settings"
+              hint="Provider, model and API key"
+              tone="nav"
+              aria-expanded={settingsOpen}
+              aria-controls="settings-region"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <Cog aria-hidden="true" />
+            </IconButton>
+            <Popover
+              id="settings-region"
+              title="Provider settings"
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              anchorRef={settingsAnchor}
+            >
+              {settings}
+            </Popover>
+          </div>
+        ) : null}
       </header>
 
       <StageSwitcher stage={stage} onChange={setStage} previewReady={preview !== undefined} />
@@ -309,11 +338,11 @@ export function Dashboard({
           className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-none lg:basis-[var(--agent-basis)]"
         >
           {/*
-            The heading row is a strip of chrome, not a banner: `Agent` names the pane at `lg`
-            (where both panes are visible and need naming) and the cog is the pane's one control.
-            The cog is present at every width on purpose — below `lg` the heading is redundant
-            because the stage switcher already says "Agent", but the *setting* would otherwise
-            become unreachable on exactly the screens that need it most.
+            The heading row is a strip of chrome, not a banner: `Agent` names the pane at `lg`,
+            where both panes are visible and need naming. The cog that used to sit here moved to
+            the header (user request: "Put the Provider Settings under Header at the most Right"):
+            a setting is about the whole app rather than about this pane, and the header has a
+            right edge that a per-pane heading row does not.
           */}
           <div className="flex items-center justify-between gap-1.5 border-b px-1.5 py-0.5 sm:px-2 sm:py-0.5">
             <h2
@@ -322,46 +351,13 @@ export function Dashboard({
             >
               Agent
             </h2>
-            {settings ? (
-              /*
-                The cog and its popover are one wrapper, and the wrapper is the anchor: the
-                surface is positioned against it (`top-full right-0`), a press inside it is not
-                a dismissal (so clicking the cog toggles rather than closes-then-reopens), and
-                focus returns to the cog when the popover closes from the keyboard. The label
-                stays "Provider settings" in both states — `aria-expanded` is what says
-                whether it is open, and a name that changes under a screen reader is a name
-                that cannot be used twice.
-              */
-              <div ref={settingsAnchor} className="relative ml-auto flex items-center">
-                <IconButton
-                  testId="settings-toggle"
-                  label="Provider settings"
-                  hint="Provider, model and API key"
-                  tone="nav"
-                  aria-expanded={settingsOpen}
-                  aria-controls="settings-region"
-                  onClick={() => setSettingsOpen((open) => !open)}
-                >
-                  <Cog aria-hidden="true" />
-                </IconButton>
-                <Popover
-                  id="settings-region"
-                  title="Provider settings"
-                  open={settingsOpen}
-                  onClose={() => setSettingsOpen(false)}
-                  anchorRef={settingsAnchor}
-                >
-                  {settings}
-                </Popover>
-              </div>
-            ) : null}
           </div>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chat}
             {terminal ? (
               <div className="flex min-h-0 flex-1 flex-col p-1 sm:p-1.5">{terminal}</div>
             ) : (
-              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-3 text-center">
+              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-2 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
                 <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -417,7 +413,7 @@ export function Dashboard({
               clipped and unreachable rather than scrolled — measured as a 574 px document in a
               390 px window.
             */
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-3 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-2 text-center">
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
               <p className="text-sm font-medium">No production build yet.</p>
               <p className="text-muted-foreground max-w-[42ch] text-[13px]">

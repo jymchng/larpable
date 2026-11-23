@@ -42,11 +42,14 @@ describe("ChatPanel", () => {
     expect(html).toContain('id="chat-prompt"');
   });
 
-  it("explains an empty transcript rather than showing a blank pane", () => {
+  it("explains an empty transcript without a status line saying there are no messages", () => {
     const html = render(initialChat());
     expect(html).toContain('data-testid="chat-empty"');
     expect(html).toContain("Describe the site you want.");
-    expect(html).toContain("No messages yet.");
+    // Removed on request: "No messages yet." was a band of chrome over an empty pane that the
+    // hint below already explains. With nothing to say, there is no row at all.
+    expect(html).not.toContain("No messages yet.");
+    expect(html).not.toContain('data-testid="chat-status"');
   });
 
   it("cannot send an empty draft", () => {

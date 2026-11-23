@@ -56,6 +56,9 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const blocked = unavailableReason !== null;
   const canSend = !blocked && !state.running && draft.trim().length > 0;
+  // Empty and idle is silent now: `describeChat` returns `""` for that state, so the status row
+  // is not rendered at all and the transcript starts at the top of the pane.
+  const status = describeChat(state);
 
   const submit = () => {
     const text = draft.trim();
@@ -70,34 +73,36 @@ export function ChatPanel({
       aria-label="Agent conversation"
       className={cn("flex min-h-0 flex-1 flex-col", className)}
     >
-      <div className="flex items-center gap-1.5 border-b px-2 py-1">
-        <p
-          data-testid="chat-status"
-          aria-live="polite"
-          className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]"
-        >
-          {describeChat(state)}
-        </p>
-        {state.running ? (
-          <IconButton
-            testId="chat-stop"
-            label="Stop the run"
-            hint="Stop the agent after the current tool call"
-            tone="stop"
-            onClick={onStop}
+      {status.length > 0 || state.running ? (
+        <div className="flex items-center gap-1.5 border-b px-2 py-0.5">
+          <p
+            data-testid="chat-status"
+            aria-live="polite"
+            className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]"
           >
-            <CircleStop aria-hidden="true" />
-          </IconButton>
-        ) : null}
-      </div>
+            {status}
+          </p>
+          {state.running ? (
+            <IconButton
+              testId="chat-stop"
+              label="Stop the run"
+              hint="Stop the agent after the current tool call"
+              tone="stop"
+              onClick={onStop}
+            >
+              <CircleStop aria-hidden="true" />
+            </IconButton>
+          ) : null}
+        </div>
+      ) : null}
 
       <ol
         data-testid="chat-transcript"
         aria-label="Transcript"
-        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-1.5"
+        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-1"
       >
         {state.entries.length === 0 ? (
-          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-1.5 text-[13px]">
+          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-1 text-[13px]">
             {emptyHint}
           </li>
         ) : (
@@ -111,7 +116,7 @@ export function ChatPanel({
           event.preventDefault();
           submit();
         }}
-        className="border-t p-1.5"
+        className="border-t px-1.5 py-1"
       >
         <label htmlFor="chat-prompt" className="sr-only">
           Ask the agent to build or change something
@@ -149,7 +154,7 @@ export function ChatPanel({
             // 16 px below `lg` is not a style choice: iOS Safari zooms the page when a focused
             // field's text is smaller than that, and a zoomed app is a broken app. The laptop
             // size stays 12.5 px, where density is worth more than a magnifier.
-            className="border-input bg-background focus-visible:ring-ring min-h-[36px] flex-1 resize-none rounded-md border px-1.5 py-1 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
+            className="border-input bg-background focus-visible:ring-ring min-h-[38px] flex-1 resize-none rounded-md border px-1.5 py-0.5 font-mono text-base outline-none focus-visible:ring-[3px] disabled:opacity-60 sm:text-[12.5px]"
           />
           {/* Send is the prompt's primary action, so it keeps the filled (primary) variant
               rather than the ghost one: the pictogram is the label, the fill is the emphasis. */}
@@ -160,7 +165,7 @@ export function ChatPanel({
             aria-label={state.running ? "Sending…" : "Send the prompt"}
             title="Send the prompt (Enter)"
             disabled={!canSend}
-            className="size-11"
+            className="size-9 lg:size-8"
           >
             {state.running ? (
               <Loader2 aria-hidden="true" className="size-4 animate-spin" />
