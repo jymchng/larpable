@@ -386,6 +386,7 @@ describe("build strip", () => {
         phase={{ kind: "idle" }}
         onRefresh={() => undefined}
         available
+        prod={false}
         port={1234}
         build={control()}
       />,

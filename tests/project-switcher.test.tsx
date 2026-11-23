@@ -26,7 +26,7 @@ import { INITIAL_ENVIRONMENT } from "../src/env/status";
 import type { ProjectMetadata } from "../src/projects/store";
 import type { ProjectState } from "../src/projects/manager";
 import { EMPTY_PROJECT_STATE } from "../src/projects/manager";
-import { Dashboard, PROJECTS_POPOVER_ID } from "../src/ui/dashboard";
+import { Dashboard } from "../src/ui/dashboard";
 import { StatusFacts } from "../src/ui/status-bar-view";
 import { NO_TERMINAL } from "../src/ui/terminal-connection";
 import {
@@ -268,15 +268,16 @@ describe("ProjectSwitcher", () => {
 });
 
 /**
- * The header half: a folder glyph that opens the list, and the open project's name beside it.
+ * The header half: there is no header half any more.
  *
- * Rendered as static markup, because the question is what the browser receives: a glyph that
- * names the surface it controls, the badge that answers "which site am I editing" while the
- * popover is shut, and — the negative case — no glyph at all when the shell was given no projects
- * to show. A trigger that opened an empty surface would be worse than no trigger.
+ * The folder glyph, its popover and the badge beside it were removed on request ("remove the
+ * Projects popover at the header"). The panel itself still exists — the app creates and remembers
+ * an active project, and the status bar names it — but a header control that opened it is gone,
+ * and this asserts the removal rather than leaving the old ids to be found by the next person
+ * grepping for them.
  */
-describe("the projects glyph in the header", () => {
-  function shell(overrides: { projects?: boolean; projectName?: string | null } = {}): string {
+describe("the header after the projects surface was removed", () => {
+  function shell(): string {
     return renderToStaticMarkup(
       <Dashboard
         version="9.9.9"
@@ -287,7 +288,7 @@ describe("the projects glyph in the header", () => {
           <StatusFacts
             input={{
               environment: INITIAL_ENVIRONMENT,
-              project: { name: overrides.projectName ?? null, root: "/workspace" },
+              project: { name: "landing-page", root: "/workspace" },
               build: { kind: "none" },
               netlify: { kind: "unknown" },
               preview: { kind: "idle" },
@@ -297,40 +298,24 @@ describe("the projects glyph in the header", () => {
         }
         chat={<div data-testid="chat-slot" />}
         settings={<div data-testid="settings-slot" />}
-        {...(overrides.projects === false
-          ? {}
-          : {
-              projects: (
-                <ProjectSwitcher
-                  state={TWO}
-                  onCreate={() => undefined}
-                  onOpen={() => undefined}
-                  onRename={() => undefined}
-                  onRemove={() => undefined}
-                />
-              ),
-            })}
-        projectName={overrides.projectName ?? null}
       />,
     );
   }
 
-  it("puts the list behind a glyph that names the surface it controls", () => {
-    const html = shell({ projectName: "landing-page" });
-    expect(html).toContain('data-testid="projects-toggle"');
-    expect(html).toContain(`aria-controls="${PROJECTS_POPOVER_ID}"`);
-    expect(html).toContain(`id="${PROJECTS_POPOVER_ID}"`);
-    // The body is in the markup even while closed, so `aria-controls` names something real.
-    expect(html).toContain('data-testid="project-list"');
-    expect(html).toContain('data-testid="active-project"');
-    expect(html).toContain("landing-page");
+  it("renders no folder glyph, no projects popover and no project badge", () => {
+    const html = shell();
+
+    expect(html).not.toContain('data-testid="projects-toggle"');
+    expect(html).not.toContain('data-testid="projects-anchor"');
+    expect(html).not.toContain('data-testid="active-project"');
+    expect(html).not.toContain("projects-popover");
   });
 
-  it("renders no glyph when there are no projects to show", () => {
-    const html = shell({ projects: false });
-    expect(html).not.toContain('data-testid="projects-toggle"');
-    expect(html).not.toContain('data-testid="active-project"');
-    // The cog keeps the row's right edge for the shells that have no project list.
+  it("keeps the cog at the header's right edge, which the glyph used to share", () => {
+    const html = shell();
+
     expect(html).toContain('data-testid="settings-toggle"');
+    // One `ml-auto` sibling, so the cog is still pinned to the window's edge.
+    expect(html).toContain("relative ml-auto flex items-center");
   });
 });

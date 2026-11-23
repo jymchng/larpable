@@ -226,9 +226,9 @@ export interface PreviewPaneProps {
   /**
    * The Prod switch, as the pane needs it: which of the two previews this is.
    *
-   * Off (the default) means the reload arrow attaches to the server the user runs, so the empty
-   * state points at their terminal instead of at the hammer. On means the build-and-publish path
-   * the pane has always had.
+   * On (the default here, matching the Settings default) means the build-and-publish path the pane
+   * has always had, and the empty state points at the hammer. Off means the reload arrow attaches
+   * to the server the user runs, so the empty state points at their terminal instead.
    */
   prod?: boolean;
   /** The port in Settings, used for the address bar's own examples. */
@@ -255,7 +255,9 @@ export function PreviewPane({
   app,
   build,
   initialViewport = "desktop",
-  prod = false,
+  // The same default as `defaultPreviewSettings()`: a pane rendered without the switch is a prod
+  // preview, so it cannot quietly disagree with the app about which preview it is.
+  prod = true,
   port = 5173,
   onAttach,
   onRefuseAddress,

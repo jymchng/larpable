@@ -38,6 +38,7 @@ import {
   FORWARD_REQUEST_MESSAGE,
 } from "../src/preview/forwarder";
 import { PreviewPane } from "../src/ui/preview-pane";
+import type { BuildControl } from "../src/ui/use-build";
 import { usePreview } from "../src/ui/use-preview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -165,6 +166,24 @@ function lastInstallBuildId(received: Array<Record<string, unknown>>): string | 
 // The pane, wired exactly as `App.tsx` wires it
 // ---------------------------------------------------------------------------
 
+/**
+ * The build control the app hands the pane.
+ *
+ * It is here because the pane's empty state is written by whoever renders the hammer: with no
+ * control it can only say "a preview appears here once a build has been published", which is the
+ * wrong sentence for a dev preview. `App` always passes one, so the test does too.
+ */
+function buildControl(): BuildControl {
+  return {
+    status: { kind: "none" },
+    busy: false,
+    problem: null,
+    run: () => undefined,
+    cancel: () => undefined,
+    port: null,
+  };
+}
+
 function PreviewTab({ environment }: { environment: FakeEnvironment }) {
   const preview = usePreview({
     environment,
@@ -182,6 +201,7 @@ function PreviewTab({ environment }: { environment: FakeEnvironment }) {
       available={preview.available}
       prod={false}
       port={PORT}
+      build={buildControl()}
       onAttach={(port) => preview.attach(port)}
     />
   );
@@ -311,10 +331,13 @@ describe("a dev server on the Settings port, Prod off", () => {
       "/__preview__/dev-2/@vite/client",
     );
 
-    // The session that is no longer on screen is not answered by this page any more: a stale frame
-    // must not be served the new session's bytes.
+    // The session that is no longer on screen is refused rather than served: a stale frame must
+    // never receive the new session's bytes, and the refusal names the session this page does serve
+    // so the reason is in the sentence rather than in a blank frame.
     const stale = await worker.forward("https://app.example/__preview__/dev-1/");
-    expect(stale.some((message) => message.type === FORWARD_REPLY_MESSAGE)).toBe(false);
+    const refusal = stale.find((message) => message.type === FORWARD_REPLY_MESSAGE);
+    expect(refusal?.status).toBe(404);
+    expect(new TextDecoder().decode(new Uint8Array(refusal?.body as ArrayBuffer))).toContain("dev-2");
   });
 
   it("says what to run when nothing is listening, instead of showing a blank frame", async () => {

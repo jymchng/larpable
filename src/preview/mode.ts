@@ -3,13 +3,14 @@
  *
  * There are two honest ways to show a site, and they differ in *who runs the server*:
  *
- * - **dev** (the default, and the switch off): the user runs their own server —
- *   `bun run dev -- -p 1234` in the terminal — and the preview does nothing but attach to it
- *   on the port in Settings. No build, no static server of ours, no snapshot: a request for
- *   `localhost:1234/app` is forwarded to whatever is listening there, which is the whole point
- *   of previewing a dev server (hot reload, server routes, the app's real HTML).
- * - **prod**: the older behaviour. The project is built, its output directory is read out of
- *   the guest and served statically on the same port — the bytes that would ship.
+ * - **dev** (the switch off): the user runs their own server — `bun run dev -- -p 1234` in the
+ *   terminal — and the preview does nothing but attach to it on the port in Settings. No build,
+ *   no static server of ours, no snapshot: a request for `localhost:1234/app` is forwarded to
+ *   whatever is listening there, which is the whole point of previewing a dev server (hot
+ *   reload, server routes, the app's real HTML).
+ * - **prod** (the default, for now): the older behaviour. The project is built, its output
+ *   directory is read out of the guest and served statically on the same port — the bytes that
+ *   would ship.
  *
  * Both are needed because they answer different questions. A user editing a component wants the
  * dev server's response; a user checking what Netlify will serve wants the build output. Before

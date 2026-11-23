@@ -66,9 +66,10 @@ export function defaultPreviewSettings(): PreviewSettings {
   return {
     port: DEFAULT_PREVIEW_SETTINGS_PORT,
     buildDirectory: DEFAULT_BUILD_DIRECTORY,
-    // Dev, because that is what a web developer means by "the port my server runs on", and
-    // because attaching starts nothing: the cheaper, more honest default.
-    prod: false,
+    // Prod, for now (user request: "set prod=true by default for now"). The switch is still the
+    // user's: off means the preview attaches to the server they run, and `src/preview/mode.ts`
+    // turns the bit into a plan either way.
+    prod: true,
   };
 }
 
@@ -176,8 +177,7 @@ export function serializePreviewSettings(settings: PreviewSettings): string {
  *
  * Field by field, not all-or-nothing: a stored port that is no longer a number must not wipe
  * the user's build directory, and the defaults are always runnable. A missing or non-boolean
- * `prod` is `false`, which is the same answer as "the user never chose" \u2014 the switch defaults
- * to dev, so an old record cannot silently turn a static preview on.
+ * `prod` is the current default (`true`), which is the same answer as "the user never chose".
  */
 export function parseStoredPreviewSettings(raw: string | null): PreviewSettings {
   const defaults = defaultPreviewSettings();

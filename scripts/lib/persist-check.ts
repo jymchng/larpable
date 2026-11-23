@@ -250,6 +250,6 @@ function tailOf(transcript: string): string {
 export function persistenceSkipReason(projectsToggleCount: number, remote: boolean): string | null {
   if (projectsToggleCount > 0) return null;
   return remote
-    ? "the deployed build has no projects control (it predates the panel); run this against a dev server"
-    : "the app rendered no projects control, so the panel this check drives is missing";
+    ? "the deployed build has no projects control (it predates the panel, or the panel was removed); run this against a dev server"
+    : "the app has no projects control any more (the header surface was removed on request), so this check has no panel to drive";
 }

@@ -33,7 +33,9 @@ describe("the defaults", () => {
   it("are Vite's port and `dist`, so the numbers a web developer already knows work", () => {
     expect(DEFAULT_PREVIEW_SETTINGS_PORT).toBe(5173);
     expect(DEFAULT_BUILD_DIRECTORY).toBe("dist");
-    expect(defaults).toEqual({ port: 5173, buildDirectory: "dist", prod: false });
+    // Prod on, for now (user request: "set prod=true by default for now"). The switch is still
+    // the user's: off attaches to the server they run.
+    expect(defaults).toEqual({ port: 5173, buildDirectory: "dist", prod: true });
   });
 
   it("name a host that cannot be configured, only painted", () => {
@@ -71,8 +73,8 @@ describe("the port", () => {
     // A valid number replaces it, including a valid prefix: `5` *is* a port, and a field that
     // says 5 should not quietly mean 5173.
     expect(withPort(defaults, "5173")).toBe(defaults);
-    expect(withPort(defaults, "8080")).toEqual({ port: 8080, buildDirectory: "dist", prod: false });
-    expect(withPort(defaults, "5")).toEqual({ port: 5, buildDirectory: "dist", prod: false });
+    expect(withPort(defaults, "8080")).toEqual({ port: 8080, buildDirectory: "dist", prod: true });
+    expect(withPort(defaults, "5")).toEqual({ port: 5, buildDirectory: "dist", prod: true });
   });
 });
 
@@ -100,7 +102,7 @@ describe("the build directory", () => {
     expect(withBuildDirectory(defaults, "build/")).toEqual({
       port: 5173,
       buildDirectory: "build",
-      prod: false,
+      prod: true,
     });
   });
 });
@@ -108,10 +110,10 @@ describe("the build directory", () => {
 describe("the draft and the settings are different things", () => {
   it("adopts each field independently, so fixing one keeps the other", () => {
     const next = settingsFromDraft(defaults, { port: "8080", buildDirectory: "build" });
-    expect(next).toEqual({ port: 8080, buildDirectory: "build", prod: false });
+    expect(next).toEqual({ port: 8080, buildDirectory: "build", prod: true });
 
     const halfTyped = settingsFromDraft(defaults, { port: "", buildDirectory: "build" });
-    expect(halfTyped).toEqual({ port: 5173, buildDirectory: "build", prod: false });
+    expect(halfTyped).toEqual({ port: 5173, buildDirectory: "build", prod: true });
   });
 
   it("says what is wrong in the panel's own words, and nothing when it is right", () => {
@@ -143,12 +145,13 @@ describe("storage", () => {
     expect(parseStoredPreviewSettings('{"port":0,"buildDirectory":"build"}')).toEqual({
       port: 5173,
       buildDirectory: "build",
-      prod: false,
+      // No stored `prod`: the default, which is now on.
+      prod: true,
     });
     expect(parseStoredPreviewSettings('{"port":8080,"buildDirectory":"../escape"}')).toEqual({
       port: 8080,
       buildDirectory: "dist",
-      prod: false,
+      prod: true,
     });
   });
 

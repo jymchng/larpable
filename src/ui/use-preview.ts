@@ -71,16 +71,27 @@ export interface PreviewControl {
 export function usePreview(options: UsePreviewOptions): PreviewControl {
   const { environment, http, port, root, prod } = options;
 
+  // The door is read through a ref, so *its identity* is not a dependency of the controller.
+  //
+  // A caller that passes an inline `() => environment.guestHttp()` — which is the obvious way to
+  // write it — produces a new function every render. With `http` in the memo below, that made a new
+  // controller every render, whose subscription effect set a fresh phase object, which re-rendered,
+  // which made another controller: an endless render loop, i.e. a frozen tab, with no error to read.
+  // The controller is rebuilt when the *machine* changes, not when a closure is re-created, and it
+  // still calls the newest door.
+  const httpRef = useRef(http);
+  httpRef.current = http;
+
   const controller = useMemo(() => {
     if (environment === null) return null;
     return createPreviewController({
       environment,
-      http,
+      http: () => httpRef.current(),
       ...(port !== undefined ? { port } : {}),
       ...(root !== undefined ? { root } : {}),
       ...(prod !== undefined ? { prod } : {}),
     });
-  }, [environment, http, port, root, prod]);
+  }, [environment, port, root, prod]);
 
   const [phase, setPhase] = useState<PreviewPhase>({ kind: "idle" });
 

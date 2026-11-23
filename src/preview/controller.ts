@@ -22,7 +22,7 @@
  *
  * - **prod** (`prod: true`, the default here) publishes a build: list `dist/`, start the guest's
  *   static server, read the bytes out of it, hand them to the worker.
- * - **dev** (`prod: false`, the app's default) *attaches*: one knock on the port in Settings, then
+ * - **dev** (`prod: false`, the Settings switch off) *attaches*: one knock on the port, then
  *   every request is forwarded to the server the user runs (`attach.ts`). No build, no static
  *   server of ours, no snapshot — which is the whole point of previewing a dev server.
  *
