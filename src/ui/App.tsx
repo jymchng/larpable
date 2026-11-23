@@ -12,7 +12,6 @@ import { DEFAULT_STAGE, stageFromSearch } from "@/ui/stage";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
 import { PreviewPane } from "@/ui/preview-pane";
-import { ProjectSwitcher } from "@/ui/project-switcher";
 import { SettingsPanel } from "@/ui/settings-panel";
 import { StatusFacts } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
@@ -94,6 +93,10 @@ export function App() {
   // Projects: the manager, the store that remembers them and the autosave watcher, bound to the
   // booted machine. Null until boot, because a project is files in `/workspace` and there is no
   // `/workspace` before the kernel is up \u2014 the hook says so rather than listing nothing.
+  //
+  // There is no header surface for it any more (user request: "remove the Projects popover at the
+  // header"): the hook still creates and remembers the active project, and the status bar still
+  // names it, but picking one is not a header control.
   const projects = useProjects({ environment: environment.environment });
   const activeProjectName = projects.state.active?.name ?? null;
   // The build: one controller per machine, behind the warm-runtime gate, publishing into the
@@ -176,20 +179,6 @@ export function App() {
         onRetry: environment.boot,
       }}
       statusFacts={<StatusFacts input={statusInput} />}
-      projects={
-        <ProjectSwitcher
-          state={projects.state}
-          persistent={projects.persistent}
-          unavailable={projects.unavailable}
-          busy={projects.busy}
-          error={projects.error ?? projects.state.error}
-          onCreate={projects.create}
-          onOpen={projects.open}
-          onRename={projects.rename}
-          onRemove={projects.remove}
-        />
-      }
-      projectName={activeProjectName}
       settings={
         <SettingsPanel
           settings={settings.settings}
