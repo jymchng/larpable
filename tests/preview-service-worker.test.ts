@@ -31,6 +31,7 @@ interface WorkerSnapshot {
   buildId: string;
   fallbackPath: string | null;
   files: Map<string, { body: Uint8Array | string; headers: Record<string, string>; size: number }>;
+  publishedAt: number;
 }
 
 /** A snapshot shaped exactly as `installSnapshot` builds it, with real routing headers. */
@@ -43,7 +44,7 @@ function snapshotOf(buildId: string, files: WorkerFile[], fallbackPath: string |
       size: file.body instanceof Uint8Array ? file.body.byteLength : file.body.length,
     });
   }
-  return { buildId, fallbackPath, files: map };
+  return { buildId, fallbackPath, files: map, publishedAt: 0 };
 }
 
 function requestFor(path: string, method = "GET"): Request {
@@ -211,7 +212,11 @@ describe("installSnapshot", () => {
     installSnapshot({ buildId: "b-10", files: [] });
     const response = handlePreviewRequest(
       new Request(`https://larpable.netlify.app${PREVIEW_PREFIX}/b-10/nope`),
-      { get snapshot() { return { buildId: "b-10", fallbackPath: null, files: new Map() }; } },
+      {
+        get snapshot() {
+          return { buildId: "b-10", fallbackPath: null, files: new Map(), publishedAt: 0 };
+        },
+      },
     );
     expect(response?.status).toBe(404);
     clearSnapshot();

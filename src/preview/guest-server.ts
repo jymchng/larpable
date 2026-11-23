@@ -23,6 +23,7 @@
 
 import type { ExecutionEnvironment, ExecutionResult } from "../env/execution";
 import { joinGuestPath } from "../env/paths";
+import { MIME_TYPES } from "./routing";
 
 /** Where the script is written, relative to the workspace: dot-prefixed, so it reads as tooling. */
 export const PREVIEW_SERVER_DIR = ".larpable";
@@ -54,30 +55,7 @@ const port = Number(process.argv[2] ?? ${DEFAULT_PREVIEW_PORT});
 const root = resolve(process.argv[3] ?? process.cwd());
 const manifestPath = ${JSON.stringify(PREVIEW_MANIFEST_PATH)};
 
-const TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".htm": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".wasm": "application/wasm",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mp3": "audio/mpeg",
-};
+const TYPES = ${JSON.stringify(MIME_TYPES)};
 
 function contentType(path) {
   const dot = extname(path).toLowerCase();

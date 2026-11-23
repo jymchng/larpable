@@ -116,9 +116,12 @@ export function handlePreviewRequest(request, state) {
 function fileResponse(request, file, buildId) {
   const headers = new Headers(file.headers);
   headers.set("x-larpable-build", buildId);
-  // A sandboxed preview is its own origin, but the response still comes from this one:
-  // same-origin is what COEP wants, and there is nothing cross-origin to allow.
-  headers.set("cross-origin-resource-policy", "same-origin");
+  // The iframe is sandboxed without `allow-same-origin`, so its document has an opaque
+  // origin and every module/stylesheet request it makes is a cross-origin request. Both
+  // headers say "these bytes may be used by any origin": they are a build's static output,
+  // already public to the page, and the worker answers nothing else.
+  headers.set("access-control-allow-origin", "*");
+  headers.set("cross-origin-resource-policy", "cross-origin");
   // HEAD must not carry a body, and a module worker cannot stream one it never reads.
   const body = request.method === "HEAD" ? null : file.body;
   return new Response(body, { status: 200, headers });

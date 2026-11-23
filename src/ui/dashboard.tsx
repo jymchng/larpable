@@ -21,6 +21,12 @@ export interface DashboardProps {
    * renders it without knowing there is a Linux machine behind it.
    */
   terminal?: ReactNode;
+  /**
+   * The preview pane. Injected for the same reason again: the dashboard shows whatever
+   * state the container derived (no build, building, ready, failed) without owning a
+   * guest connection or a service worker.
+   */
+  preview?: ReactNode;
 }
 
 /**
@@ -35,6 +41,7 @@ export function Dashboard({
   distro,
   environmentPanel,
   terminal,
+  preview,
 }: DashboardProps) {
   // Open by default: this report is why a boot button is disabled when it is, and
   // hiding that behind a collapsed panel would hide the explanation. The user
@@ -92,14 +99,18 @@ export function Dashboard({
           >
             Preview
           </h2>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-            <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
-            <p className="text-sm font-medium">No production build yet.</p>
-            <p className="text-muted-foreground max-w-[42ch] text-[13px]">
-              The preview renders the real <code className="font-mono">dist/</code> output built
-              inside the guest, never a mock page.
-            </p>
-          </div>
+          {preview ? (
+            <div className="flex min-h-0 flex-1 flex-col">{preview}</div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+              <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
+              <p className="text-sm font-medium">No production build yet.</p>
+              <p className="text-muted-foreground max-w-[42ch] text-[13px]">
+                The preview renders the real <code className="font-mono">dist/</code> output built
+                inside the guest, never a mock page.
+              </p>
+            </div>
+          )}
         </section>
       </main>
 

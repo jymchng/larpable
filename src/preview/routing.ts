@@ -145,7 +145,7 @@ export function resolvePreviewPath(options: {
 }
 
 /** Extensions whose bytes are text and whose types browsers are picky about. */
-const MIME_TYPES: Readonly<Record<string, string>> = {
+export const MIME_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
   ".htm": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",

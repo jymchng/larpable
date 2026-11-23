@@ -7,6 +7,7 @@ import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
+import { PreviewPanel } from "@/ui/preview-frame";
 import { TerminalPanel } from "@/ui/terminal-panel";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 
