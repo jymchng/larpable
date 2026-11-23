@@ -6,6 +6,7 @@ import type { EnvironmentSnapshot } from "@/env/status";
 import { describeEnvironment } from "@/env/status";
 import type { SupportReport } from "@/env/support";
 import { Badge } from "@/ui/components/badge";
+import { BootIndicator } from "@/ui/boot-indicator";
 import { IconButton } from "@/ui/components/icon-button";
 import { Popover } from "@/ui/components/popover";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
@@ -60,6 +61,20 @@ export interface DashboardProps {
    */
   initialSettingsOpen?: boolean;
   /**
+   * The automatic boot: whether one is in flight, the stage it last reported, its failure text
+   * and how to retry it. Only those three values are passed, because the *status* is already
+   * here — `environment.status` — and the footer prints it, so a second copy could disagree.
+   *
+   * Present in the app, absent in tests that render the shell without one: the indicator is
+   * chrome for a machine that is starting, and a dashboard with no boot action shows none.
+   */
+  boot?: {
+    busy: boolean;
+    stage?: string | null;
+    error?: string | null;
+    onRetry: () => void;
+  };
+  /**
    * The pane a phone opens on. A prop (and a `?pane=` link) so the layout is a pure function of
    * its inputs: the switcher's state lives here, but every branch of it can be rendered in a
    * static-markup test.
@@ -88,6 +103,7 @@ export function Dashboard({
   preview,
   statusBar,
   settings,
+  boot,
   initialSplit = 50,
   initialStage = DEFAULT_STAGE,
   initialSettingsOpen = false,
@@ -149,6 +165,21 @@ export function Dashboard({
             className="size-3.5 rounded-[4px] bg-gradient-to-br from-primary via-chart-5 to-primary shadow-[0_0_18px_-2px] shadow-primary/60"
           />
           <span className="text-xs font-semibold tracking-[0.14em] uppercase">Larpable</span>
+          {/* The machine starts itself, so the one thing a person needs to know in the first
+              second is whether it is still starting. The spinner sits against the wordmark
+              because that is where the eye already is; it disappears the moment there is
+              nothing true to say (ready, stopped) and becomes an error + retry when the boot
+              failed, rather than turning forever. */}
+          {boot ? (
+            <BootIndicator
+              status={environment.status}
+              supported={support.ok}
+              busy={boot.busy}
+              stage={boot.stage ?? null}
+              error={boot.error ?? null}
+              onRetry={boot.onRetry}
+            />
+          ) : null}
           <Badge variant="outline" className="font-mono text-[10px]">
             v{version}
           </Badge>

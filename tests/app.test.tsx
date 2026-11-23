@@ -33,14 +33,17 @@ function renderDashboard(
   overrides: Partial<{
     support: typeof supported;
     distro: ReturnType<typeof summarizeDistro>;
+    environment: typeof INITIAL_ENVIRONMENT;
+    boot: { busy: boolean; stage?: string | null; error?: string | null; onRetry: () => void };
   }> = {},
 ) {
   return renderToStaticMarkup(
     <Dashboard
       version="9.9.9"
       support={overrides.support ?? supported}
-      environment={INITIAL_ENVIRONMENT}
+      environment={overrides.environment ?? INITIAL_ENVIRONMENT}
       distro={overrides.distro ?? summarizeDistro([debianAsset], null)}
+      {...(overrides.boot === undefined ? {} : { boot: overrides.boot })}
     />,
   );
 }
@@ -59,6 +62,93 @@ describe("Dashboard", () => {
 
   it("starts from an idle environment instead of claiming a running one", () => {
     expect(renderDashboard()).toContain(`Linux: ${statusLabel("idle")}`);
+  });
+
+  describe("the boot spinner beside the wordmark", () => {
+    const onRetry = () => undefined;
+
+    it("turns while the machine boots, with a name a screen reader can read", () => {
+      const html = renderDashboard({
+        environment: { ...INITIAL_ENVIRONMENT, status: "booting" },
+        boot: { busy: true, stage: "runtime: Detecting JavaScript runtimes", error: null, onRetry },
+      });
+
+      expect(html).toContain('data-testid="boot-spinner"');
+      expect(html).toContain('role="status"');
+      expect(html).toContain('aria-label="Starting Linux"');
+      expect(html).toContain("animate-spin");
+      // The stage the adapter reported is the tooltip, so the spinner is never a bare guess.
+      expect(html).toContain('title="runtime: Detecting JavaScript runtimes"');
+    });
+
+    it("turns during the window before the adapter exists, because busy is real state", () => {
+      const html = renderDashboard({
+        boot: { busy: true, stage: "Creating the Linux machine", error: null, onRetry },
+      });
+
+      expect(html).toContain('data-testid="boot-spinner"');
+      expect(html).toContain('title="Creating the Linux machine"');
+    });
+
+    it("is gone once the machine is ready: there is nothing left to wait for", () => {
+      const html = renderDashboard({
+        environment: { ...INITIAL_ENVIRONMENT, status: "ready", distro: "debian" },
+        boot: { busy: false, stage: null, error: null, onRetry },
+      });
+
+      expect(html).not.toContain('data-testid="boot-spinner"');
+      expect(html).not.toContain('data-testid="boot-failed"');
+      expect(html).toContain(`Linux: ${statusLabel("ready")}`);
+    });
+
+    it("stops turning on a stopped machine, and does not offer to restart it", () => {
+      const html = renderDashboard({
+        environment: { ...INITIAL_ENVIRONMENT, status: "stopped" },
+        boot: { busy: false, stage: null, error: null, onRetry },
+      });
+
+      expect(html).not.toContain('data-testid="boot-spinner"');
+      expect(html).not.toContain('data-testid="boot-failed"');
+    });
+
+    it("becomes the machine's own error plus a retry when the boot failed", () => {
+      const html = renderDashboard({
+        environment: { ...INITIAL_ENVIRONMENT, status: "error", error: "the kernel worker exited with code 1" },
+        boot: { busy: false, stage: null, error: "the kernel worker exited with code 1", onRetry },
+      });
+
+      expect(html).not.toContain('data-testid="boot-spinner"');
+      expect(html).toContain('data-testid="boot-failed"');
+      expect(html).toContain('role="alert"');
+      expect(html).toContain("Linux failed to start");
+      expect(html).toContain("the kernel worker exited with code 1");
+      expect(html).toContain('aria-label="Retry starting Linux"');
+    });
+
+    it("shows no spinner on a browser that cannot boot, and no retry either", () => {
+      const unsupported = evaluateSupport({
+        crossOriginIsolated: false,
+        jspi: false,
+        sharedArrayBuffer: false,
+      });
+      const html = renderDashboard({
+        support: unsupported,
+        environment: { ...INITIAL_ENVIRONMENT, status: "booting" },
+        boot: { busy: true, stage: null, error: null, onRetry },
+      });
+
+      expect(html).not.toContain('data-testid="boot-spinner"');
+      expect(html).not.toContain('data-testid="boot-failed"');
+      // The existing, honest answer is still there: the footer and the requirements dot.
+      expect(html).toContain("Kernel cannot boot here");
+    });
+
+    it("draws no boot chrome when the dashboard was not given a boot action", () => {
+      const html = renderDashboard();
+
+      expect(html).not.toContain('data-testid="boot-spinner"');
+      expect(html).not.toContain('data-testid="boot-failed"');
+    });
   });
 
   it("says the kernel cannot boot when a requirement is missing, and why", () => {

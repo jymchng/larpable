@@ -212,7 +212,22 @@ try {
     `reopened data-state=${String(reopened.state)} → after press data-state=${String(afterOutside.state)}, display=${afterOutside.display}`,
   );
 
-  // 7. Pressing the cog while open closes it (the anchor is not "outside", so no double-toggle).
+  // 7. The close button is the other way out that hides the control holding focus, so it returns
+  //    focus to the trigger for the same reason Escape does.
+  await page.click("[data-testid=settings-toggle]");
+  await page.waitForTimeout(150);
+  await page.click("[data-testid=settings-region-close]");
+  await page.waitForTimeout(150);
+  const afterCloseButton = await observe(page);
+  check(
+    "closes on the close button and returns focus to the trigger",
+    afterCloseButton.state === "closed" &&
+      afterCloseButton.display === "none" &&
+      afterCloseButton.active === "settings-toggle",
+    `data-state=${String(afterCloseButton.state)}, display=${afterCloseButton.display}, activeElement=${afterCloseButton.active}`,
+  );
+
+  // 8. Pressing the cog while open closes it (the anchor is not "outside", so no double-toggle).
   await page.click("[data-testid=settings-toggle]");
   await page.waitForTimeout(150);
   await page.click("[data-testid=settings-toggle]");

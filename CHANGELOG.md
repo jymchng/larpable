@@ -76,7 +76,7 @@ All notable changes to Larpable are documented here. The format follows
   `aria-expanded` carries the state instead. The rules are pure functions
   (`src/ui/popover.ts`) asserted by `tests/popover.test.ts`; the markup by `tests/app.test.tsx`
   and `tests/settings-panel.test.tsx`; and the real events by `bun run acceptance:popover`,
-  which measures them in Chromium at 390 × 844 (measured: 8/8 checks, surface 352 px wide
+  which measures them in Chromium at 390 × 844 (measured: 9/9 checks, surface 352 px wide
   inside a 390 px viewport, dialog right edge equal to the cog's, `scrollWidth - clientWidth` =
   0) and writes `docs/evidence/provider-popover-390.png` — see `docs/provider-popover.md`.
 - **Controls are pictograms, not sentences.** Every button in the chat box, the environment

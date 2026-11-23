@@ -1,10 +1,11 @@
 /**
  * The one place the app touches the environment.
  *
- * Booting is an explicit action, not a side effect of rendering: the user asked for a
- * Linux machine, and a page that silently downloads 14 MB and starts a VM on load is a
- * page that lies about what it is doing. The hook therefore exposes `boot()` and the
- * live snapshot the PRD §5.3 state machine reports.
+ * Booting is an action the shell takes once on mount (`useAutoBoot`), not a side effect of
+ * rendering a pane: a component that booted in an effect of its own would start a kernel
+ * every time it remounted. The hook therefore exposes `boot()` and the live snapshot the PRD
+ * §5.3 state machine reports; the decision to call it — once, only on a capable browser, never
+ * again after a failure unless a human retries — lives in `src/ui/autoboot.ts`.
  *
  * Everything the hook holds is derived from the environment (`snapshot()`,
  * `onStatus()`), never invented here — the status bar cannot claim `ready` before the
@@ -55,7 +56,19 @@ export interface EnvironmentBootState {
   shutdown: () => void;
 }
 
-export function useEnvironmentBoot(): EnvironmentBootState {
+export interface EnvironmentBootOptions {
+  /**
+   * The factory the hook boots with. Injected so a test can drive this whole hook under jsdom
+   * against `FakeEnvironment` instead of downloading a 72 MB image and starting a kernel
+   * (`tests/autoboot-hook.test.tsx` is the caller). Default: `createBrowserEnvironment`.
+   */
+  createEnvironment?: () => Promise<ExecutionEnvironment>;
+}
+
+export function useEnvironmentBoot(
+  options: EnvironmentBootOptions = {},
+): EnvironmentBootState {
+  const createEnvironment = options.createEnvironment ?? createBrowserEnvironment;
   const [snapshot, setSnapshot] = useState<EnvironmentSnapshot>(INITIAL_ENVIRONMENT);
   const [booted, setBooted] = useState<ExecutionEnvironment | null>(null);
   const [stage, setStage] = useState<string | null>(null);
@@ -83,12 +96,13 @@ export function useEnvironmentBoot(): EnvironmentBootState {
     starting.current = true;
     setBusy(true);
     setError(null);
+    setBootDurationMs(null);
     setStage("Creating the Linux machine");
     const startedAt = performance.now();
 
     void (async () => {
       try {
-        const env = await createBrowserEnvironment();
+        const env = await createEnvironment();
         environment.current = env;
         // Published as state, not only as a ref: callers that need the machine itself (the
         // preview) must re-render when it appears, and a ref read during render would not.
@@ -104,15 +118,28 @@ export function useEnvironmentBoot(): EnvironmentBootState {
         setBootDurationMs(Math.round(performance.now() - startedAt));
         setStage(null);
       } catch (cause) {
+        // A failed boot must be retryable, and it is not while a half-built machine is still
+        // in the ref: `boot()` returns early when `environment.current` is set, which turned
+        // the retry button into a no-op for every failure that happened after the adapter
+        // existed (an `initialize()` that threw). So the failed machine is torn down here,
+        // its last snapshot is kept for the footer, and the next press starts clean.
+        const failed = environment.current;
+        environment.current = null;
+        unsubscribing.current?.();
+        unsubscribing.current = null;
+        setBooted(null);
+        if (failed) {
+          setSnapshot(failed.snapshot());
+          void failed.shutdown().catch(() => undefined);
+        }
         setError(cause instanceof Error ? cause.message : String(cause));
-        if (environment.current) setSnapshot(environment.current.snapshot());
         setStage(null);
       } finally {
         starting.current = false;
         setBusy(false);
       }
     })();
-  }, []);
+  }, [createEnvironment]);
 
   const runSelfTest = useCallback(() => {
     const env = environment.current;

@@ -38,13 +38,20 @@ PASS fits the 390 px viewport — rect 30..382 x 220..561 in 390×844, document 
 PASS anchored to the cog — dialog right 382 vs trigger right 382, dialog top 220 vs trigger bottom 216
 PASS closes on Escape and returns focus to the trigger — aria-expanded=false, data-state=closed, activeElement=settings-toggle
 PASS closes on a press outside — reopened data-state=open → after press data-state=closed, display=none
+PASS closes on the close button and returns focus to the trigger — data-state=closed, display=none, activeElement=settings-toggle
 PASS the cog toggles rather than closes-then-reopens — after two presses: aria-expanded=false, data-state=closed
-[popover] 8/8 checks passed at 390×844 against http://127.0.0.1:5173
+[popover] 9/9 checks passed at 390×844 against http://127.0.0.1:5173
 ```
 
 The surface is **352 px wide** inside a 390 px viewport (382 − 30), its right edge is exactly the
 cog's right edge, and the document's `scrollWidth - clientWidth` is **0**: the popover does not
 create a horizontal scrollbar at phone width.
+
+**One deliberate deviation.** Focus returns to the cog on Escape and on the close button, but not
+when the popover is dismissed by a press elsewhere on the page. The press has already moved focus
+to whatever was pressed; pulling it back to the cog would undo the user's click. That is the same
+rule the WAI-ARIA practices apply to a non-modal popup, and it is stated in the component's
+docstring rather than left implicit.
 
 Screenshot: `docs/evidence/provider-popover-390.png` (taken with the surface open).
 

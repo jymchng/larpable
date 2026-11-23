@@ -16,6 +16,7 @@ import { StatusBar } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
 import { TerminalPanel } from "@/ui/terminal-panel";
 import { useAgentChat } from "@/ui/use-agent-chat";
+import { useAutoBoot } from "@/ui/use-autoboot";
 import { useBuild } from "@/ui/use-build";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 import { useAppPreview } from "@/ui/use-app-preview";
@@ -48,6 +49,15 @@ export function App() {
   // during a session, and re-reading a user agent on every render buys nothing.
   const handset = useMemo(() => detectHandset(), []);
   const environment = useEnvironmentBoot();
+  // The machine starts with the page. One attempt per mount, none on a browser that cannot
+  // boot, and no second attempt after a failure or a shut-down: the retry is a person's press,
+  // not a loop. The rules — and why the indicator is derived from status rather than a timer —
+  // are in `src/ui/autoboot.ts`.
+  useAutoBoot({
+    supported: support.ok,
+    status: environment.snapshot.status,
+    boot: environment.boot,
+  });
   // The preview shares the booted machine with the terminal: same kernel, one HTTP door.
   // It is created lazily and does nothing at all until the user asks for a build.
   const preview = usePreview({
@@ -109,6 +119,12 @@ export function App() {
       environment={environment.snapshot}
       initialStage={initialStage}
       distro={distro}
+      boot={{
+        busy: environment.busy,
+        stage: environment.stage,
+        error: environment.error,
+        onRetry: environment.boot,
+      }}
       statusBar={<StatusBar input={statusInput} />}
       settings={
         <SettingsPanel
