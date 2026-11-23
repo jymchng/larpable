@@ -8,7 +8,6 @@ import { applySupportSimulation, detectSupport } from "@/env/support";
 import { ChatPanel } from "@/ui/chat-panel";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
-import { createNetlifyPort } from "@/ui/netlify-port";
 import { PreviewPane } from "@/ui/preview-pane";
 import { SettingsPanel } from "@/ui/settings-panel";
 import { StatusBar } from "@/ui/status-bar-view";
@@ -19,6 +18,7 @@ import { useBuild } from "@/ui/use-build";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 import { useAppPreview } from "@/ui/use-app-preview";
 import { useLlmSettings } from "@/ui/use-llm-settings";
+import { useNetlify } from "@/ui/use-netlify";
 import { usePreview } from "@/ui/use-preview";
 
 /**
@@ -59,23 +59,18 @@ export function App() {
     environment: environment.environment,
     onBuilt: (result) => preview.refresh(result.id),
   });
-  // The agent's Netlify tool validates against the last successful build, read at call time.
-  const netlify = useMemo(
-    () =>
-      environment.environment === null
-        ? null
-        : createNetlifyPort({
-            environment: environment.environment,
-            lastBuild: () => build.port?.lastSuccessfulBuild() ?? null,
-          }),
-    [environment.environment, build.port],
-  );
+  // The agent's Netlify tool validates against the last successful build, read at call time;
+  // the run's own verdict is what the status bar's Netlify segment renders.
+  const netlify = useNetlify({
+    environment: environment.environment,
+    lastBuild: () => build.port?.lastSuccessfulBuild() ?? null,
+  });
   // The tools receive the same objects the panes render: one build, one preview, one truth.
   const chat = useAgentChat({
     environment: environment.environment,
     settings: settings.settings,
     build: build.port,
-    netlify,
+    netlify: netlify.port,
     preview: preview.port,
   });
 
@@ -86,13 +81,13 @@ export function App() {
   );
 
   // Every segment is derived from an object that owns the fact: the environment snapshot, the
-  // build status the build hook publishes, the Netlify verdict the session recorded (none yet,
-  // so it says "not validated") and the preview controller's own phase.
+  // build status the build hook publishes, the Netlify verdict the Netlify port reported for
+  // the last run (unknown until one has), and the preview controller's own phase.
   const statusInput: StatusInput = {
     environment: environment.snapshot,
     project: { name: null, root: DEFAULT_WORKSPACE_PATH },
     build: build.status,
-    netlify: { kind: "unknown" },
+    netlify: netlify.status,
     preview: preview.phase,
   };
 

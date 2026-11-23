@@ -14,8 +14,9 @@
 import type { NetlifyPort } from "@/agent/tools/types";
 import type { BuildResult } from "@/build/manager";
 import type { ExecutionEnvironment } from "@/env/execution";
-import { ensureNetlifyConfig } from "@/netlify/flow";
+import { ensureNetlifyConfig, type EnsureNetlifyConfigResult } from "@/netlify/flow";
 import type { NetlifyBuildOutput } from "@/netlify/validator";
+import { netlifyStatusFrom, type NetlifyStatus } from "@/ui/status-bar";
 
 export interface NetlifyPortOptions {
   environment: ExecutionEnvironment;
@@ -23,6 +24,42 @@ export interface NetlifyPortOptions {
   root?: string;
   /** Read lazily, so a call after a build validates against that build. */
   lastBuild?: () => BuildResult | null;
+  /**
+   * Every call's verdict, so the status bar can stop saying "not validated".
+   *
+   * The port is the only place in the app that runs the Netlify flow, so it is also the only
+   * place that can report the outcome without guessing. The status bar is a *consumer*: it
+   * receives the verdict rather than re-deriving it from the conversation.
+   */
+  onVerdict?: (verdict: NetlifyStatus) => void;
+}
+
+/**
+ * The reasons a Netlify run did not pass, in the order a reader needs them.
+ *
+ * A blocked sync outranks the validator's summary: when the project could not justify a
+ * configuration at all, "netlify.toml: nothing to validate" is the honest sentence, and the
+ * planner's own problems say why. Validation errors win when they exist, because they name a
+ * concrete setting in the file that was written.
+ */
+export function netlifyErrors(result: EnsureNetlifyConfigResult): string[] {
+  const errors = result.validation.issues
+    .filter((issue) => issue.severity === "error")
+    .map((issue) => issue.message);
+  if (errors.length > 0) return errors;
+  if (result.sync.action === "blocked") return [result.sync.reason];
+  if (!result.ok) return [result.validation.summary];
+  return [];
+}
+
+/**
+ * One run's outcome as the status bar's vocabulary.
+ *
+ * `attempted: true` even for a failure: "invalid" and "nothing tried yet" are different facts,
+ * and a red segment is the honest one after a run that did not pass.
+ */
+export function netlifyVerdict(result: EnsureNetlifyConfigResult): NetlifyStatus {
+  return netlifyStatusFrom({ attempted: true, ok: result.ok, errors: netlifyErrors(result) });
 }
 
 /**
@@ -43,10 +80,14 @@ export function createNetlifyPort(options: NetlifyPortOptions): NetlifyPort {
   return {
     ensure: async (ensureOptions = {}) => {
       const root = ensureOptions.root ?? options.root;
-      return ensureNetlifyConfig(options.environment, {
+      const result = await ensureNetlifyConfig(options.environment, {
         ...(root === undefined ? {} : { root }),
         build: toNetlifyBuildOutput(options.lastBuild?.() ?? null),
       });
+      // Published after the run, from the run's own record. A throw above reaches no verdict,
+      // which is right: an exception is not an answer about `netlify.toml`.
+      options.onVerdict?.(netlifyVerdict(result));
+      return result;
     },
   };
 }

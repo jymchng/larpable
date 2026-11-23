@@ -56,16 +56,27 @@ export interface BuildControl {
   port: BuildPort | null;
 }
 
-const defaultRuntime = (environment: ExecutionEnvironment): WarmGate =>
+/**
+ * The real objects the shell builds, exported so a test can assert the app uses *them* rather
+ * than a stub: the manager is what installs and builds inside the guest, and the bootstrap is
+ * the gate that pays the shim's ~147 s once per machine instead of once per build.
+ */
+export const defaultBuildRuntime = (environment: ExecutionEnvironment): WarmGate =>
   new RuntimeBootstrap({ environment, persistentDataDisk: true });
 
-const defaultManager = (
+export const defaultBuildManager = (
   environment: ExecutionEnvironment,
   root: string | undefined,
 ): BuildPort => new BuildManager({ environment, ...(root === undefined ? {} : { root }) });
 
 export function useBuild(options: UseBuildOptions): BuildControl {
-  const { environment, root, onBuilt, createRuntime = defaultRuntime, createManager = defaultManager } = options;
+  const {
+    environment,
+    root,
+    onBuilt,
+    createRuntime = defaultBuildRuntime,
+    createManager = defaultBuildManager,
+  } = options;
 
   // The callback is read at call time so a re-render with a new closure does not rebuild the
   // manager (and lose the history the status is derived from).
