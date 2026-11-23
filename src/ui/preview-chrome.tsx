@@ -158,6 +158,13 @@ export interface PreviewBrowserBarProps {
   /** True while there is no document to re-navigate (nothing published). */
   reloadDisabled?: boolean;
   /**
+   * What the Reload arrow will do, in the caller's words.
+   *
+   * A prod preview reloads a published build; a dev preview attaches to the server the user runs.
+   * One arrow, two meanings, so the sentence comes from whoever knows which preview this is.
+   */
+  reloadTitle?: string;
+  /**
    * Called with what the user typed, on Enter.
    *
    * Absent means the bar cannot be typed into: a caller with no way to act on an address gets a
@@ -184,6 +191,7 @@ export function PreviewBrowserBar({
   onForward,
   onReload,
   reloadDisabled = false,
+  reloadTitle,
   onNavigate,
   children,
 }: PreviewBrowserBarProps): ReactNode {
@@ -227,7 +235,11 @@ export function PreviewBrowserBar({
         <NavButton
           testId="preview-reload"
           label="Reload"
-          title={reloadDisabled ? "Publish a build before reloading it" : "Load this URL again from the published build"}
+          title={
+            reloadDisabled
+              ? "Publish a build before reloading it"
+              : (reloadTitle ?? "Load this URL again from the published build")
+          }
           disabled={reloadDisabled}
           onClick={onReload}
         >

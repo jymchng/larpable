@@ -253,6 +253,14 @@ export interface PreviewPanelProps {
    * build *can* be published.
    */
   reloadDisabled?: boolean;
+  /**
+   * What the Reload arrow will do, when the caller knows better than "publish a build".
+   *
+   * In dev mode the same arrow *attaches* to the server the user runs (`src/preview/mode.ts`), so
+   * a tooltip promising a published build would describe a thing that is not going to happen.
+   * Absent keeps the published-build wording, which is right for a prod preview.
+   */
+  reloadTitle?: string;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?: () => void;
@@ -307,6 +315,7 @@ export function PreviewPanel({
   framePath,
   reloads = 0,
   reloadDisabled,
+  reloadTitle,
   canGoBack = false,
   canGoForward = false,
   onBack,
@@ -353,6 +362,7 @@ export function PreviewPanel({
         // in flight would ask two questions of the same guest at once. When the caller owns the
         // decision (the pane publishes through this button), its answer wins.
         reloadDisabled={reloadDisabled ?? !ready}
+        {...(reloadTitle !== undefined ? { reloadTitle } : {})}
         {...(onNavigate !== undefined ? { onNavigate } : {})}
       />
 

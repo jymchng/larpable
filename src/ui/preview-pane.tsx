@@ -62,7 +62,7 @@ import {
 import { useCallback, useEffect, useReducer, useRef, type ReactNode } from "react";
 
 import type { PreviewPhase } from "@/preview/controller";
-import { describePreviewMode, modeBuilds, previewPlan } from "@/preview/mode";
+import { modeBuilds, previewPlan } from "@/preview/mode";
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
 import { IconButton } from "@/ui/components/icon-button";
@@ -271,6 +271,9 @@ export function PreviewPane({
   // who switched Prod off should be told that the preview now expects their own server, not
   // handed a hammer that builds output nobody asked for.
   const plan = previewPlan({ prod, port });
+  // `false` in dev: nothing is built and nothing is served from `dist/`, so the empty pane must
+  // not point at the hammer. This is the difference the switch exists to make, in one boolean.
+  const builds = modeBuilds(plan);
   const preset = viewportFor(browser.viewport);
   const ready = state.kind === "ready";
   const buildId = state.kind === "ready" ? state.buildId : null;
@@ -414,7 +417,9 @@ export function PreviewPane({
         emptyHint={
           build === undefined
             ? undefined
-            : "Click the hammer above — Install & build — to build the project in the guest. The real output appears here when it finishes."
+            : builds
+              ? "Click the hammer above — Install & build — to build the project in the guest. The real output appears here when it finishes."
+              : `Prod is off, so nothing is built here: this pane attaches to the server you run on guest port ${String(port)}. Start it in the terminal, then press the reload arrow above.`
         }
         canGoBack={canGoBack(browser.history)}
         canGoForward={canGoForward(browser.history)}
@@ -423,6 +428,13 @@ export function PreviewPane({
         // removed button made. So it is enabled when there is *something to publish*
         // (`available`), not only when a document is already on screen.
         reloadDisabled={!available || phase.kind === "starting" || phase.kind === "publishing"}
+        // One arrow, two jobs: attach to the user's server (dev) or publish the build (prod). The
+        // tooltip is the only place the difference is stated before the click.
+        reloadTitle={
+          builds
+            ? "Publish the build and load this URL again"
+            : `Attach to whatever answers on guest port ${String(port)}`
+        }
         onBack={() => dispatch({ type: "back" })}
         onForward={() => dispatch({ type: "forward" })}
         viewport={preset}

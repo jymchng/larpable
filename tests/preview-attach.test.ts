@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import { attachGuestServer } from "../src/preview/attach";
-import type { PreviewWorkerRegistration } from "../src/preview/client";
+import type { PreviewWorkerContainer, PreviewWorkerRegistration } from "../src/preview/client";
 import type { MessageContainer } from "../src/preview/forwarder";
 
 interface Harness {
@@ -224,6 +224,63 @@ describe("attachGuestServer", () => {
     // A null session matches no preview URL. `clear` would also drop a published build, which a
     // mode switch must not do.
     expect(h.installs.at(-1)).toEqual({ type: "larpable:preview:forward:install", buildId: null });
+  });
+
+  it("listens where the worker posts: the container that registered it, not window", async () => {
+    // The bug this test exists for: the page listened on `window`, so the worker's
+    // `larpable:preview:forward` was never heard, every forwarded request sat until the worker's
+    // 30 s budget expired, and the pane said "The app did not answer for
+    // https://…/__preview__/dev-1/ within 30 s. It may still be compiling" — for a dev server
+    // that had answered in milliseconds. `messages` is deliberately *not* injected here: the
+    // default is the thing under test.
+    const requested: string[] = [];
+    const replies: unknown[] = [];
+    const { container } = workerContainer();
+    const listeners = new Set<(event: MessageEvent) => void>();
+    const registering: PreviewWorkerContainer = {
+      register: container.register,
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
+    };
+
+    const result = await attachGuestServer({
+      http: async (url) => {
+        requested.push(url);
+        return new Response("<html><body>vite</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      },
+      port: 1234,
+      buildId: "dev-1",
+      container: registering,
+    });
+    if (!result.ok) throw new Error(result.message);
+
+    // The worker posts to its clients; those messages arrive at `navigator.serviceWorker`.
+    expect(listeners.size).toBe(1);
+    for (const listener of listeners) {
+      listener({
+        data: {
+          type: "larpable:preview:forward",
+          requestId: "r1",
+          url: "http://app.example/__preview__/dev-1/",
+          method: "GET",
+          buildId: "dev-1",
+        },
+        source: { postMessage: (message: unknown) => replies.push(message) },
+      } as unknown as MessageEvent);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(requested.at(-1)).toBe("http://127.0.0.1:1234/");
+    expect(replies).toHaveLength(1);
+    expect((replies[0] as { status: number }).status).toBe(200);
+    expect(result.attach.answered()).toBe(1);
   });
 
   it("serves a path directly, for a caller without a worker in between", async () => {

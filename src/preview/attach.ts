@@ -20,7 +20,9 @@
  *    by the service worker, and a worker cannot reach the guest (no kernel in a worker). It asks
  *    the page; `forwarder.ts` is the page's answer; this module installs that forwarder and tells
  *    the worker which session it is serving. Without a worker there is no way in at all, so that
- *    is a failure with its own sentence rather than a silently empty preview.
+ *    is a failure with its own sentence rather than a silently empty preview. The forwarder is
+ *    installed on `navigator.serviceWorker` — see `messagesOf()` for why `window` is the wrong
+ *    object and what that mistake looked like to a user.
  * 3. **Answer each request through the guest.** `serveAppRequest` (the same code the "run the app"
  *    path uses) forwards one path to the port, rebases root-absolute URLs onto the preview prefix
  *    and keeps redirects inside the pane. One transport, one timeout, one set of header rules.
@@ -62,7 +64,10 @@ export interface GuestAttachOptions {
    * only thing that can route a frame's request to this page.
    */
   container?: PreviewWorkerContainer | null;
-  /** Where the worker's forward messages arrive. Default: `window`. */
+  /**
+   * Where the worker's forward messages arrive. Default: the same container that registered the
+   * worker — `navigator.serviceWorker`. See `messagesOf()` for why that is not `window`.
+   */
   messages?: MessageContainer;
   /** Budget for the one knock on the port. Default: the transport's 10 s. */
   timeoutMs?: number;
@@ -95,13 +100,29 @@ export type GuestAttachResult =
   | { ok: true; attach: GuestAttach }
   | { ok: false; message: string };
 
-/** The page's `window`, or undefined outside a browser (a unit test). */
-function browserMessages(): MessageContainer | undefined {
-  const candidate = (globalThis as { window?: unknown }).window;
-  if (candidate === undefined || candidate === null) return undefined;
-  const container = candidate as Partial<MessageContainer>;
-  if (typeof container.addEventListener !== "function") return undefined;
-  return candidate as MessageContainer;
+/**
+ * The object a service worker's messages are dispatched at.
+ *
+ * It is the container that registered the worker — a page's `navigator.serviceWorker` — and *not*
+ * `window`. `Client.postMessage()` fires its `message` event at the client's
+ * `ServiceWorkerContainer`; a listener on `window` never sees it. This module shipped with a
+ * `window` listener, and the consequence was not subtle: the page never heard the worker's
+ * `larpable:preview:forward`, so it never answered, so every request the iframe made sat until
+ * the worker's own budget expired and the pane showed
+ *
+ *     The app did not answer for https://…/__preview__/dev-1/ within 30 s.
+ *     It may still be compiling; reload the preview.
+ *
+ * for a dev server that had answered in milliseconds — and "reload the preview" could never
+ * help, because the bug was on this side of the wire. `use-app-preview.ts` has always listened
+ * on `navigator.serviceWorker`; this is the same wire, and the default now matches it.
+ *
+ * The cast is the price of one object described by two interfaces: `PreviewWorkerContainer` is a
+ * `MessageEvent`-typed view of the container `forwarder.ts` wants, and a page has exactly one
+ * `navigator.serviceWorker`.
+ */
+function messagesOf(container: PreviewWorkerContainer): MessageContainer {
+  return container as unknown as MessageContainer;
 }
 
 /** The command a user is most likely to have meant, named in the failure's own sentence. */
@@ -172,15 +193,7 @@ export async function attachGuestServer(
     };
   }
 
-  const messages = options.messages ?? browserMessages();
-  if (messages === undefined) {
-    return {
-      ok: false,
-      message:
-        "This page has no window to receive the worker's forwarded requests, so the preview " +
-        "cannot attach to a running server.",
-    };
-  }
+  const messages = options.messages ?? messagesOf(container);
 
   const serve = (path: string, method?: string): Promise<AppPreviewResponse> =>
     serveAppRequest(
