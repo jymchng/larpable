@@ -26,7 +26,7 @@ a limitation is known, it is written down rather than worked around.
 - A browser with **WebAssembly JSPI** and cross-origin isolation:
   Chrome/Edge 137+, Firefox 153+, or Safari 27+. The app detects this on load and
   explains what is missing instead of failing mid-boot.
-- The first boot downloads a Linux distro image (~4 MB for Alpine). It is served from
+- The first boot downloads a Linux distro image (69.2 MiB for Debian 13). It is served from
   this app's own origin; see [Distro images](#distro-images).
 
 ## Getting started
@@ -69,12 +69,18 @@ src/
 
 Three design decisions are worth knowing up front:
 
-- **The guest is aarch64 Linux.** unkernel runs unmodified arm64 binaries, so every
-  tool used inside the guest must be an arm64 build. The supported toolchain is
-  **Node + npm** from the image's own first-use shim (`node --version` downloads
-  Node 26.13.1 once, then it is cached): Bun is excluded because
-  `bun-linux-aarch64-musl` exits 127 (no `libstdc++.so.6`), and `apk` cannot install
-  anything for the unprivileged guest user, so nothing depends on a package manager.
+- **The guest is aarch64 Linux, booted from a Debian 13 image.** Alpine was tried first
+  (4 MB instead of 69.2 MiB) and dropped: its `curl` is a first-use shim, `apk` cannot
+  install anything for the guest's unprivileged uid 1000, and a staged static curl still
+  lost to the shim on `PATH`. Debian is also the image unkernel's own demo page boots, so
+  this is the environment known to work rather than the smaller one plus workarounds.
+  Goals #2-#8 were measured on Alpine; those reports stay as historical evidence, and the
+  guest tests now boot `/distros/debian.erofs`.
+- **The toolchain is Node + npm**, from the image's own first-use shim (`node --version`
+  downloads Node once, then it is cached in `~/.local` on the persistent data disk). Bun
+  is probed rather than assumed: on Alpine it exited 127 (`libstdc++.so.6`), on the
+  Debian image it has answered `1.4.5`, so `src/runtime/detect.ts` measures it at boot and
+  records the reason it was or was not selected.
 - **Filesystem access goes through one bridge.** The guest `/workspace` is a 9p
   host mount backed by `MemoryFs`, so writes propagate in both directions and the
   agent, the build manager and the UI all see the same files.

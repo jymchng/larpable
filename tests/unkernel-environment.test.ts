@@ -243,7 +243,7 @@ function environment(
   overrides: Partial<ConstructorParameters<typeof UnkernelEnvironment>[0]> = {},
 ): UnkernelEnvironment {
   return new UnkernelEnvironment({
-    distro: "/distros/alpine.erofs",
+    distro: "/distros/debian.erofs",
     kernelFactory: async (request) => {
       kernel.boots.push(request);
       return kernel;
@@ -281,7 +281,7 @@ describe("UnkernelEnvironment initialisation", () => {
     await env.initialize();
 
     const snapshot = env.snapshot();
-    expect(snapshot.distro).toBe("alpine");
+    expect(snapshot.distro).toBe("debian");
     expect(snapshot.runtime).toBe("node (guest shim)");
     expect(snapshot.memoryMiB).toBe(1024); // the kernel's measurement wins over the request
     expect(snapshot.cpus).toBeNull();

@@ -38,6 +38,23 @@ export interface DistroSummary {
 
 export const DISTRO_MANIFEST_URL = "/distros/distros.json";
 
+/**
+ * The distribution this app boots: Debian 13, not Alpine.
+ *
+ * Alpine was the obvious first choice (a 4 MB image boots in well under a second) and it
+ * is what goals #1-#8 were measured against. It is also the reason `curl` could never
+ * work there: the image's `/usr/local/bin/curl` is a first-use *shim*, `apk` cannot run
+ * as the guest's uid 1000, and the only copy of a real static curl that could be staged
+ * still lost to the shim on `PATH`. Debian 13 ships a real userland, and unkernel's own
+ * demo page boots exactly this image, so the environment is the one path known to work
+ * rather than a smaller one plus workarounds.
+ *
+ * Named once, because three things must agree: `scripts/fetch-distros.ts` downloads this
+ * file, the manifest check below looks for this name, and `boot.ts` builds the URL from
+ * it. A mismatch is the failure mode where the app offers to boot an image nobody fetched.
+ */
+export const DEFAULT_DISTRO_NAME = "debian";
+
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class DistroError extends Error {
@@ -158,6 +175,7 @@ export async function probeDistroAsset(
 export function summarizeDistro(
   statuses: readonly DistroAssetStatus[] | null,
   error: string | null,
+  distroName: string = DEFAULT_DISTRO_NAME,
 ): DistroSummary {
   if (error) {
     return {
@@ -171,27 +189,32 @@ export function summarizeDistro(
     return { state: "loading", head: "Checking Linux image", detail: "Reading the distro manifest." };
   }
 
-  const alpine = statuses.find((status) => status.entry.name === "alpine");
-  if (!alpine) {
+  const wanted = statuses.find((status) => status.entry.name === distroName);
+  if (!wanted) {
+    // Say which image was wanted *and* which ones the manifest has: "no distro" and "the
+    // wrong distro" have different fixes, and the manifest is written by the fetch script.
+    const available = statuses.map((status) => status.entry.name).join(", ");
     return {
       state: "error",
-      head: "No Alpine image listed",
-      detail: "The distro manifest does not mention alpine, so there is nothing to boot.",
+      head: `No ${distroName} image listed`,
+      detail:
+        `The distro manifest lists ${available || "nothing"}, not ${distroName}, so there ` +
+        `is nothing to boot. Run \`LARPABLE_DISTROS=${distroName} bun run fetch:distros\`.`,
     };
   }
 
-  if (!alpine.present) {
+  if (!wanted.present) {
     return {
       state: "missing",
-      head: `${alpine.entry.image} not downloaded`,
+      head: `${wanted.entry.image} not downloaded`,
       detail: "Run `bun run fetch:distros` to place the image in public/distros/.",
     };
   }
 
-  const mebibytes = ((alpine.bytes ?? alpine.entry.size) / (1024 * 1024)).toFixed(1);
+  const mebibytes = ((wanted.bytes ?? wanted.entry.size) / (1024 * 1024)).toFixed(1);
   return {
     state: "ready",
-    head: `${alpine.entry.image} ready`,
-    detail: `${mebibytes} MiB served from ${alpine.url}`,
+    head: `${wanted.entry.image} ready`,
+    detail: `${mebibytes} MiB served from ${wanted.url}`,
   };
 }

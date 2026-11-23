@@ -8,7 +8,7 @@
  * downloads twice, this test fails and says so.
  *
  * Skipped unless `LARPABLE_GUEST_TESTS=1`, because it needs Node >= 24 (JSPI), the
- * Alpine image in `public/distros/`, and outbound network for the shim's one download
+ * Debian image in `public/distros/`, and outbound network for the shim's one download
  * (~147 s on the machine that wrote the feasibility report). Run it with:
  *
  * ```sh
@@ -61,7 +61,7 @@ describe.skipIf(!enabled)("RuntimeBootstrap against the real guest", () => {
     "warms node + npm once and reuses the install on the next boot",
     async () => {
       const unkernel = await import("unkernel/node");
-      const distro = new URL("../../public/distros/alpine.erofs", import.meta.url).pathname;
+      const distro = new URL("../../public/distros/debian.erofs", import.meta.url).pathname;
       // Not `os.tmpdir()`: this image is 4 GiB sparse and the guest writes real blocks
       // into it, so it belongs on the same disk as the checkout, not a small tmpfs.
       const scratch = new URL("../../.tmp", import.meta.url).pathname;

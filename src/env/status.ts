@@ -19,7 +19,7 @@ export interface EnvironmentSnapshot {
   status: EnvironmentStatus;
   /** Guest runtime reported by the runtime manager, e.g. `bun 1.4.5`. */
   runtime: string | null;
-  /** Distribution booted in the guest, e.g. `alpine`. */
+  /** Distribution booted in the guest, e.g. `debian`. */
   distro: string | null;
   /** CPUs the guest actually got, and guest memory in MiB. */
   cpus: number | null;

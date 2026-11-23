@@ -58,7 +58,7 @@ import type {
 import type { WorkspaceFs } from "./workspace-fs";
 
 export interface UnkernelEnvironmentOptions {
-  /** The Linux image to boot: `/distros/alpine.erofs` in the browser, a path on Node. */
+  /** The Linux image to boot: `/distros/debian.erofs` in the browser, a path on Node. */
   distro: string;
   /** Label for the status bar. Defaults to the image's base name without extension. */
   distroName?: string;

@@ -1,7 +1,7 @@
 # Larpable — progress
 
-_Status snapshot after implementing goal 8 of 24. Every number below was copied from a
-command run in this repo; nothing is estimated._
+_Status snapshot after implementing goal 8 of 26, on the Debian guest image. Every number
+below was copied from a command run in this repo; nothing is estimated._
 
 ---
 
@@ -11,9 +11,10 @@ command run in this repo; nothing is estimated._
 WebAssembly (unkernel), an autonomous coding agent, and a live preview of the real
 production build. Built from `prds/01-whole-prd.md`.
 
-**Workflow position:** `implement_goal`, goal **#8 of 24** (runtime detection → scaffold →
-install/build). Goals #1–#7 are verified and closed; #8 is implemented and typechecks, its
-tests arrive with the verification phase.
+**Workflow position:** `implement_goal`, goal **#8 of 26** (runtime detection → scaffold →
+install/build). Goals #1–#7 are verified and closed. #8 is implemented, typechecked and
+unit-tested (82 tests); its gated guest build run is the one item still open. The guest
+image is now **Debian 13.7** rather than Alpine — see §3a.
 
 | Goal | State | Evidence |
 | --- | --- | --- |
@@ -68,14 +69,52 @@ Design decisions worth remembering:
 ## 3. Verification actually run
 
 ```
-bun run typecheck   → exit 0 (both tsconfigs)
-bun run test        → 120 passed | 2 skipped (122) in 6.35 s
+bun run typecheck                   → exit 0 (both tsconfigs)
+bun run test                        → 204 passed | 3 skipped (207) in 7.13 s
+LARPABLE_GUEST_TESTS=1 … tests/guest/environment.guest.test.ts
+                                    → 1 passed in 5.09 s (Debian 13.7 image)
 ```
 
-The suite has been green three consecutive runs at `a980f4c`; this goal's four new modules
-add no tests yet and change no existing behaviour, so the count is unchanged. Goal 8 has
-**no unit tests and no gated integration test** — that is the next phase's job, and until
-then this file claims implementation, not verification.
+The unit suite covers goal 8 directly: `tests/build-plan.test.ts` (26),
+`tests/runtime-detect.test.ts` (18), `tests/scaffold.test.ts` (20),
+`tests/build-manager.test.ts` (18). They assert by *source*, not by string match
+(`scripts.build` vs `framework-default`; `vite-config` vs `netlify-toml` vs
+`react-scripts`), so a plan that guessed the right answer for the wrong reason fails.
+
+The gated guest build test (`tests/guest/build.guest.test.ts`, scaffold → `npm install`
+→ `vite build` → `dist/index.html`) has **not passed yet**; it is the one acceptance item
+still open on goal 8.
+
+---
+
+## 3a. The guest is Debian now, not Alpine
+
+Changed because Alpine could not be made to satisfy the product: `curl` is a first-use
+shim, `apk` refuses as the guest's uid 1000, and a staged static curl lost to the shim on
+`PATH` (see §4). unkernel's own demo page boots Debian 13, and `debian.erofs` is in the
+same pinned release we already use, so the fix was to boot the image that is known to work
+instead of keeping workarounds for the smaller one.
+
+One name, four consumers: `DEFAULT_DISTRO_NAME = "debian"` in `src/env/distro.ts` feeds
+`DEFAULT_DISTRO_URL` in `boot.ts`, the default in `scripts/fetch-distros.ts` and the
+manifest check in `summarizeDistro()`. A test covers the failure that motivated that: a
+manifest that lists Alpine while the app boots Debian is complete, reachable and useless,
+so the message now names both the wanted image and the ones the manifest has.
+
+Measured, not assumed:
+
+```
+bun scripts/fetch-distros.ts → debian.erofs 72593408 bytes sha256 verified
+                               manifest public/distros/distros.json (1 image)
+LARPABLE_GUEST_TESTS=1 …/environment.guest.test.ts → passed, 5.09 s
+                               (uname, file round-trip, exit codes, shutdown)
+```
+
+**Known inconsistency, owned by goal 26:** `RuntimeBootstrap.#assertSupported` still
+refuses any command containing `bun`/`bunx`, while `detectRuntime` can *select* Bun when
+`bun --version` answers (it does: `1.4.5`). Nothing on the supported path hits that
+combination yet because `SUPPORTED_RUNTIME.bun` is `false` and `BuildManager` is told
+`npm`, but the two must be reconciled when goal 26 proves or disproves `bun install`.
 
 ---
 
@@ -122,9 +161,13 @@ app to `wss://wisp.mercurywork.shop/` (still overridable with `VITE_WISP_SERVERS
 
 ## 6. Repo state
 
-- Branch `main`; last commit `a980f4c`.
-- New and uncommitted: `src/runtime/detect.ts`, `src/runtime/scaffold.ts`,
-  `src/build/plan.ts`, `src/build/manager.ts`, `scripts/probe-curl-install.mjs`,
-  `docs/evidence/probe-curl-production.png`, this file.
-- No placeholders: Bun, `apk`, and browser `direct` networking all fail with a message
-  that names the measured reason.
+- Branch `main`; last commit `7dd5b18` before this change.
+- This change touches: `src/env/distro.ts` (one `DEFAULT_DISTRO_NAME`, manifest check no
+  longer hard-codes Alpine), `src/env/boot.ts`, `scripts/fetch-distros.ts`,
+  `src/runtime/bootstrap.ts` (exclusion text now says which image it was measured on),
+  `src/ui/environment-panel.tsx`, and the distro fixtures in `tests/`.
+- `public/distros/debian.erofs` (72,593,408 bytes, sha256 verified against the pinned
+  release) and `distros.json` listing it; the stale `alpine.erofs` was removed so the
+  served directory and the manifest cannot disagree.
+- No placeholders: a package manager, Bun and browser `direct` networking all fail with a
+  message that names the measured reason.

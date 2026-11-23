@@ -10,7 +10,7 @@
  * The defaults are the ones the acceptance run actually uses, so "it works in the app"
  * and "it works in the browser test" cannot drift apart:
  *
- * - the Alpine image served from this origin (`/distros/alpine.erofs`),
+ * - the Debian image served from this origin (`/distros/debian.erofs`),
  * - 1 GiB of guest memory and 2 CPUs, each CPU in its own worker,
  * - the kernel in a Web Worker, so a build never freezes the page,
  * - the guest's network through a Wisp proxy (browsers have no raw sockets),
@@ -21,13 +21,14 @@
  */
 
 import { DEFAULT_PROJECT_TREE, DEFAULT_WORKSPACE_PATH } from "./default-project";
+import { DEFAULT_DISTRO_NAME } from "./distro";
 import type { KernelNetwork } from "./unkernel-kernel";
 import { browserKernelFactory, createMemoryWorkspace } from "./unkernel-kernel";
 import { UnkernelEnvironment } from "./unkernel-environment";
 import type { WorkspaceFs } from "./workspace-fs";
 
 /** The image `bun run fetch:distros` places in `public/distros/`. */
-export const DEFAULT_DISTRO_URL = "/distros/alpine.erofs";
+export const DEFAULT_DISTRO_URL = `/distros/${DEFAULT_DISTRO_NAME}.erofs`;
 export const DEFAULT_MEMORY_MIB = 1024;
 export const DEFAULT_CPUS = 2;
 /**

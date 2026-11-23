@@ -66,7 +66,7 @@ export function EnvironmentPanel({
           Linux environment
         </CardTitle>
         <CardDescription>
-          A real Alpine machine, booted from WebAssembly in this tab. Nothing runs on a server.
+          A real Debian machine, booted from WebAssembly in this tab. Nothing runs on a server.
         </CardDescription>
       </CardHeader>
 

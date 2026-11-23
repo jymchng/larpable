@@ -14,7 +14,7 @@
  * - the output check (the `dist/index.html` is read back out of the mounted workspace
  *   and must contain the hashed asset tag Vite emits, not just any HTML).
  *
- * Skipped unless `LARPABLE_GUEST_TESTS=1`: it needs Node >= 24 (JSPI), the Alpine image
+ * Skipped unless `LARPABLE_GUEST_TESTS=1`: it needs Node >= 24 (JSPI), the Debian image
  * in `public/distros/`, and outbound network. Run it with:
  *
  * ```sh
@@ -42,7 +42,7 @@ describe.skipIf(!enabled)("scaffold → install → build in the real guest", ()
     "produces dist/index.html and a successful build id",
     async () => {
       const unkernel = await import("unkernel/node");
-      const distro = new URL("../../public/distros/alpine.erofs", import.meta.url).pathname;
+      const distro = new URL("../../public/distros/debian.erofs", import.meta.url).pathname;
       // A 4 GiB sparse disk with real blocks written into it belongs on the checkout's
       // disk, not in a small tmpfs (a full tmpfs here once killed a guest run).
       const scratch = new URL("../../.tmp", import.meta.url).pathname;
@@ -89,11 +89,21 @@ describe.skipIf(!enabled)("scaffold → install → build in the real guest", ()
         expect(warm.state).toBe("ready");
 
         const detected = await detectRuntime(environment);
-        expect(detected.runtime).toBe("node");
-        expect(detected.packageManager).toBe("npm");
-        expect(detected.version).toMatch(/^v\d+\.\d+\.\d+$/);
+        // Which runtime wins is measured, not asserted. Goals #2-#7 recorded Bun as
+        // unusable on Alpine (`libstdc++.so.6`, exit 127); a later run of this same
+        // guest answered `1.4.5` once the probe budget was raised, so on Debian the
+        // honest assertion is *consistency*: either Bun was chosen with no fallback
+        // reason, or Node was chosen with a reason that quotes what Bun did. Goal #26
+        // settles which of those is true.
+        expect(["node", "bun"]).toContain(detected.runtime);
+        expect(detected.packageManager).toBe(detected.runtime === "bun" ? "bun" : "npm");
+        expect(detected.version).toMatch(/^v?\d+\.\d+\.\d+$/);
         expect(detected.packageManagerVersion).toMatch(/^\d+\.\d+\.\d+$/);
-        expect(detected.fallbackReason).toContain("libstdc++");
+        if (detected.runtime === "bun") {
+          expect(detected.fallbackReason).toBeNull();
+        } else {
+          expect(detected.fallbackReason).toMatch(/exited|could not run|did not answer/);
+        }
 
         // --- Scaffold: the React + TS + Vite template, written into /workspace. ---
         const project = scaffoldProject({ framework: "react-ts", name: "guest-build" });
@@ -105,15 +115,19 @@ describe.skipIf(!enabled)("scaffold → install → build in the real guest", ()
           environment,
           runtime,
           framework: "react-ts",
+          // The package manager detection picked, not a hard-coded npm: on a guest where
+          // Bun answers, the install and build must go through Bun for this to mean
+          // anything.
+          packageManager: detected.packageManager,
           installTimeoutMs: 900_000,
           buildTimeoutMs: 600_000,
         });
 
-        // --- Install: real npm, real registry, real output streamed into the log. ---
+        // --- Install: real registry, real output streamed into the log. ---
         const install = await manager.install();
         expect(
           install.ok,
-          `npm install failed: ${install.failure?.summary ?? ""}\n${install.log.stderr.slice(-2_000)}`,
+          `${install.command} failed: ${install.failure?.summary ?? ""}\n${install.log.stderr.slice(-2_000)}`,
         ).toBe(true);
         expect(install.log.stdout.length).toBeGreaterThan(0);
         expect(install.log.exitCode).toBe(0);
@@ -127,7 +141,9 @@ describe.skipIf(!enabled)("scaffold → install → build in the real guest", ()
 
         // The id is what the preview and the UI name, so it has to exist and be stable.
         expect(build.id).toMatch(/^build-/);
-        expect(build.command).toBe("npm run build");
+        expect(build.command).toBe(
+          detected.packageManager === "bun" ? "bun run build" : "npm run build",
+        );
         expect(build.commandSource).toBe("scripts.build");
         expect(build.outputDir).toBe("dist");
         expect(build.entryPoint).toBe("/workspace/dist/index.html");

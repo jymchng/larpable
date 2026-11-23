@@ -11,11 +11,11 @@ import {
 } from "../src/env/distro";
 
 const entry: DistroEntry = {
-  name: "alpine",
-  file: "alpine.erofs",
-  size: 4_046_848,
-  sha256: "02460df31c14772659bb347a651693ac9aaa7a8c2477f05e4e5e4d5c756dd567",
-  image: "alpine-3.24.4-e0d59c37c0882d76",
+  name: "debian",
+  file: "debian.erofs",
+  size: 72_593_408,
+  sha256: "d5894fa27ee868108c56c8a635d122687937c741f26535296e7b61b5e2c2f5e8",
+  image: "debian-13.7-a6bb4b5e547bc28a",
 };
 
 const manifest: DistroManifest = {
@@ -83,13 +83,13 @@ describe("loadDistroManifest", () => {
 describe("probeDistroAsset", () => {
   it("uses HEAD so opening the app never downloads the image", async () => {
     const fetched = vi.fn(
-      async () => new Response(null, { status: 200, headers: { "content-length": "4046848" } }),
+      async () => new Response(null, { status: 200, headers: { "content-length": "72593408" } }),
     );
 
     const status = await probeDistroAsset(entry, fetched);
 
-    expect(fetched).toHaveBeenCalledWith("/distros/alpine.erofs", { method: "HEAD" });
-    expect(status).toMatchObject({ present: true, bytes: 4_046_848 });
+    expect(fetched).toHaveBeenCalledWith("/distros/debian.erofs", { method: "HEAD" });
+    expect(status).toMatchObject({ present: true, bytes: 72_593_408 });
   });
 
   it("treats 404 as 'not fetched yet' rather than an error", async () => {
@@ -143,15 +143,42 @@ describe("summarizeDistro", () => {
 
   it("reports the served image, its size and its URL", () => {
     const summary = summarizeDistro(
-      [{ entry, url: "/distros/alpine.erofs", present: true, bytes: 4_046_848 }],
+      [{ entry, url: "/distros/debian.erofs", present: true, bytes: 72_593_408 }],
       null,
     );
-    expect(summary.head).toBe("alpine-3.24.4-e0d59c37c0882d76 ready");
-    expect(summary.detail).toContain("3.9 MiB");
-    expect(summary.detail).toContain("/distros/alpine.erofs");
+    expect(summary.head).toBe("debian-13.7-a6bb4b5e547bc28a ready");
+    expect(summary.detail).toContain("69.2 MiB");
+    expect(summary.detail).toContain("/distros/debian.erofs");
   });
 
-  it("flags a manifest that lost its alpine entry", () => {
+  it("flags a manifest that lost its entry for the image the app boots", () => {
     expect(summarizeDistro([], null).state).toBe("error");
+  });
+
+  it("names the image it wanted and the ones the manifest has, when they differ", () => {
+    // The failure this prevents: the app boots `/distros/debian.erofs`, someone ran
+    // `LARPABLE_DISTROS=alpine bun run fetch:distros`, and the manifest is complete,
+    // server-reachable and useless. "No image" would send the reader looking in the
+    // wrong place.
+    const alpineOnly = { ...entry, name: "alpine", file: "alpine.erofs" };
+    const summary = summarizeDistro(
+      [{ entry: alpineOnly, url: "/distros/alpine.erofs", present: true, bytes: 4_046_848 }],
+      null,
+    );
+
+    expect(summary.state).toBe("error");
+    expect(summary.head).toBe("No debian image listed");
+    expect(summary.detail).toContain("alpine");
+    expect(summary.detail).toContain("LARPABLE_DISTROS=debian");
+  });
+
+  it("accepts another distro when the caller asks for it", () => {
+    const alpineOnly = { ...entry, name: "alpine", file: "alpine.erofs" };
+    const summary = summarizeDistro(
+      [{ entry: alpineOnly, url: "/distros/alpine.erofs", present: true, bytes: 4_046_848 }],
+      null,
+      "alpine",
+    );
+    expect(summary.state).toBe("ready");
   });
 });

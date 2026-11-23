@@ -140,9 +140,9 @@ export interface RuntimeBootstrapOptions {
 
 /** Why `apk` is not part of any plan here. Shown verbatim to a caller that tries. */
 export const APK_RESTRICTION =
-  "apk cannot be used in this guest. The shim's own advice (`sudo apk add libgcc`) fails " +
-  "for the unprivileged guest user, so nothing may depend on a package manager: the " +
-  "runtime has to come from the shim's own download (see docs/feasibility-report.md).";
+  "No package manager can install anything in this guest: it runs as an unprivileged " +
+  "user, so `apk` (Alpine) and `apt` (Debian) both refuse. Nothing may depend on one: the " +
+  "runtime has to come from the image's own first-use shim (see docs/feasibility-report.md).";
 
 /**
  * Why Bun is excluded, with the measurement rather than an opinion.
@@ -155,8 +155,8 @@ export const BUN_EXCLUSION = {
   target: "bun-linux-aarch64-musl",
   exitCode: 127,
   reason:
-    "bun cannot run in this guest: the aarch64-musl build fails with exit 127 because " +
-    "libstdc++.so.6 is missing and its C++ symbol relocations fail.",
+    "bun was measured unusable on the Alpine image: the aarch64-musl build fails with exit " +
+    "127 because libstdc++.so.6 is missing and its C++ symbol relocations fail.",
   measuredMs: 52_210,
 } as const;
 

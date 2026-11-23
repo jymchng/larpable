@@ -13,17 +13,17 @@ const supported = evaluateSupport({
   sharedArrayBuffer: true,
 });
 
-const alpineAsset: DistroAssetStatus = {
+const debianAsset: DistroAssetStatus = {
   entry: {
-    name: "alpine",
-    file: "alpine.erofs",
-    size: 4_046_848,
-    sha256: "02460df31c14772659bb347a651693ac9aaa7a8c2477f05e4e5e4d5c756dd567",
-    image: "alpine-3.24.4-e0d59c37c0882d76",
+    name: "debian",
+    file: "debian.erofs",
+    size: 72_593_408,
+    sha256: "d5894fa27ee868108c56c8a635d122687937c741f26535296e7b61b5e2c2f5e8",
+    image: "debian-13.7-a6bb4b5e547bc28a",
   },
-  url: "/distros/alpine.erofs",
+  url: "/distros/debian.erofs",
   present: true,
-  bytes: 4_046_848,
+  bytes: 72_593_408,
 };
 
 function renderDashboard(
@@ -37,7 +37,7 @@ function renderDashboard(
       version="9.9.9"
       support={overrides.support ?? supported}
       environment={INITIAL_ENVIRONMENT}
-      distro={overrides.distro ?? summarizeDistro([alpineAsset], null)}
+      distro={overrides.distro ?? summarizeDistro([debianAsset], null)}
     />,
   );
 }
@@ -73,7 +73,7 @@ describe("Dashboard", () => {
 
   it("offers the fetch command when the Linux image is absent", () => {
     const html = renderDashboard({
-      distro: summarizeDistro([{ ...alpineAsset, present: false, bytes: null }], null),
+      distro: summarizeDistro([{ ...debianAsset, present: false, bytes: null }], null),
     });
 
     expect(html).toContain("not downloaded");
@@ -81,7 +81,7 @@ describe("Dashboard", () => {
   });
 
   it("shows the image size when it is actually served", () => {
-    expect(renderDashboard()).toContain("3.9 MiB");
+    expect(renderDashboard()).toContain("69.2 MiB");
   });
 
   it("puts the guest terminal in the agent pane when one is supplied", () => {
@@ -90,7 +90,7 @@ describe("Dashboard", () => {
         version="9.9.9"
         support={supported}
         environment={INITIAL_ENVIRONMENT}
-        distro={summarizeDistro([alpineAsset], null)}
+        distro={summarizeDistro([debianAsset], null)}
         terminal={<div data-testid="terminal-slot">shell</div>}
       />,
     );
@@ -119,7 +119,7 @@ describe("describeEnvironment", () => {
   it("includes distro, runtime, resources and error once known", () => {
     const summary = describeEnvironment({
       status: "ready",
-      distro: "alpine 3.24",
+      distro: "debian 13.7",
       runtime: "bun 1.4.5",
       cpus: 2,
       memoryMiB: 512,
@@ -127,7 +127,7 @@ describe("describeEnvironment", () => {
     });
 
     expect(summary).toBe(
-      "Linux: Ready | Distro: alpine 3.24 | Runtime: bun 1.4.5 | CPUs: 2 | Memory: 512 MiB",
+      "Linux: Ready | Distro: debian 13.7 | Runtime: bun 1.4.5 | CPUs: 2 | Memory: 512 MiB",
     );
   });
 

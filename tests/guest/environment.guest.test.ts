@@ -8,7 +8,7 @@
  *
  * - Node >= 24 (JSPI) — hence `bun run test:guest`, which runs vitest under
  *   `.tooling/node/bin/node`,
- * - the Alpine image in `public/distros/` (`bun run fetch:distros`).
+ * - the Debian image in `public/distros/` (`bun run fetch:distros`).
  *
  * It uses `directBackend()` from `unkernel/node`: the browser has no direct backend
  * (Wisp only), but on Node it is the simplest way to boot a guest for a test.
@@ -27,7 +27,7 @@ describe.skipIf(!enabled)("UnkernelEnvironment against the real guest", () => {
     async () => {
       const { createKernel, directBackend, MemoryFs } = await import("unkernel/node");
       type MountSource = NonNullable<Parameters<typeof createKernel>[0]>["mounts"];
-      const image = new URL("../../public/distros/alpine.erofs", import.meta.url).pathname;
+      const image = new URL("../../public/distros/debian.erofs", import.meta.url).pathname;
       const fs = new MemoryFs();
 
       const env = new UnkernelEnvironment({
