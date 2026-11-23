@@ -21,10 +21,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExecutionEnvironment } from "@/env/execution";
 import type { AgentSession } from "@/agent/session";
 import { createAgentSession } from "@/agent/session";
-import { statusLabel } from "@/env/status";
+import { chatProblem } from "@/ui/availability";
+import { useMachineStatus } from "@/ui/use-environment-status";
 import type { BuildPort, NetlifyPort, PreviewPort } from "@/agent/tools/types";
 import { describeFindings } from "@/agent/claims";
-import { createProvider, settingsProblem, type LlmSettings } from "@/llm/settings";
+import { createProvider, type LlmSettings } from "@/llm/settings";
 import { createChatController, type ChatController } from "@/ui/chat-controller";
 import type { ChatState } from "@/ui/chat";
 import { initialChat } from "@/ui/chat";
@@ -60,14 +61,11 @@ export function useAgentChat(options: UseAgentChatOptions): AgentChatControl {
   const optionsRef = useRef({ environment, settings, build, netlify, preview, root });
   optionsRef.current = { environment, settings, build, netlify, preview, root };
 
-  const problem = useMemo(() => {
-    if (environment === null) return "Boot the Linux environment before asking the agent to build anything.";
-    const status = environment.status();
-    if (status !== "ready") {
-      return `The Linux machine is ${statusLabel(status).toLowerCase()}, so the agent has no filesystem to work in yet.`;
-    }
-    return settingsProblem(settings);
-  }, [environment, settings]);
+  // The status is subscribed state, not a call made during render: a memo over the
+  // environment object would freeze the "not available yet" sentence at boot time — measured
+  // in the browser run, where the prompt stayed disabled after the guest reported Ready.
+  const machine = useMachineStatus(environment);
+  const problem = useMemo(() => chatProblem(machine, settings), [machine, settings]);
 
   const controller = useMemo(() => {
     return createChatController({

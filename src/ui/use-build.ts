@@ -23,8 +23,9 @@ import type { ExecutionEnvironment } from "@/env/execution";
 import { RuntimeBootstrap } from "@/runtime/bootstrap";
 import type { BuildPort } from "@/agent/tools/types";
 import { createBuildController, type WarmGate } from "@/ui/build-controller";
+import { buildProblem } from "@/ui/availability";
 import { initialBuild, type BuildStatus } from "@/ui/build-state";
-import { statusLabel } from "@/env/status";
+import { useMachineStatus } from "@/ui/use-environment-status";
 
 export interface UseBuildOptions {
   environment: ExecutionEnvironment | null;
@@ -100,14 +101,10 @@ export function useBuild(options: UseBuildOptions): BuildControl {
     controller?.cancel();
   }, [controller]);
 
-  const problem = useMemo(() => {
-    if (environment === null) return "Boot the Linux machine before building anything: there is no guest to run the build in.";
-    const current = environment.status();
-    if (current !== "ready") {
-      return `The Linux machine is ${statusLabel(current).toLowerCase()}, so the build has nowhere to run yet.`;
-    }
-    return null;
-  }, [environment]);
+  // Subscribed, for the same reason as the chat: a memo over the environment object kept the
+  // build button disabled after the guest was ready.
+  const machine = useMachineStatus(environment);
+  const problem = useMemo(() => buildProblem(machine), [machine]);
 
   return { status, busy: status.kind === "running", problem, run, cancel, port: controller };
 }
