@@ -19,8 +19,11 @@
  * - **The tab names the build.** Two publishes of the same project are two documents; the tab
  *   carries the build id in mono so a screenshot of the pane says which build it shows.
  * - **The device toolbar sizes the frame and says so.** It is not a phone: no touch events, no
- *   device pixel ratio. The size readout is exact (`834 × 1112`) and the note that accompanies
- *   it is the one `viewport.ts` already writes for the vault of the same claim.
+ *   device pixel ratio. The size is exact (`834 × 1112`) and the note that accompanies it is the
+ *   one `viewport.ts` already writes for the vow of the same claim. Both live in the tooltip of
+ *   the button that applies them rather than in a readout of their own: the row was printing a
+ *   number nobody needed once, permanently, and now prints it while the pointer is over the
+ *   preset \u2014 which is also the only moment the user is choosing between them.
  */
 
 import {

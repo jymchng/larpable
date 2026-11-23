@@ -64,8 +64,8 @@ export function viewportFor(name: ViewportName): ViewportPreset {
  *
  * This exists because of the phone. A 390-px pane showing the 834-px tablet preset at 1:1 is a
  * site you can only read by dragging the pane sideways, which is not a preview. Scaling down is
- * the better answer \u2014 but it is a *claim* about the frame, so the toolbar prints the factor
- * next to the size rather than letting `834 \u00d7 1112` describe something drawn at 45 %.
+ * the better answer — but it is a *claim* about the frame, so the toolbar prints the factor
+ * next to the size rather than letting `834 × 1112` describe something drawn at 45 %.
  *
  * Below 25 % nothing is legible and a scrollbar is the honest failure, so that is where the
  * scale stops (`1` is returned instead, and the pane scrolls). A frame that already fits is
@@ -109,7 +109,46 @@ export function viewportStyle(preset: ViewportPreset): Record<string, string> | 
   };
 }
 
-/** One sentence for the toolbar's status line, so the claim is written down. */
+/**
+ * The limit of every sized preset, written once.
+ *
+ * It travels with the size wherever the size is printed, because a width on its own reads as a
+ * device: a 390-px frame is *not* a phone, and the toolbar would be lying by omission if it let
+ * the number stand alone.
+ */
+const SIZED_LIMIT = "Sizes the frame only — no touch events or device pixel ratio.";
+
+/**
+ * The size as the toolbar prints it, or `null` for the preset that has no size.
+ *
+ * `null` rather than the words "full width": what to say for the preset that follows the window
+ * is the caller's decision (the tooltip says "Fills the pane"), and this function has one job —
+ * the exact claim, in exact pixels.
+ */
+export function viewportSize(preset: ViewportPreset): string | null {
+  if (preset.width === null || preset.height === null) return null;
+  return `${String(preset.width)} × ${String(preset.height)}`;
+}
+
+/**
+ * The sentence that qualifies a preset: what it does, or what it does not do.
+ *
+ * Desktop has no limit to state — it sizes nothing — so the preset's own note ("Follows your
+ * window.") is the honest thing to print. The two sized presets get the disclaimer, because the
+ * number is exactly the part that would otherwise imply a device.
+ */
+export function viewportLimit(preset: ViewportPreset): string {
+  return viewportSize(preset) === null ? preset.note : SIZED_LIMIT;
+}
+
+/**
+ * One sentence for the whole preset: name, size and limit.
+ *
+ * It is no longer painted in a row of its own — the device toolbar states it in the tooltip of
+ * the button that applies it — but it is still the single source of those words, and it is what
+ * an `aria-describedby` target should hold when a caller wants the sentence rather than its
+ * parts. Composed from `viewportSize`/`viewportLimit` so the three cannot drift apart.
+ */
 export function describeViewport(preset: ViewportPreset): string {
   return preset.width === null
     ? `${preset.label}: ${preset.note}`

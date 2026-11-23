@@ -54,8 +54,16 @@ export interface IconButtonProps
   extends Omit<ComponentProps<"button">, "aria-label" | "title" | "children"> {
   /** The accessible name and the default tooltip. Required: see the note at the top. */
   label: string;
-  /** A longer tooltip, when the label alone would be a riddle. */
-  hint?: string;
+  /**
+   * A longer tooltip, when the label alone would be a riddle.
+   *
+   * `null` means *no native tooltip*, and exists for the caller that paints its own: the device
+   * toolbar's three preset buttons show a styled bubble (`components/tooltip.tsx`) carrying the
+   * size they apply, and the browser's grey rectangle arriving a second later on top of it would
+   * be two tooltips over one control. The pictogram still has its `aria-label`, which is what a
+   * screen reader announces either way.
+   */
+  hint?: string | null;
   tone?: ActionTone;
   /** A test hook, because the label is not stable ("Install & build" becomes "Rebuild"). */
   testId?: string;
@@ -80,7 +88,7 @@ export function IconButton({
       size="icon"
       variant="ghost"
       aria-label={label}
-      title={hint ?? label}
+      title={hint === null ? undefined : (hint ?? label)}
       {...(testId === undefined ? {} : { "data-testid": testId })}
       data-tone={tone}
       className={cn("size-8 shrink-0", TOUCH_TARGET_ICON, TONE_CLASS[tone], className)}
