@@ -69,7 +69,8 @@ export interface DashboardProps {
   /**
    * The automatic boot: whether one is in flight, the stage it last reported, its failure text
    * and how to retry it. Only those three values are passed, because the *status* is already
-   * here — `environment.status` — and the footer prints it, so a second copy could disagree.
+   * here — `environment.status` — and the debug popover's Status section prints it, so a second
+   * copy could disagree.
    *
    * Present in the app, absent in tests that render the shell without one: the indicator is
    * chrome for a machine that is starting, and a dashboard with no boot action shows none.

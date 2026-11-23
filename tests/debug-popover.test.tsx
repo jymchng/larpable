@@ -156,7 +156,12 @@ describe("the debug popover", () => {
     // Memory: 1024 MiB") is rendered for real, not only in the hidden live region.
     expect(panel).toContain(">Environment<");
     expect(panel).toContain(sentence);
-    expect(panel).toMatch(/data-testid="environment-sentence"[^>]*title="[^"]*Linux: Ready/);
+    // ...as the row's own text, in the `dd` beside its label. There is no `title` repeating it:
+    // the `dd` wraps rather than truncating, so a native tooltip could only repeat what is
+    // already on screen — and would make the sentence appear three times in the markup instead
+    // of the two the "only other copy" test below counts.
+    expect(panel).toMatch(/<dd[^>]*>Linux: Ready \| Distro: debian/);
+    expect(panel).not.toMatch(/data-testid="environment-sentence"[^>]*title=/);
     // The verdict the header badge used to carry, in words, with its tone as data.
     expect(panel).toContain('data-testid="support-verdict" data-ok="true"');
     expect(panel).toContain("Kernel can boot");

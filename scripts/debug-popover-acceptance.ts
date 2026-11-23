@@ -4,12 +4,16 @@
  *
  * User request, the session after the machine learned to boot itself: "Put all the above in the
  * debug popover, change the debug information into a popover, make it more concise" — where
- * "the above" was six facts: Linux, runtime, project, build, Netlify and preview.
+ * "the above" was the six facts the status bar painted: Linux, runtime, project, build, Netlify
+ * and preview. A later goal added the terminal's connection state as a seventh fact, so the
+ * expected list lives in one constant (`EXPECTED_FACTS`) instead of a `6` typed three times: the
+ * count and the labels cannot drift apart again, and a run that finds a row the list does not
+ * name fails instead of passing on a number.
  *
- * `tests/debug-popover.test.tsx` asserts the static markup (closed by default, named, the six
- * facts inside the surface, no second copy in the layout). This run asserts what static markup
+ * `tests/debug-popover.test.tsx` asserts the static markup (closed by default, named, the facts
+ * inside the surface, no second copy in the layout). This run asserts what static markup
  * cannot: that a press on the `d` really opens a surface which fits a 390 px phone with no
- * sideways overflow, that a screen reader would find the six values inside it, that Escape
+ * sideways overflow, that a screen reader would find every value inside it, that Escape
  * closes it and hands focus back, and that a press outside closes it too.
  *
  *   bun run acceptance:debug
@@ -39,6 +43,24 @@ const DEV_HOST = "127.0.0.1";
 const BOOT_TIMEOUT_MS = 240_000;
 const SERVER_TIMEOUT_MS = 60_000;
 const POPOVER_ID = "diagnostics-popover";
+
+/**
+ * The facts the popover must show, in render order, by label prefix.
+ *
+ * One list rather than a `6` beside a list of six prefixes: the previous shape hard-coded
+ * `facts.length === 6` in three checks while the expected labels lived in a fourth place, so
+ * adding the Terminal row turned three passing checks red without anything being wrong on
+ * screen. `EXPECTED_FACTS.length` is now the only count.
+ */
+const EXPECTED_FACTS = [
+  "Linux=",
+  "Runtime=",
+  "Project=",
+  "Build=",
+  "Netlify=",
+  "Preview=",
+  "Terminal=",
+] as const;
 
 interface Check {
   name: string;
@@ -120,6 +142,18 @@ interface OpenState {
   factsInside: boolean;
   duplicateFactsLists: number;
   controls: { boot: boolean; selfTest: boolean; shutdown: boolean };
+  /** The `dd` of the `environment-sentence` row: the sentence the user quoted, as an eye reads it. */
+  environmentSentence: string | null;
+  /** The `support-verdict` row: its words and its tone (`data-ok`), the old footer badge's replacement. */
+  support: { text: string | null; ok: string | null };
+  /** `v0.1.0` — the build id that used to sit in the header. */
+  version: string | null;
+  /** Whether the requirements `StatusDot` (the green dot beside the `d`) is inside the surface. */
+  requirementsDotInside: boolean;
+  /** Whether *any* `<footer>` element is on the page: the band this goal removed. */
+  footerElements: number;
+  /** The always-in-DOM `sr-only` polite live region, and whether it is really `aria-live="polite"`. */
+  live: { text: string | null; politeness: string | null; visuallyHidden: boolean };
   popoverOverflowPx: number;
   pageOverflowPx: number;
   rect: { left: number; right: number; width: number; top: number; bottom: number };
@@ -154,6 +188,35 @@ async function observeOpen(page: Page): Promise<OpenState> {
         boot: surface?.querySelector("[data-testid=boot-button]") !== null,
         selfTest: surface?.querySelector("[data-testid=self-test-button]") !== null,
         shutdown: surface?.querySelector("[data-testid=shutdown-button]") !== null,
+      },
+      // The three things this goal moved out of always-visible chrome, read the way a person would
+      // read them: the sentence row's value, the verdict row's words and tone, and the version in
+      // the surface's own footer.
+      environmentSentence:
+        surface
+          ?.querySelector("[data-testid=environment-sentence] dd")
+          ?.textContent?.trim() ?? null,
+      support: {
+        text: surface?.querySelector("[data-testid=support-verdict] dd")?.textContent?.trim() ?? null,
+        ok: surface?.querySelector("[data-testid=support-verdict]")?.getAttribute("data-ok") ?? null,
+      },
+      version: surface?.querySelector("[data-testid=app-version]")?.textContent?.trim() ?? null,
+      // The dot beside the `d` used to be in the header; it must now be *inside* the surface, so
+      // "found anywhere on the page" is not enough — the containment is the assertion.
+      requirementsDotInside:
+        surface !== null &&
+        surface.querySelector("[data-testid=requirements-status]") !== null,
+      footerElements: document.querySelectorAll("footer").length,
+      // The one copy that stays always-visible to assistive tech: same sentence, polite, hidden
+      // from the layout rather than removed from the DOM.
+      live: {
+        text: document.querySelector("[data-testid=environment-summary]")?.textContent?.trim() ?? null,
+        politeness: document
+          .querySelector("[data-testid=environment-summary]")
+          ?.getAttribute("aria-live") ?? null,
+        visuallyHidden:
+          document.querySelector("[data-testid=environment-summary]")?.className.includes("sr-only") ??
+          false,
       },
       popoverOverflowPx:
         surface === null ? -1 : Math.max(0, surface.scrollWidth - surface.clientWidth),
@@ -193,7 +256,7 @@ async function main(): Promise<void> {
     const closed = await observeOpen(page);
     check(
       "the popover is closed on arrival, and hidden rather than unpainted",
-      !closed.open && closed.hidden && closed.facts.length === 6,
+      !closed.open && closed.hidden && closed.facts.length === EXPECTED_FACTS.length,
       `data-state=${closed.open ? "open" : "closed"}, display:none=${String(closed.hidden)}, facts in DOM=${String(closed.facts.length)}`,
     );
     const trigger = await page.evaluate(() => {
@@ -254,11 +317,13 @@ async function main(): Promise<void> {
       `document.activeElement is the surface: ${String(open.activeIsSurface)}`,
     );
 
-    // The acceptance's own sentence: all six facts, with values, *inside* it.
-    const expected = ["Linux=", "Runtime=", "Project=", "Build=", "Netlify=", "Preview="];
+    // The acceptance's own sentence: every fact, with values, *inside* it — in render order, so a
+    // missing row, an extra row or a reordered list all fail here.
     check(
-      "all six facts are visible inside the popover",
-      open.factsInside && open.facts.length === 6 && expected.every((prefix, index) => open.facts[index]?.startsWith(prefix)),
+      "every status fact is visible inside the popover",
+      open.factsInside &&
+        open.facts.length === EXPECTED_FACTS.length &&
+        EXPECTED_FACTS.every((prefix, index) => open.facts[index]?.startsWith(prefix)),
       open.facts.join(" | ") || "(no facts found)",
     );
     check(
@@ -275,6 +340,44 @@ async function main(): Promise<void> {
       "the Boot, self-test and Shut down controls are inside it",
       open.controls.boot && open.controls.selfTest && open.controls.shutdown,
       `boot=${String(open.controls.boot)}, self-test=${String(open.controls.selfTest)}, shutdown=${String(open.controls.shutdown)}`,
+    );
+
+    // ------------------------------------------------- the chrome this goal folded in
+    // The user asked for three specific things to move here: the environment sentence (with the
+    // "Kernel can boot" verdict beside it), the version, and the green dot. Each is checked where
+    // it now lives *and* for the absence of the old always-visible copy, because "it is in the
+    // popover" is only half the request — "no longer on screen" is the other half.
+    const sentenceShape =
+      /^Linux: .+ \| Distro: .+ \| Runtime: .+ \| CPUs: \d+ \| Memory: \d+ MiB$/;
+    check(
+      "the environment sentence the user quoted is a row inside it",
+      open.environmentSentence !== null && sentenceShape.test(open.environmentSentence),
+      JSON.stringify(open.environmentSentence),
+    );
+    check(
+      "the support verdict is the row below it, with its tone as data",
+      open.support.text !== null &&
+        open.support.text.length > 0 &&
+        (open.support.ok === "true" || open.support.ok === "false"),
+      `support=${JSON.stringify(open.support.text)}, data-ok=${JSON.stringify(open.support.ok)}`,
+    );
+    check(
+      "the version and the requirements dot are in the same surface",
+      /^v\d+\.\d+\.\d+$/.test(open.version ?? "") && open.requirementsDotInside,
+      `version=${JSON.stringify(open.version)}, requirements dot inside=${String(open.requirementsDotInside)}`,
+    );
+    check(
+      "no visible footer band is left anywhere in the layout",
+      open.footerElements === 0,
+      `a <footer> element is on the page: ${String(open.footerElements > 0)}`,
+    );
+    check(
+      "the sr-only live region still carries the same sentence for a screen reader",
+      open.live.text !== null &&
+        open.live.text === open.environmentSentence &&
+        open.live.politeness === "polite" &&
+        open.live.visuallyHidden,
+      `environment-summary=${JSON.stringify(open.live.text)}, aria-live=${JSON.stringify(open.live.politeness)}, sr-only=${String(open.live.visuallyHidden)}`,
     );
 
     // ---------------------------------------------------------------- it fits 390 px
@@ -327,8 +430,8 @@ async function main(): Promise<void> {
     const wide = await observeOpen(desktop);
     await desktop.screenshot({ path: join(evidenceDir, "debug-popover-desktop.png") });
     check(
-      "at 1440 px the same surface opens with the same six facts and no overflow",
-      wide.open && wide.facts.length === 6 && wide.pageOverflowPx === 0,
+      "at 1440 px the same surface opens with the same facts and no overflow",
+      wide.open && wide.facts.length === EXPECTED_FACTS.length && wide.pageOverflowPx === 0,
       `facts=${String(wide.facts.length)}, page overflow=${String(wide.pageOverflowPx)} px, rect ${String(wide.rect.left)}..${String(wide.rect.right)}`,
     );
 

@@ -31,8 +31,8 @@ export function BootIndicator({ onRetry, ...input }: BootIndicatorProps) {
   const state = bootIndicator(input);
 
   // `none` is ready/stopped/idle, `blocked` is an unsupported browser. In both cases the
-  // answer already has an owner elsewhere in the header and footer (the requirements dot, the
-  // kernel badge in the footer, the diagnostics sheet), and a fourth signal would be noise.
+  // answer already has an owner inside the debug popover (the requirements dot beside the count,
+  // the environment sentence and its Support verdict), and a fourth signal would be noise.
   if (state.kind === "none" || state.kind === "blocked") return null;
 
   if (state.kind === "starting") {

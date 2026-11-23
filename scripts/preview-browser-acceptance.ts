@@ -440,7 +440,10 @@ async function main(): Promise<void> {
       .waitFor({ timeout: BOOT_TIMEOUT_MS });
     measurements.boot = {
       status: (await text(page, "[data-testid=env-status]")) ?? "",
-      runtime: await text(page, "footer > span"),
+      // The sentence used to be the footer band's `footer > span`; the band is gone (its text
+      // moved into the debug popover), and the always-in-DOM `sr-only` polite live region is the
+      // one stable place left to read it from — the same text a screen reader hears.
+      runtime: await text(page, "[data-testid=environment-summary]"),
       wallClockMs: Date.now() - bootStartedAt,
     };
     expect("the guest booted to Ready", measurements.boot.status === "Ready", measurements.boot.status);
@@ -676,7 +679,7 @@ async function main(): Promise<void> {
 
 function renderReport(measurements: Measurements): string {
   const passed = checks.filter((check) => check.ok).length;
-  const { session, boot, write, runtimeWarm, publish, render, deepLink } = measurements;
+  const { session, boot, write, runtimeWarm, publish, render, nav, deepLink } = measurements;
 
   const lines: string[] = [
     "# Preview browser report",
