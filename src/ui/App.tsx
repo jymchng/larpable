@@ -139,7 +139,9 @@ export function App() {
       preview={
         <PreviewPane
           phase={preview.phase}
-          onRefresh={() => preview.refresh()}
+          // The reload arrow hands back the build id it is showing, so a reload re-publishes
+          // that build rather than whatever happens to be in `dist/` now.
+          onRefresh={(buildId) => preview.refresh(buildId)}
           available={preview.available}
           app={appPreview}
           build={build}

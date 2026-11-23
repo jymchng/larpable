@@ -2,9 +2,28 @@
  * The preview pane, driven by the controller's phase.
  *
  * The split matters: `src/preview/controller.ts` decides *what happened*, `preview-frame.tsx`
- * knows how to draw a sandboxed iframe and a failure, and this file is the one place that maps
+ * knows how to draw a browser window and a failure, and this file is the one place that maps
  * one onto the other. Keeping the mapping here — not in the controller — means the controller
  * stays free of UI types and the acceptance run can assert phases instead of markup.
+ *
+ * This file also owns the pane's *browser* state, which is a reducer and not a pile of
+ * `useState`s: what the frame has visited, what it was last told to load, and which device
+ * preset sizes it. `src/ui/preview-browser.ts` holds that reducer, so back/forward/reload are
+ * testable decisions rather than click handlers nobody can assert.
+ *
+ * Three behaviours in here are deliberately narrow:
+ *
+ * - **Back and forward are disabled at the start of every build**, because the pane's history is
+ *   the list of paths the frame actually visited and a new build has exactly one. They are never
+ *   wired to the browser's own arrows: this frame's session history belongs to the app's window,
+ *   and hijacking it would break the Back button that gets the user out of the preview.
+ * - **Reload reloads what is on screen.** It re-navigates the frame to the path it is showing
+ *   (not to the build's root) and asks the caller to re-publish *that build id*, so a reload can
+ *   never silently swap in a different build's bytes.
+ * - **The address bar follows the frame, not the other way round.** A 500 ms read of
+ *   `contentWindow.location` keeps the URL honest when the previewed site routes itself
+ *   (`pushState`, a link, a hash), and it never writes back into the frame — see the note in
+ *   `preview-frame.tsx` about the reload loop that would cause.
  *
  * The toolbar is not decoration. A preview does not appear by itself: the user asks for one,
  * and the moment they do, the start of a guest `node` can take a minute. So the control shows
@@ -25,8 +44,8 @@
  *   way to reach the iframe.
  *
  * The viewport control is the third honest thing here: it sizes the *frame* and says so. It is
- * not a device emulator (no touch events, no device pixel ratio), and the status line spells
- * that out rather than letting a 390-px frame imply a phone.
+ * not a device emulator (no touch events, no device pixel ratio), and the toolbar spells that
+ * out rather than letting a 390-px frame imply a phone.
  */
 
 import {
@@ -35,34 +54,40 @@ import {
   Hammer,
   Loader2,
   Maximize2,
-  Minimize2,
-  Monitor,
   Play,
   RotateCw,
   Server,
-  Smartphone,
   Square,
   SquareTerminal,
-  Tablet,
 } from "lucide-react";
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useReducer, useRef, type ReactNode } from "react";
 
 import type { PreviewPhase } from "@/preview/controller";
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
 import { describeBuildProgress, type BuildStatus } from "@/ui/build-state";
 import { PreviewPanel, previewUrlFor, type PreviewState } from "@/ui/preview-frame";
+import {
+  beginBrowser,
+  canGoBack,
+  canGoForward,
+  currentPath,
+  pathFromFrameUrl,
+  previewBrowserReducer,
+  readFrameUrl,
+} from "@/ui/preview-browser";
 import type { AppPreviewControl, AppPreviewState } from "@/ui/use-app-preview";
 import type { BuildControl } from "@/ui/use-build";
 import {
-  VIEWPORTS,
-  describeViewport,
   viewportFor,
   viewportStyle,
   type ViewportName,
   type ViewportPreset,
 } from "@/ui/viewport";
 import { cn } from "@/lib/utils";
+
+/** How often the address bar re-reads the frame's location. Cheap, and no faster than a eye. */
+const OBSERVE_INTERVAL_MS = 500;
 
 /**
  * A controller phase as the frame's state.
@@ -128,7 +153,7 @@ export function describeAppPreview(state: AppPreviewState | undefined): string |
   if (state === undefined) return null;
   switch (state.kind) {
     case "idle":
-      return "No app running: \u201cRun the app\u201d starts the project\u2019s own start script.";
+      return "No app running: “Run the app” starts the project’s own start script.";
     case "starting":
       return state.message;
     case "running":
@@ -158,8 +183,14 @@ export function describePreviewPhase(phase: PreviewPhase): string {
 
 export interface PreviewPaneProps {
   phase: PreviewPhase;
-  /** Called when the user asks for the build in the guest to be published. */
-  onRefresh: () => void;
+  /**
+   * Called when the user asks for the build in the guest to be published.
+   *
+   * The build id is passed on reload (`PreviewPanel`'s own reload control), so a reload
+   * re-publishes the build that is on screen; a rebuild asks with no id, because "rebuild the
+   * preview" means "whatever is in `dist/` now" and the controller can fingerprint that.
+   */
+  onRefresh: (buildId?: string) => void;
   /** False when there is no running machine to ask. */
   available: boolean;
   /**
@@ -189,46 +220,85 @@ export function PreviewPane({
   initialViewport = "desktop",
   className,
 }: PreviewPaneProps) {
-  const [viewport, setViewport] = useState<ViewportName>(initialViewport);
-  const [fullscreen, setFullscreen] = useState(false);
+  // One reducer for the browser bits: history, what the frame was told to load, and the device.
+  const [browser, dispatch] = useReducer(previewBrowserReducer, initialViewport, beginBrowser);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   const state = mergePreviewStates(phase, app);
-  const preset = viewportFor(viewport);
+  const preset = viewportFor(browser.viewport);
   const ready = state.kind === "ready";
-  const url = state.kind === "ready" ? previewUrlFor(state.buildId) : null;
+  const buildId = state.kind === "ready" ? state.buildId : null;
+  const url = buildId === null ? null : previewUrlFor(buildId);
+  const path = currentPath(browser.history);
+
+  // A different build is a different document: its root, and its own history. Without this the
+  // address bar would keep claiming `/about` from the previous build.
+  useEffect(() => {
+    dispatch({ type: "reset" });
+  }, [buildId]);
+
+  const observe = useCallback(() => {
+    if (buildId === null) return;
+    const observed = pathFromFrameUrl(readFrameUrl(frameRef.current), buildId);
+    if (observed !== null) dispatch({ type: "visit", path: observed });
+  }, [buildId]);
+
+  // A previewed site can navigate itself — a link, `pushState`, a hash — and none of those fire
+  // an event the parent can hear. Reading the frame's location on a slow timer is what keeps
+  // the address bar from lying; `onLoad` covers full document loads without the wait.
+  useEffect(() => {
+    if (!ready || buildId === null) return;
+    const timer = setInterval(observe, OBSERVE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [ready, buildId, observe]);
 
   const toggleFullscreen = () => {
     const element = containerRef.current;
     if (element === null || typeof document === "undefined") return;
     if (document.fullscreenElement === null) {
-      void element.requestFullscreen?.().then(() => setFullscreen(true)).catch(() => setFullscreen(false));
+      void element.requestFullscreen?.().catch(() => undefined);
     } else {
-      void document.exitFullscreen?.().then(() => setFullscreen(false)).catch(() => undefined);
+      void document.exitFullscreen?.().catch(() => undefined);
     }
   };
 
   return (
-    <div ref={containerRef} data-testid="preview-pane" className={cn("flex min-h-0 flex-1 flex-col", className)}>
-      {build !== undefined ? <BuildStrip build={build} /> : null}
+    <div
+      ref={containerRef}
+      data-testid="preview-pane"
+      className={cn("flex min-h-0 flex-1 flex-col", className)}
+    >
       <PreviewPanel
         state={state}
-        onReload={onRefresh}
-        frameStyle={viewportStyle(preset)}
+        onReload={(id) => {
+          dispatch({ type: "reload" });
+          onRefresh(id ?? undefined);
+        }}
         toolbar={
           <PreviewToolbar
             phase={phase}
-            onRefresh={onRefresh}
+            onRefresh={() => onRefresh()}
             available={available}
             app={app}
-            viewport={preset}
-            onViewport={setViewport}
             ready={ready}
             url={url}
-            fullscreen={fullscreen}
             onFullscreen={toggleFullscreen}
           />
         }
+        strip={build !== undefined ? <BuildStrip build={build} /> : null}
+        frameStyle={viewportStyle(preset)}
+        path={path}
+        framePath={browser.navigation.path}
+        reloads={browser.navigation.nonce}
+        canGoBack={canGoBack(browser.history)}
+        canGoForward={canGoForward(browser.history)}
+        onBack={() => dispatch({ type: "back" })}
+        onForward={() => dispatch({ type: "forward" })}
+        viewport={preset}
+        onViewport={(name) => dispatch({ type: "viewport", name })}
+        frameRef={frameRef}
+        onFrameLoad={observe}
       />
     </div>
   );
@@ -314,26 +384,27 @@ export interface PreviewToolbarProps {
   onRefresh: () => void;
   available: boolean;
   app?: AppPreviewControl;
-  viewport?: ViewportPreset;
-  onViewport?: (name: ViewportName) => void;
   /** True when a frame is actually rendered: fullscreen and "open in a new tab" need a URL. */
   ready?: boolean;
   /** The preview URL, when there is one. */
   url?: string | null;
-  fullscreen?: boolean;
   onFullscreen?: () => void;
 }
 
+/**
+ * The pane's own controls: publish, run the app, the status sentence, the served-by badge.
+ *
+ * It is deliberately *not* the browser chrome. Tabs, arrows, the address bar and the device
+ * toolbar belong to `preview-chrome.tsx`, because those are a browser's words for a browser's
+ * controls; this row is the app talking about what it did.
+ */
 export function PreviewToolbar({
   phase,
   onRefresh,
   available,
   app,
-  viewport,
-  onViewport,
   ready = phase.kind === "ready",
   url = phase.kind === "ready" ? previewUrlFor(phase.buildId) : null,
-  fullscreen = false,
   onFullscreen,
 }: PreviewToolbarProps) {
   const busy = phase.kind === "starting" || phase.kind === "publishing";
@@ -366,10 +437,6 @@ export function PreviewToolbar({
 
       {app !== undefined ? <RunAppButton app={app} available={available} /> : null}
 
-      {viewport !== undefined && onViewport !== undefined ? (
-        <ViewportControl current={viewport} onChange={onViewport} />
-      ) : null}
-
       <div className="ml-auto flex items-center gap-1">
         {url !== null ? (
           <Button asChild size="sm" variant="ghost" data-testid="preview-new-tab" className="gap-1.5">
@@ -393,12 +460,8 @@ export function PreviewToolbar({
             title={ready ? "Fullscreen preview" : "Publish a build before going fullscreen"}
             className="gap-1.5"
           >
-            {fullscreen ? (
-              <Minimize2 aria-hidden="true" className="size-3.5" />
-            ) : (
-              <Maximize2 aria-hidden="true" className="size-3.5" />
-            )}
-            <span className="sr-only">{fullscreen ? "Exit fullscreen" : "Fullscreen"}</span>
+            <Maximize2 aria-hidden="true" className="size-3.5" />
+            <span className="sr-only">Fullscreen</span>
           </Button>
         ) : null}
       </div>
@@ -419,66 +482,9 @@ export function PreviewToolbar({
             {appNote}
           </span>
         ) : null}
-        {viewport !== undefined ? (
-          <span data-testid="preview-viewport-status" className="block truncate">
-            {describeViewport(viewport)}
-          </span>
-        ) : null}
       </p>
 
       <ServedBy phase={phase} app={app} />
-    </div>
-  );
-}
-
-/**
- * Desktop / tablet / mobile, as a segmented control of real buttons.
- *
- * `aria-pressed` and not a `<select>`: there are three choices, they are visible at once, and
- * the current one has to be readable by a screen reader — a select would work too, but a
- * segmented control is what every device toolbar in every devtool looks like.
- */
-function ViewportControl({
-  current,
-  onChange,
-}: {
-  current: ViewportPreset;
-  onChange: (name: ViewportName) => void;
-}): ReactNode {
-  const ICONS: Readonly<Record<ViewportName, ReactNode>> = {
-    desktop: <Monitor aria-hidden="true" className="size-3.5" />,
-    tablet: <Tablet aria-hidden="true" className="size-3.5" />,
-    mobile: <Smartphone aria-hidden="true" className="size-3.5" />,
-  };
-
-  return (
-    <div
-      data-testid="preview-viewports"
-      role="group"
-      aria-label="Preview viewport"
-      className="border-border flex items-center overflow-hidden rounded-md border"
-    >
-      {VIEWPORTS.map((preset) => {
-        const selected = preset.name === current.name;
-        return (
-          <button
-            key={preset.name}
-            type="button"
-            data-testid={`preview-viewport-${preset.name}`}
-            data-selected={selected ? "true" : "false"}
-            aria-pressed={selected}
-            title={describeViewport(preset)}
-            onClick={() => onChange(preset.name)}
-            className={cn(
-              "flex h-7 items-center gap-1 px-1.5 font-mono text-[10.5px] transition-colors",
-              selected ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted/60",
-            )}
-          >
-            {ICONS[preset.name]}
-            {preset.label}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -566,3 +572,6 @@ function ServedBy({
     </Badge>
   );
 }
+
+/** Kept for callers that used the old name; the levels live in `build-state.ts`. */
+export type { BuildStatus };

@@ -130,4 +130,32 @@ describe("PreviewPanel", () => {
     );
     expect(html.indexOf('data-testid="toolbar"')).toBeLessThan(html.indexOf("<iframe"));
   });
+
+  /**
+   * The pane is a browser window now, and these two assertions are the contract that made it
+   * one: the chrome is *above* the document (a tab strip, a navigation bar, a device toolbar),
+   * and the frame's URL is not the address bar's value when the site routed itself — otherwise
+   * watching the address would reload the page the user is reading.
+   */
+  it("puts a tab strip, a navigation bar and a device toolbar above the frame", () => {
+    const html = render(<PreviewPanel state={{ kind: "ready", buildId: "b-17" }} />);
+
+    expect(html).toContain('data-testid="preview-tab-strip"');
+    expect(html).toContain('data-testid="preview-browser-bar"');
+    expect(html).toContain('data-testid="preview-device-toolbar"');
+    expect(html.indexOf('data-testid="preview-browser-bar"')).toBeLessThan(
+      html.indexOf("<iframe"),
+    );
+  });
+
+  it("loads the path it was told to load while the address shows where the frame is", () => {
+    const html = render(
+      <PreviewPanel state={{ kind: "ready", buildId: "b-17" }} path="/about" framePath="/" />,
+    );
+
+    // The address follows the frame…
+    expect(html).toContain(`value="${PREVIEW_PREFIX}/b-17/about"`);
+    // …and the frame is not re-pointed at it, which would reload the user's page.
+    expect(html).toContain(`src="${PREVIEW_PREFIX}/b-17/"`);
+  });
 });

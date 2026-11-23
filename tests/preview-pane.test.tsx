@@ -147,6 +147,18 @@ describe("PreviewToolbar", () => {
     expect(html).toContain("Rebuild preview");
     expect(html).not.toMatch(/data-testid="preview-build"[^>]*disabled/);
   });
+
+  it("has handed the device control to the browser chrome", () => {
+    // The three presets used to live here, in the same row as "Preview build". They are a
+    // browser's device toolbar now (`preview-chrome.tsx`), so the pane has one place that
+    // sizes the frame and states the size, not two.
+    const html = renderToStaticMarkup(
+      <PreviewToolbar phase={ready} onRefresh={() => undefined} available />,
+    );
+
+    expect(html).not.toContain('data-testid="preview-viewports"');
+    expect(html).toContain('data-testid="preview-served-by"');
+  });
 });
 
 /**

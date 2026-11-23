@@ -22,8 +22,9 @@ import { AnthropicProvider } from "@/llm/anthropic";
 import { createDemoProvider } from "@/llm/demo";
 import { OpenAICompatibleProvider } from "@/llm/openai";
 import type { LLMProvider } from "@/llm/types";
+import { OPENROUTER_FREE_MODEL, OPENROUTER_PROXY_PATH } from "@/lib/openrouter-proxy";
 
-export type ProviderKind = "demo" | "openai" | "anthropic";
+export type ProviderKind = "demo" | "default" | "openai" | "anthropic";
 
 export interface LlmSettings {
   provider: ProviderKind;
@@ -41,6 +42,16 @@ export interface ProviderChoice {
   label: string;
   /** Prefilled when the user switches to this provider. */
   defaultModel: string;
+  /**
+   * The API root, when it is not the provider's own public one.
+   *
+   * The default choice points at the app's own origin (`/api/openrouter`), because its key is
+   * the deployment's and must never reach the browser; the server in front of the app adds it
+   * (`src/lib/openrouter-proxy.ts`). Empty for the providers that the browser calls directly.
+   */
+  baseUrl?: string;
+  /** The provider id used in logs and errors, when it is not the kind. */
+  id?: string;
   /** True when a key is required before the provider can run. */
   needsKey: boolean;
   /** One sentence: what this choice costs and where the traffic goes. */
@@ -54,6 +65,17 @@ export const PROVIDER_CHOICES: readonly ProviderChoice[] = [
     defaultModel: "demo-1",
     needsKey: false,
     note: "A scripted conversation over the real tools: it writes files, builds and previews with no account and no network.",
+  },
+  {
+    kind: "default",
+    label: "Default",
+    defaultModel: OPENROUTER_FREE_MODEL,
+    baseUrl: OPENROUTER_PROXY_PATH,
+    id: "openrouter",
+    // No key in this browser: the deployment's key is added by the proxy in front of the app,
+    // so a user with no account still gets a real model. The note says which provider that is.
+    needsKey: false,
+    note: "OpenRouter's free models (openrouter/free) through this app's /api/openrouter proxy, which adds the deployment's key — nothing secret is kept in your browser.",
   },
   {
     kind: "openai",
@@ -121,6 +143,19 @@ export function createProvider(settings: LlmSettings): LLMProvider {
   switch (settings.provider) {
     case "demo":
       return createDemoProvider();
+    case "default":
+      // No key: the request goes to this app's own origin, and the proxy in front of it
+      // (`src/lib/openrouter-proxy.ts`) adds the deployment's. Sending an empty bearer here
+      // instead would be a header that means "authenticated as nobody".
+      return new OpenAICompatibleProvider({
+        apiKey: "",
+        model,
+        baseUrl: OPENROUTER_PROXY_PATH,
+        id: "openrouter",
+        // Free-tier models are rate limited hard; a shorter budget fails honestly instead of
+        // holding a chat turn open for minutes.
+        timeoutMs: 120_000,
+      });
     case "openai":
       return new OpenAICompatibleProvider({ apiKey: settings.apiKey.trim(), model });
     case "anthropic":
@@ -166,7 +201,9 @@ export function parseStoredSettings(raw: string | null): LlmSettings {
   const record = parsed as Record<string, unknown>;
   const kind = record.provider;
   const provider: ProviderKind =
-    kind === "demo" || kind === "openai" || kind === "anthropic" ? kind : fallback.provider;
+    kind === "demo" || kind === "default" || kind === "openai" || kind === "anthropic"
+      ? kind
+      : fallback.provider;
   const model = typeof record.model === "string" && record.model.trim().length > 0 ? record.model : choiceFor(provider).defaultModel;
   const apiKey = typeof record.apiKey === "string" ? record.apiKey : "";
   return { provider, model, apiKey };

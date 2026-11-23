@@ -114,7 +114,15 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
             value={settings.apiKey}
             disabled={!choice.needsKey}
             onChange={(event) => onChange({ ...settings, apiKey: event.target.value })}
-            placeholder={choice.needsKey ? "sk-…" : "not needed for the demo"}
+            placeholder={
+              choice.needsKey
+                ? "sk-…"
+                : choice.kind === "default"
+                  ? // Stated, not implied: the Default option's key is the deployment's and is
+                    // added by the proxy, so an empty field is correct here.
+                    "not needed — the deployment's key is added by /api/openrouter"
+                  : "not needed for the demo"
+            }
             className="font-mono text-[12px]"
           />
         </label>

@@ -161,6 +161,46 @@ not arrive in time, the publish is reported as a failure.
 | the guest server itself | `tests/preview-guest-server.test.ts` |
 | a real guest serving a real build | `LARPABLE_GUEST_TESTS=1 bun run test:guest` |
 
+## The pane looks like a browser, and never fakes it
+
+The pane is wrapped in the chrome of a browser — a tab strip, back/forward, a read-only address
+bar, a reload, and a device toolbar — because a bare iframe cannot answer "where am I, and can I
+go back". A previewed site that routed to `/about` looked identical to its home page, and its
+URL was unobtainable.
+
+The imitation is governed by three rules, and each is a test rather than a promise:
+
+- **Nothing is invented.** The address bar shows the path the frame is *actually* on
+  (`/__preview__/<buildId>/<path>`), read from `contentWindow.location` and stripped of the
+  build prefix by `pathFromFrameUrl()`; a URL that does not belong to this build returns `null`
+  and is not written down. Back and forward are `disabled` whenever the pane's own history has
+  nowhere to go, which at the start of every build is both of them.
+- **The arrows are the pane's, not the window's.** The history in `src/ui/preview-browser.ts`
+  lists the paths the frame *visited*; it is not the browser's session history. Pushing entries
+  into the app's own history would break the Back button that gets a user out of the preview,
+  and driving back/forward through `history.back()` could leave the app entirely.
+- **The address follows the frame; the frame does not follow the address.** The address is
+  polled every 500 ms and updated on `load`. If the frame's `src` were derived from that value,
+  React would rewrite the attribute half a second after an SPA navigated and the browser would
+  reload the document — throwing away client-side state and looking like a crash. So the frame's
+  URL comes from `PreviewNavigation` ("what we last asked it to load"), which only an explicit
+  back/forward/reload/new-build changes.
+
+Reload is a reload, not a repaint: it re-navigates the frame to the path on screen (not the
+build's root) *and* asks the controller to re-publish the build id it is showing, so a reload can
+never swap in a different build's bytes. The acceptance run asserts the document is new by
+setting a property on the old document's `window` and checking it is gone afterwards.
+
+The device toolbar is a device toolbar, not a phone: desktop fills the pane, tablet is 834 × 1112
+CSS px, mobile is 390 × 844, and the row states the size it is applying plus the limit — sizing
+only, no touch events, no device pixel ratio. `src/ui/viewport.ts` owns those numbers.
+
+| File | Job |
+| --- | --- |
+| `src/ui/preview-browser.ts` | The URLs, the history and the reducer: what a click *does* |
+| `src/ui/preview-chrome.tsx` | The tab strip, the navigation bar and the device toolbar |
+| `src/ui/preview-frame.tsx` | The sandboxed iframe, the failure surface, the layout |
+
 ## How the app drives it
 
 The modules above are each honest about one step. The order they run in, and what the pane

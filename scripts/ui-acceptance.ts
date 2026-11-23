@@ -28,6 +28,8 @@
  * Output:
  *   docs/evidence/ui-acceptance.txt   the checks, timings, samples and chat transcript
  *   docs/evidence/ui-acceptance.png   the window after the run
+ *   docs/evidence/preview-browser-desktop.png   the browser-styled pane, desktop preset
+ *   docs/evidence/preview-browser-mobile.png    the same pane at 390 × 844
  *
  * Exit code 0 only when every assertion passed. A red run still writes the transcript, because
  * a stale green record is worse than a recorded failure.
@@ -450,6 +452,39 @@ async function main(): Promise<void> {
       `${before.trim()} -> ${after.trim()}`,
     );
 
+    // ------------------------------------------- the pane is a browser, not an iframe
+    const previewPane = page.locator("[data-testid=preview-pane]");
+    const chromeTab = await text(page, "[data-testid=preview-tab]");
+    const buildInTab = (await text(page, "[data-testid=preview-tab-build]")) ?? "";
+    const frameSrc = await page.locator("[data-testid=preview-iframe]").first().getAttribute("src");
+    const addressValue = await page.locator("[data-testid=preview-address]").inputValue();
+    const backDisabled = await page.locator("[data-testid=preview-back]").isDisabled();
+    const forwardDisabled = await page.locator("[data-testid=preview-forward]").isDisabled();
+    const deviceSize = await text(page, "[data-testid=preview-device-size]");
+    note(
+      "browser chrome",
+      `tab="${chromeTab ?? ""}" build=${buildInTab} address=${addressValue} back=${String(backDisabled)} forward=${String(forwardDisabled)} device="${deviceSize ?? ""}"`,
+    );
+    expect(
+      "the pane is wrapped in browser chrome that names the build it shows",
+      /preview/i.test(chromeTab ?? "") && buildInTab.length > 0,
+      `tab=${chromeTab ?? "(none)"} build=${buildInTab}`,
+    );
+    expect(
+      "the address bar shows the preview URL the frame is actually on",
+      addressValue.length > 0 && addressValue === frameSrc && addressValue.startsWith("/__preview__/"),
+      `address=${addressValue} src=${frameSrc ?? "(none)"}`,
+    );
+    expect(
+      "back and forward are disabled, because this build has no history to move through",
+      backDisabled && forwardDisabled,
+      `back=${String(backDisabled)} forward=${String(forwardDisabled)}`,
+    );
+
+    const desktopScreenshot = join(evidenceDir, "preview-browser-desktop.png");
+    await previewPane.screenshot({ path: desktopScreenshot });
+    lines.push("", `screenshot: ${desktopScreenshot}`, "");
+
     // --------------------------------------------- viewports, split, status bar
     const desktopBox = await page.locator("[data-testid=preview-iframe]").first().boundingBox();
     await page.locator("[data-testid=preview-viewport-mobile]").click();
@@ -465,7 +500,47 @@ async function main(): Promise<void> {
         mobileBox.width < desktopBox.width,
       `${String(Math.round(desktopBox?.width ?? 0))} px -> ${String(Math.round(mobileBox?.width ?? 0))} px`,
     );
+
+    // The device toolbar is a toolbar, not a decoration: it states the size it is applying, and
+    // the site inside the frame is still the real build at that size.
+    const mobileSize = await text(page, "[data-testid=preview-device-size]");
+    const mobileBody = await frame.locator("body").innerText().catch(() => "");
+    const mobileScreenshot = join(evidenceDir, "preview-browser-mobile.png");
+    await previewPane.screenshot({ path: mobileScreenshot });
+    lines.push("", `screenshot: ${mobileScreenshot}`, "");
+    expect(
+      "the device toolbar names the mobile size and the site still renders inside it",
+      mobileSize === "390 × 844" && /counter/i.test(mobileBody),
+      `size="${mobileSize ?? "(none)"}" body: ${mobileBody.replace(/\s+/g, " ").slice(0, 60)}…`,
+    );
     await page.locator("[data-testid=preview-viewport-desktop]").click();
+
+    // The reload arrow has to be a real reload — a fresh document at the same URL — and not a
+    // no-op that leaves the old page (and the state the user was in) on screen.
+    await frame
+      .locator("html")
+      .evaluate(() => {
+        (window as unknown as Record<string, unknown>).__acceptanceMark = 1;
+      })
+      .catch(() => undefined);
+    await page.locator("[data-testid=preview-reload]").click();
+    // A reload re-publishes the build, and the pane hides the frame while it does; the URL must
+    // come back unchanged and the document must be new.
+    await page.locator("[data-testid=preview-iframe]").first().waitFor({ timeout: PUBLISH_TIMEOUT_MS });
+    await frame.locator("body").waitFor({ timeout: 60_000 });
+    const markAfterReload = await frame
+      .locator("html")
+      .evaluate(() => typeof (window as unknown as Record<string, unknown>).__acceptanceMark)
+      .catch(() => "unreadable");
+    const srcAfterReload = await page
+      .locator("[data-testid=preview-iframe]")
+      .first()
+      .getAttribute("src");
+    expect(
+      "reload loads a fresh document at the same URL",
+      markAfterReload === "undefined" && srcAfterReload === frameSrc,
+      `mark=${markAfterReload} src=${srcAfterReload ?? "(none)"} (was ${frameSrc ?? "(none)"})`,
+    );
 
     const basisBefore = Number(
       (await page.locator("[data-testid=agent-pane]").getAttribute("data-basis")) ?? "0",

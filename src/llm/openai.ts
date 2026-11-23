@@ -116,7 +116,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${this.#apiKey}`,
+          // Omitted when this provider was given no key. The "Default" choice is exactly that
+          // case: it talks to the app's own `/api/openrouter` proxy, which adds the
+          // deployment's key server-side, so an empty `Bearer ` here would claim an
+          // authentication nobody made (and a proxy must be free to supply the real one).
+          ...(this.#apiKey.length > 0 ? { authorization: `Bearer ${this.#apiKey}` } : {}),
         },
         body: JSON.stringify(body),
         signal,
