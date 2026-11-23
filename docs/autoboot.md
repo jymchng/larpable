@@ -30,7 +30,10 @@ Three rules, each of which is a bug if it flips:
 ## The measurements
 
 Chromium, 390 × 844, `http://127.0.0.1:5173` started by the script itself and bound to loopback.
-**No click of any kind** is issued after `page.goto`.
+**No click of any kind** is issued after `page.goto`. The transcript below is the run committed as
+`docs/evidence/autoboot-acceptance.txt`; the run before it measured the same eleven checks with a
+slower boot (15 218 ms to `Ready`, `booted in 9.8 s`), which is the run-to-run spread of a 72 MB
+image streaming through a cold HTTP cache — not a behaviour change.
 
 ```
 PASS the spinner appears without a click — aria-label="Starting Linux"
@@ -38,17 +41,17 @@ PASS the spinner is named for a screen reader — role="status", aria-label="Sta
 PASS the spinner actually animates — animation-name=spin
 PASS the footer says the machine is starting — Linux: Not started
 PASS the header does not overflow at 390 px while starting — scrollWidth - clientWidth = 0 px
-PASS the machine reaches Ready with no click — 15218 ms from navigation
+PASS the machine reaches Ready with no click — 14009 ms from navigation
 PASS the spinner is gone once the machine is ready — present=false
-PASS the app's own boot duration is published — booted in 9.8 s
+PASS the app's own boot duration is published — booted in 8.8 s
 PASS one image was read, in ranges with no offset requested twice (no second kernel) — 9 request(s), duplicates: none
 PASS an unsupported browser shows no spinner and no boot — spinner=false, footer="Linux: Not started"
 PASS an unsupported browser still explains itself — This browser cannot boot Linux / lacks WebAssembly JSPI …
 [autoboot] 11/11 checks passed against http://127.0.0.1:5173
 ```
 
-- **15.2 s** from navigation to `Ready`; the app's own figure (click-to-ready equivalent, from
-  `boot()` to the adapter's `ready`) is **9.8 s**. The difference is page load, the 72 MB image
+- **14.0 s** from navigation to `Ready`; the app's own figure (boot-to-ready, from `boot()` to the
+  adapter's `ready`) is **8.8 s**. The difference is page load, the 72 MB image
   being streamed in ranges, and the runtime probe — not a second boot.
 - **9 requests for `/distros/debian.erofs`** in that run: one plain request plus eight `Range`
   reads. The first version of this check failed on the raw count (`9 !== 1`), which is what led

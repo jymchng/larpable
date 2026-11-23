@@ -4,13 +4,13 @@ PASS the spinner is named for a screen reader — role="status", aria-label="Sta
 PASS the spinner actually animates — animation-name=spin
 PASS the footer says the machine is starting — Linux: Not startedKernel can boot
 PASS the header does not overflow at 390 px while starting — scrollWidth - clientWidth = 0 px
-PASS the machine reaches Ready with no click — 15218 ms from navigation
+PASS the machine reaches Ready with no click — 14009 ms from navigation
 PASS the spinner is gone once the machine is ready — present=false
-PASS the app's own boot duration is published — booted in 9.8 s
+PASS the app's own boot duration is published — booted in 8.8 s
 PASS one image was read, in ranges with no offset requested twice (no second kernel) — 9 request(s), duplicates: none
 PASS an unsupported browser shows no spinner and no boot — spinner=false, footer="Linux: Not startedKernel cannot boot here"
 PASS an unsupported browser still explains itself — This browser cannot boot LinuxThis browser lacks WebAssembly JSPI (WebAssembly.Suspending). unkernel needs it to boot; use Chrome/Edge 137+, Firefox 153+, or Sa
-boot: 15218 ms from navigation to Ready
+boot: 14009 ms from navigation to Ready
 image range requests: 9
 console errors: Failed to load resource: the server responded with a status of 404 (Not Found) | [host] data disk: created from the template (547 blocks) in IndexedDB kwdisk:kwdata-v1
 
