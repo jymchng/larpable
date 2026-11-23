@@ -40,6 +40,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { PREVIEW_IFRAME_SANDBOX } from "@/preview/sandbox";
+import { guestAddressFor } from "@/ui/preview-address";
 import { addressFor, previewUrlFor } from "@/ui/preview-browser";
 import {
   PreviewBrowserBar,
@@ -66,7 +67,19 @@ export { previewUrlFor };
 export type PreviewState =
   | { kind: "idle" }
   | { kind: "building"; buildId: string | null }
-  | { kind: "ready"; buildId: string; title?: string }
+  | {
+      kind: "ready";
+      buildId: string;
+      title?: string;
+      /**
+       * The guest port a *forwarded* preview is attached to, when it is one.
+       *
+       * The address bar then prints the user's own address (`localhost:1234/app`) instead of the
+       * pane's URL space (`/__preview__/dev-1/app`): they typed the former, and a bar that
+       * answered with the latter would be telling them they are somewhere they are not.
+       */
+      forwarded?: { port: number } | null;
+    }
   /**
    * A failure, with the status the server sent — or null when no server was reached at all
    * (an empty publish directory, a guest with no HTTP door, an unconfirmed publish). A null
@@ -218,6 +231,13 @@ export interface PreviewPanelProps {
   /** The path inside the build the frame is on. Drives the address bar. */
   path?: string;
   /**
+   * Called when the user types an address and presses Enter.
+   *
+   * Absent leaves the field read-only — a caller with nowhere to send an address (a static
+   * render) must not offer a field whose Enter key does nothing.
+   */
+  onNavigate?: (address: string) => void;
+  /**
    * The path the frame is *told* to load, when that differs from the one it is on.
    *
    * They differ in exactly one situation, and it is the reason this prop exists: the frame
@@ -283,6 +303,7 @@ export function PreviewPanel({
   strip,
   frameStyle,
   path = "/",
+  onNavigate,
   framePath,
   reloads = 0,
   reloadDisabled,
@@ -304,7 +325,13 @@ export function PreviewPanel({
   const frameBox = useRef<HTMLDivElement | null>(null);
   const zoom = useFitZoom(frameBox, viewport);
   const buildId = state.kind === "ready" ? state.buildId : null;
-  const address = buildId === null ? "" : addressFor(buildId, path);
+  const forwarded = state.kind === "ready" ? (state.forwarded ?? null) : null;
+  const address =
+    buildId === null
+      ? ""
+      : forwarded === null
+        ? addressFor(buildId, path)
+        : guestAddressFor(forwarded.port, path);
   const title = ready ? (state.title ?? "Website preview") : "Preview";
 
   return (
@@ -326,6 +353,7 @@ export function PreviewPanel({
         // in flight would ask two questions of the same guest at once. When the caller owns the
         // decision (the pane publishes through this button), its answer wins.
         reloadDisabled={reloadDisabled ?? !ready}
+        {...(onNavigate !== undefined ? { onNavigate } : {})}
       />
 
       <PreviewDeviceToolbar

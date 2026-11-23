@@ -33,13 +33,13 @@ describe("the defaults", () => {
   it("are Vite's port and `dist`, so the numbers a web developer already knows work", () => {
     expect(DEFAULT_PREVIEW_SETTINGS_PORT).toBe(5173);
     expect(DEFAULT_BUILD_DIRECTORY).toBe("dist");
-    expect(defaults).toEqual({ port: 5173, buildDirectory: "dist" });
+    expect(defaults).toEqual({ port: 5173, buildDirectory: "dist", prod: false });
   });
 
   it("name a host that cannot be configured, only painted", () => {
     expect(PREVIEW_HOST).toBe("localhost");
     expect(baseUrlFor(defaults)).toBe("http://localhost:5173");
-    expect(baseUrlFor({ port: 8080, buildDirectory: "build" })).toBe("http://localhost:8080");
+    expect(baseUrlFor({ port: 8080, buildDirectory: "build", prod: false })).toBe("http://localhost:8080");
   });
 
   it("draft the fields from the settings, so the inputs show the live pair", () => {
@@ -126,7 +126,7 @@ describe("the draft and the settings are different things", () => {
 
 describe("storage", () => {
   it("round-trips a pair", () => {
-    const settings = { port: 3000, buildDirectory: "build" };
+    const settings = { port: 3000, buildDirectory: "build", prod: true };
     expect(parseStoredPreviewSettings(serializePreviewSettings(settings))).toEqual(settings);
   });
 

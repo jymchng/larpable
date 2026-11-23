@@ -1,0 +1,119 @@
+{
+  "before": [
+    {
+      "at": 1795447621385,
+      "mirror": 88,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' one ",
+      "rafTicks": 536,
+      "intervalTicks": 50,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447622396,
+      "mirror": 176,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒  ",
+      "rafTicks": 597,
+      "intervalTicks": 54,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447623401,
+      "mirror": 176,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒  ",
+      "rafTicks": 657,
+      "intervalTicks": 58,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447624406,
+      "mirror": 176,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒  ",
+      "rafTicks": 717,
+      "intervalTicks": 62,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    }
+  ],
+  "after": [
+    {
+      "at": 1795447627550,
+      "mirror": 198,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' two ",
+      "rafTicks": 895,
+      "intervalTicks": 75,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447628554,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 955,
+      "intervalTicks": 79,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447629557,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1015,
+      "intervalTicks": 83,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447630562,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1076,
+      "intervalTicks": 87,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447631568,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1136,
+      "intervalTicks": 91,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447632588,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1194,
+      "intervalTicks": 95,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447633595,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1252,
+      "intervalTicks": 99,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447634599,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1309,
+      "intervalTicks": 103,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447635604,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1369,
+      "intervalTicks": 107,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    },
+    {
+      "at": 1795447636610,
+      "mirror": 285,
+      "rows": "pri/workspace ⇒ printf 'PING-%s\\n' onePING-one/workspace ⇒ printf 'PING-%s\\n' twoPING-two/workspace ⇒  ",
+      "rafTicks": 1430,
+      "intervalTicks": 111,
+      "summary": "Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB"
+    }
+  ],
+  "finalMirror": "pri\u001b[?2004h\u001b]0;user@unkernel: /workspace\u0007\u001b[36m/workspace \u001b[35m⇒\u001b[0m printf 'PING-%s\\n' one\r\n\u001b[?2004l\rPING-one\r\n\u001b[?2004h\u001b]0;user@unkernel: /workspace\u0007\u001b[36m/workspace \u001b[35m⇒\u001b[0m \u0007printf 'PING-%s\\n' two\r\n\u001b[?2004l\rPING-two\r\n\u001b[?2004h\u001b]0;user@unkernel: /workspace\u0007\u001b[36m/workspace \u001b[35m⇒\u001b[0m \u0007printf %s 'aGVsbG8gZnJvbSB0aGUgZ3Vlc3QK' | base64 -d > probe.txt\r\n\u001b[?2004l\r\u001b[?2004h\u001b]0;user@unkernel: /workspace\u0007\u001b[36m/workspace \u001b[35m⇒\u001b[0m "
+}

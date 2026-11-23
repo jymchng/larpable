@@ -24,6 +24,7 @@ import {
   parseStoredPreviewSettings,
   serializePreviewSettings,
   settingsFromDraft,
+  withProd,
   type PreviewSettings,
   type PreviewSettingsDraft,
 } from "@/ui/preview-settings";
@@ -66,6 +67,12 @@ export interface PreviewSettingsControl {
   draft: PreviewSettingsDraft;
   setPort: (text: string) => void;
   setBuildDirectory: (text: string) => void;
+  /**
+   * The Prod switch: `true` serves the built directory statically, `false` attaches to the
+   * server the user runs. Persisted with the rest, and never a draft \u2014 a checkbox has no
+   * half-typed state.
+   */
+  setProd: (prod: boolean) => void;
   /** Why the draft is not usable yet, in the panel's words; null when it is. */
   problem: string | null;
   /** True when the choice survives a reload. */
@@ -92,6 +99,17 @@ export function usePreviewSettings(): PreviewSettingsControl {
   const setPort = useCallback((text: string) => apply({ port: text }), [apply]);
   const setBuildDirectory = useCallback((text: string) => apply({ buildDirectory: text }), [apply]);
 
+  // The switch is not a draft: it has two states and no in-between, so it goes straight into
+  // the settings and is persisted in the same write as the two fields.
+  const setProd = useCallback((prod: boolean) => {
+    setState((previous) => {
+      const settings = withProd(previous.settings, prod);
+      if (settings === previous.settings) return previous;
+      persist(settings);
+      return { settings, draft: previous.draft };
+    });
+  }, []);
+
   const reset = useCallback(() => {
     const settings = defaultPreviewSettings();
     persist(settings);
@@ -116,6 +134,7 @@ export function usePreviewSettings(): PreviewSettingsControl {
     draft: state.draft,
     setPort,
     setBuildDirectory,
+    setProd,
     problem: draftProblem(state.draft),
     persisted: storage() !== null,
     reset,

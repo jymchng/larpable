@@ -37,7 +37,7 @@ import {
   Smartphone,
   Tablet,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   VIEWPORTS,
@@ -157,6 +157,13 @@ export interface PreviewBrowserBarProps {
   onReload: () => void;
   /** True while there is no document to re-navigate (nothing published). */
   reloadDisabled?: boolean;
+  /**
+   * Called with what the user typed, on Enter.
+   *
+   * Absent means the bar cannot be typed into: a caller with no way to act on an address gets a
+   * read-only field rather than a field whose Enter key does nothing.
+   */
+  onNavigate?: (address: string) => void;
   /** Right-hand controls, e.g. "New tab" and fullscreen. */
   children?: ReactNode;
 }
@@ -177,81 +184,100 @@ export function PreviewBrowserBar({
   onForward,
   onReload,
   reloadDisabled = false,
+  onNavigate,
   children,
 }: PreviewBrowserBarProps): ReactNode {
   const empty = address.length === 0;
+  const editable = onNavigate !== undefined;
+
+  // The draft is what the user is typing; it follows the frame's address whenever the user is
+  // not in the field, so an SPA's pushState still moves the bar under their eyes.
+  const [draft, setDraft] = useState(address);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setDraft(address);
+  }, [address, editing]);
 
   return (
-    <div
-      data-testid="preview-browser-bar"
-      className="bg-muted/40 flex items-center gap-1 border-b px-1 py-0.5"
-    >
-      <NavButton
-        testId="preview-back"
-        label="Back"
-        title={canGoBack ? "Back to the previous page in this build" : "No earlier page in this build to go back to"}
-        disabled={!canGoBack}
-        onClick={onBack}
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-      </NavButton>
-
-      <NavButton
-        testId="preview-forward"
-        label="Forward"
-        title={canGoForward ? "Forward to the next page in this build" : "Nothing to go forward to"}
-        disabled={!canGoForward}
-        onClick={onForward}
-      >
-        <ArrowRight aria-hidden="true" className="size-4" />
-      </NavButton>
-
-      <NavButton
-        testId="preview-reload"
-        label="Reload"
-        title={reloadDisabled ? "Publish a build before reloading it" : "Load this URL again from the published build"}
-        disabled={reloadDisabled}
-        onClick={onReload}
-      >
-        <RotateCw aria-hidden="true" className="size-3.5" />
-      </NavButton>
-
-      {/* A pill, like every browser's omnibox, so it reads as an address rather than a field
-          the user is expected to type into. The input is read-only: the preview URL is derived
-          from the build and the frame's own path, never from typed text. */}
+    <div className="border-b">
       <div
-        className={cn(
-          "bg-background mx-0.5 flex h-6 min-w-0 flex-1 items-center gap-1 rounded-full border px-1.5",
-          empty && "text-muted-foreground",
-        )}
+        data-testid="preview-browser-bar"
+        className="bg-muted/40 flex items-center gap-1 px-1 py-0.5"
       >
-        <Lock aria-hidden="true" className="text-muted-foreground/70 size-3 shrink-0" />
-        {origin !== null ? (
-          <span
-            data-testid="preview-address-origin"
-            // An origin plus a path does not fit in a 390 px omnibox; the path is the part that
-            // changes, so the origin is the part that goes.
-            className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline"
-          >
-            {origin}
-          </span>
-        ) : null}
-        <input
-          data-testid="preview-address"
-          aria-label="Preview address"
-          aria-readonly="true"
-          readOnly
-          value={address}
-          placeholder="Nothing loaded yet"
-          spellCheck={false}
-          // No `onChange`: React refuses a value/readOnly input without one unless it is told
-          // the value is fixed. This is the fixed-value form.
-          onChange={() => undefined}
-          className="min-w-0 flex-1 bg-transparent font-mono text-[11.5px] outline-none"
-        />
-      </div>
+        <NavButton
+          testId="preview-back"
+          label="Back"
+          title={canGoBack ? "Back to the previous page in this build" : "No earlier page in this build to go back to"}
+          disabled={!canGoBack}
+          onClick={onBack}
+        >
+          <ArrowLeft aria-hidden="true" className="size-4" />
+        </NavButton>
 
-      {children}
+        <NavButton
+          testId="preview-forward"
+          label="Forward"
+          title={canGoForward ? "Forward to the next page in this build" : "Nothing to go forward to"}
+          disabled={!canGoForward}
+          onClick={onForward}
+        >
+          <ArrowRight aria-hidden="true" className="size-4" />
+        </NavButton>
+
+        <NavButton
+          testId="preview-reload"
+          label="Reload"
+          title={reloadDisabled ? "Publish a build before reloading it" : "Load this URL again from the published build"}
+          disabled={reloadDisabled}
+          onClick={onReload}
+        >
+          <RotateCw aria-hidden="true" className="size-3.5" />
+        </NavButton>
+
+        {/* A pill, like every browser's omnibox, so it reads as an address rather than a field the
+            user is expected to fill in. It is a real input now: `localhost:1234/app` is an address
+            the preview can be pointed at, and `/about` stays on the page on screen. What is typed is
+            a draft until Enter — see `preview-address.ts` for what each answer means. */}
+        <div
+          data-testid="preview-address-pill"
+          className={cn(
+            "bg-background mx-0.5 flex h-6 min-w-0 flex-1 items-center gap-1 rounded-full border px-1.5",
+            empty && "text-muted-foreground",
+          )}
+        >
+          <Lock aria-hidden="true" className="text-muted-foreground/70 size-3 shrink-0" />
+          {origin !== null ? (
+            <span
+              data-testid="preview-address-origin"
+              // An origin plus a path does not fit in a 390 px omnibox; the path is the part that
+              // changes, so the origin is the part that goes.
+              className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline"
+            >
+              {origin}
+            </span>
+          ) : null}
+          <input
+            data-testid="preview-address"
+            aria-label="Preview address"
+            aria-readonly={editable ? "false" : "true"}
+            readOnly={!editable}
+            value={draft}
+            placeholder="Nothing loaded yet"
+            spellCheck={false}
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              onNavigate?.(draft);
+            }}
+            className="min-w-0 flex-1 bg-transparent font-mono text-[11.5px] outline-none"
+          />
+        </div>
+
+        {children}
+      </div>
     </div>
   );
 }

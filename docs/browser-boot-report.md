@@ -9,14 +9,14 @@ hand. Re-run the command to replace this file with fresh measurements.
 ## Failure
 
 ```
-persistence: /workspace/persist-check.txt holds the bytes the host sent — the guest never answered; host sent 78 bytes; transcript tail: QK' | base64 -d > persist-check.txt [?2004l [?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m printf 'LARPABLE-%s %s %s\n' SIZE persist-check.txt "$(wc -c < persi st-check.txt | tr -d
+persistence: /workspace/persist-check.txt holds the bytes the host sent — the guest never answered; host sent 78 bytes; transcript tail:  base64 -d > persist-check.txt [?2004l [?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m printf 'LARPABLE-%s %s %s\n' SIZE persist-check.txt "$(wc -c < persi st-check.txt | tr -d ' ')
 ```
 
 ## Session
 
 | Field | Value |
 | --- | --- |
-| Started at | 2026-11-23T14:59:41.891Z |
+| Started at | 2026-11-23T15:33:06.533Z |
 | Browser | Chromium 159.0.8154.6 |
 | Chromium binary | `/root/.cache/ms-playwright/chromium-1255/chrome-linux64/chrome` |
 | Page | http://127.0.0.1:5173 |
@@ -39,9 +39,9 @@ persistence: /workspace/persist-check.txt holds the bytes the host sent — the 
 | self-test: uname reports aarch64 | PASS | Linux unkernel 7.3.4+ #909a1964cecb SMP Fri Nov 20 16:38:40 UTC 2026 aarch64 GNU/Linux |
 | self-test: host -> guest round-trip | PASS | /workspace/.larpable/host-to-guest.txt arrived intact |
 | self-test: guest -> host round-trip | PASS | /workspace/.larpable/guest-to-host.txt arrived intact |
-| self-test: overall verdict | PASS | The guest answered and the workspace round-trips. 750 ms |
-| persistence: project created through the panel | PASS | rows before the reload: persist-mwte6vij |
-| persistence: /workspace/persist-check.txt holds the bytes the host sent | FAIL | the guest never answered; host sent 78 bytes; transcript tail: QK' \| base64 -d > persist-check.txt [?2004l [?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m printf 'LARPABLE-%s %s %s\n' SIZE persist-check.txt "$(wc -c < persi st-check.txt \| tr -d |
+| self-test: overall verdict | PASS | The guest answered and the workspace round-trips. 613 ms |
+| persistence: project created through the panel | PASS | rows before the reload: persist-mwtfdxyk |
+| persistence: /workspace/persist-check.txt holds the bytes the host sent | FAIL | the guest never answered; host sent 78 bytes; transcript tail:  base64 -d > persist-check.txt [?2004l [?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m printf 'LARPABLE-%s %s %s\n' SIZE persist-check.txt "$(wc -c < persi st-check.txt \| tr -d ' ') |
 
 ## Supported browser: boot to ready
 
@@ -51,15 +51,15 @@ persistence: /workspace/persist-check.txt holds the bytes the host sent — the 
 | Distro | debian |
 | CPUs | 2 CPUs |
 | Memory | 1024 MiB |
-| Boot duration (app-measured) | booted in 7.8 s |
+| Boot duration (app-measured) | booted in 8.1 s |
 | Boot path (auto-boot vs pressed) | already ready |
-| Waited by the boot helper | 7567 ms |
-| Wall clock from the first observation to Ready | 7568 ms |
+| Waited by the boot helper | 8409 ms |
+| Wall clock from the first observation to Ready | 8410 ms |
 | Status bar | EnvironmentLinux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB |
 
 ## Supported browser: self-test round-trip
 
-Panel summary: “The guest answered and the workspace round-trips. 750 ms”
+Panel summary: “The guest answered and the workspace round-trips. 613 ms”
 
 | Step | Detail |
 | --- | --- |
@@ -86,14 +86,14 @@ them.
 
 | Field | Value |
 | --- | --- |
-| Project created in the panel | `persist-mwte6vij` |
+| Project created in the panel | `persist-mwtfdxyk` |
 | Files written inside the guest | `persist-check.txt` (78 bytes), `netlify.toml` (158 bytes) |
 | Bytes the guest confirmed with `wc -c` | `persist-check.txt`: the guest never answered; `netlify.toml`: the guest never answered |
-| Panel status before the reload | Saved just now· persist-mwte6vij |
-| A save finished after the writes | yes (waited 24 ms) |
-| Projects in the panel before the reload | persist-mwte6vij |
+| Panel status before the reload | Saved just now· persist-mwtfdxyk |
+| A save finished after the writes | yes (waited 8 ms) |
+| Projects in the panel before the reload | persist-mwtfdxyk |
 | Boot path on the reload | already ready |
-| Reload to Ready | 5684 ms |
+| Reload to Ready | 5750 ms |
 | Projects in the panel after the reload | (none) |
 | Open project after the reload | none |
 
@@ -102,13 +102,13 @@ Read back inside the guest, after the reload:
 `cat persist-check.txt`:
 
 ```
-ca[?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m cat persist-check.txt; printf '%s\n' 'LARPABLE-READ DONE'
+cat p[?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m cat persist-check.txt; printf '%s\n' 'LARPABLE-READ DONE'
 ```
 
 `cat netlify.toml`:
 
 ```
-ca[?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m cat persist-check.txt; printf '%s\n' 'LARPABLE-READ DONE'
+cat p[?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m cat persist-check.txt; printf '%s\n' 'LARPABLE-READ DONE'
 [?2004lcat: persist-check.txt: No such file or directory
 LARPABLE-READ DONE
 [?2004h]0;user@unkernel: /workspace[36m/workspace [35m⇒[0m cat netlify.toml; printf '%s\n' 'LARPABLE-READ DONE'

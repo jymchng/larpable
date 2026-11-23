@@ -80,20 +80,37 @@ export async function typeLine(
   line: string,
   attempts = 3,
 ): Promise<{ ok: boolean; tail: string }> {
+  const debug = process.env.LARPABLE_DEBUG_TYPING === "1";
   let tail = "";
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await page.locator("[data-testid=terminal-screen]").click();
     // Throw away anything left on the line by a previous, partial attempt.
     await page.keyboard.press("Control+u");
+    const startedAt = Date.now();
+    const lengthAtStart = (await transcript(page)).length;
     await page.keyboard.type(line, { delay: 6 + attempt * 10 });
+    const lengthAfterTyping = (await transcript(page)).length;
     const echoDeadline = Date.now() + 5_000;
     while (Date.now() < echoDeadline) {
       tail = await transcript(page);
       if (echoesWholeLine(tail.slice(-6_000), line)) {
+        if (debug) {
+          console.log(
+            `[typeLine] attempt ${String(attempt)} matched after ${String(Date.now() - startedAt)} ms ` +
+              `(mirror ${String(lengthAtStart)} -> ${String(lengthAfterTyping)} -> ${String(tail.length)})`,
+          );
+        }
         await page.keyboard.press("Enter");
         return { ok: true, tail };
       }
       await page.waitForTimeout(120);
+    }
+    if (debug) {
+      console.log(
+        `[typeLine] attempt ${String(attempt)} gave up after ${String(Date.now() - startedAt)} ms ` +
+          `(mirror ${String(lengthAtStart)} -> ${String(lengthAfterTyping)} -> ${String(tail.length)}); ` +
+          `tail ${JSON.stringify(tail.slice(-260))}`,
+      );
     }
   }
   await page.keyboard.press("Control+u");

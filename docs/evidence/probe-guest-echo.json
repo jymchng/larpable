@@ -1,0 +1,7 @@
+{
+  "write": "printf %s 'bGFycGFibGUtcGVyc2lzdC1td3RmOGs2Ni1maWxlCndyaXR0ZW4gaW5zaWRlIExpbnV4LCByZWFkIGJhY2sgYWZ0ZXIgYSByZWxvYWQK' | base64 -d > persist-check.txt",
+  "mirror": "\u001b[?2004h\u001b]0;user@unkernel: /workspace\u0007\u001b[36m/workspace \u001b[35m⇒\u001b[0m \u0007printf %s 'bGFycGFibGUtcGVyc2lzdC1td3RmOGs2Ni1maWxlCndyaXR0ZW4gaW5zaWRlIExpbnV4 \rLCByZWFkIGJhY2sgYWZ0ZXIgYSByZWxvYWQK' | base64 -d > persist-check.txt",
+  "divergence": -1,
+  "sizeLine": "\u001b[?2004l\rLARPABLE-SIZE persist-check.txt 78",
+  "bytes": 78
+}

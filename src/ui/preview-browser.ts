@@ -209,6 +209,8 @@ export interface PreviewBrowserState {
 export type PreviewBrowserAction =
   /** The frame navigated itself (a link, a router push, a `load`). Address bar only. */
   | { type: "visit"; path: string }
+  /** The user typed an address: record it *and* load it. */
+  | { type: "navigate"; path: string }
   | { type: "back" }
   | { type: "forward" }
   /** Re-navigate to the path on screen: the browser's own arrow, not a re-publish alone. */
@@ -235,6 +237,18 @@ export function previewBrowserReducer(
       // that is already on this path is a no-op rather than a render every 500 ms.
       const history = visit(state.history, action.path);
       return history === state.history ? state : { ...state, history };
+    }
+
+    case "navigate": {
+      // A typed address is an explicit navigation, which is the one thing `visit` is not: the
+      // frame is told to load the path as well as the history recording it. Typing the address
+      // already on screen therefore reloads it, which is what a browser does.
+      const target = normalisePath(action.path);
+      return {
+        ...state,
+        history: visit(state.history, target),
+        navigation: { path: target, nonce: state.navigation.nonce + 1 },
+      };
     }
 
     case "back": {

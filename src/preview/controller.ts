@@ -18,6 +18,18 @@
  *   worker is holding the bytes or the guest is answering on demand;
  * - `failed` — what went wrong, in the words the pane shows.
  *
+ * Two modes reach `ready`, and they are the two answers to "where do the bytes come from":
+ *
+ * - **prod** (`prod: true`, the default here) publishes a build: list `dist/`, start the guest's
+ *   static server, read the bytes out of it, hand them to the worker.
+ * - **dev** (`prod: false`, the app's default) *attaches*: one knock on the port in Settings, then
+ *   every request is forwarded to the server the user runs (`attach.ts`). No build, no static
+ *   server of ours, no snapshot — which is the whole point of previewing a dev server.
+ *
+ * The mode is a constructor option rather than a method because it changes what the controller
+ * *is*: switching it rebuilds the controller (`use-preview.ts` memoises on it), so a prod
+ * preview's guest server can never be left listening by a switch to dev.
+ *
  * Two behaviours are failure-proofing rather than features:
  *
  * - a publish that fails keeps the guest server: the next attempt does not pay the start-up
@@ -29,6 +41,12 @@
 
 import type { ExecutionEnvironment } from "@/env/execution";
 import type { GuestHttpFetch } from "@/env/unkernel-kernel";
+import {
+  attachGuestServer,
+  type GuestAttach,
+  type GuestAttachOptions,
+  type GuestAttachResult,
+} from "./attach";
 import { deriveBuildId, listPublishFiles, type PublishFile } from "./build-id";
 import { startPreviewSession, type PreviewSession, type StartPreviewSessionOptions } from "./session";
 
@@ -46,6 +64,15 @@ export type PreviewPhase =
       served: "worker" | "guest";
       /** Why the guest is answering, when it is. Shown verbatim. */
       note: string | null;
+      /**
+       * The guest port a *forwarded* preview is attached to, or null/absent for a published build.
+       *
+       * It is what lets the address bar print `localhost:1234/app` instead of the pane's own URL
+       * space: a forwarded preview's address is the user's address, and showing
+       * `/__preview__/dev-1/app` for a page they typed as `localhost:1234/app` would be the bar
+       * lying about where they are.
+       */
+      forwarded?: { port: number } | null;
     }
   | { kind: "failed"; message: string };
 
@@ -77,6 +104,18 @@ export interface PreviewControllerOptions {
   startSession?: (options: StartPreviewSessionOptions) => Promise<PreviewSession>;
   /** Injected by tests. Default: walk the guest's publish directory. */
   listFiles?: (environment: ExecutionEnvironment, root: string) => Promise<PublishFile[]>;
+  /**
+   * Which preview this controller is: `true` (the default here) publishes a build, `false`
+   * attaches to the server the user runs.
+   *
+   * The default is `true` so every existing caller — the agent's `preview_site` tool and the
+   * browser acceptance run — keeps the behaviour it was written against. The *app* passes the
+   * Settings switch, whose own default is `false` (dev): a developer editing a component wants
+   * their dev server, and the built output is one checkbox away.
+   */
+  prod?: boolean;
+  /** Injected by tests and by the acceptance run. Default: `attachGuestServer`. */
+  attach?: (options: GuestAttachOptions) => Promise<GuestAttachResult>;
   /** Called on every phase change, after the state is readable. */
   onPhase?: (phase: PreviewPhase) => void;
 }
@@ -95,9 +134,17 @@ export interface PreviewController {
    * same service-worker message channel.
    */
   refresh(buildId?: string): Promise<PreviewPhase>;
+  /**
+   * Attach the pane to whatever is listening on `port` in the guest — the dev preview.
+   *
+   * `refresh()` already does this in dev mode; this method exists for the address bar, which can
+   * name a port of its own (`localhost:3000`). It stops the previous attach first, so one pane
+   * never has two forwarders answering for two servers.
+   */
+  attach(port: number): Promise<PreviewPhase>;
   /** The published build's URL, or null before the first successful publish. */
   url(): string | null;
-  /** Stop the guest's server. Idempotent, and safe before `refresh()` was ever called. */
+  /** Stop the guest's server (and any attach). Idempotent, and safe before `refresh()`. */
   stop(): Promise<void>;
 }
 
@@ -115,6 +162,10 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
   const listeners = new Set<(phase: PreviewPhase) => void>();
   let phase: PreviewPhase = { kind: "idle" };
   let session: PreviewSession | null = null;
+  /** The dev preview: a forwarded session, or null. Mutually exclusive with `session`. */
+  let attach: GuestAttach | null = null;
+  /** How many attaches this controller has made, so each gets its own URL and frame key. */
+  let attaches = 0;
   let inFlight: Promise<PreviewPhase> | null = null;
 
   function set(next: PreviewPhase): PreviewPhase {
@@ -122,6 +173,60 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
     for (const listener of listeners) listener(next);
     options.onPhase?.(next);
     return next;
+  }
+
+  /** Drop the dev attach, if there is one. Its forwarder must stop before a new one starts. */
+  async function detach(): Promise<void> {
+    const active = attach;
+    attach = null;
+    await active?.stop().catch(() => undefined);
+  }
+
+  /**
+   * The dev preview: knock on `port` and forward every request to it.
+   *
+   * Deliberately short. There is no build step, no `dist/` listing and no guest `node`: the
+   * server is the user's, and this side's whole job is to find out whether it is there and then
+   * hand each request to it. The id is derived from the count rather than from the bytes, because
+   * there are no bytes here to fingerprint — and it has to change on every attach so the iframe
+   * gets a fresh document at a URL no cached response can answer.
+   */
+  async function attachTo(port: number): Promise<PreviewPhase> {
+    if (options.environment.status() !== "ready") {
+      return set({
+        kind: "failed",
+        message:
+          "The Linux environment is not running, so there is no server to attach to. Boot it first.",
+      });
+    }
+
+    const http = options.http();
+    if (http === null) return set({ kind: "failed", message: NO_DOOR });
+
+    // The previous attach goes first: two forwarders answering for one pane is how a request
+    // ends up at the port that was configured a minute ago.
+    await detach();
+
+    attaches += 1;
+    const buildId = `dev-${String(attaches)}`;
+    set({ kind: "starting", detail: `Looking for a server on guest port ${String(port)}…` });
+
+    const attachFn = options.attach ?? attachGuestServer;
+    const result = await attachFn({ http, port, buildId });
+    if (!result.ok) return set({ kind: "failed", message: result.message });
+
+    const live = result.attach;
+    attach = live;
+    return set({
+      kind: "ready",
+      buildId: live.buildId,
+      url: live.url,
+      files: 0,
+      // `guest` is exact: nothing was published, so the bytes are answered on demand.
+      served: "guest",
+      note: live.note,
+      forwarded: { port: live.port },
+    });
   }
 
   async function publish(buildId: string | undefined): Promise<PreviewPhase> {
@@ -231,7 +336,21 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
 
     refresh(buildId) {
       if (inFlight !== null) return inFlight;
-      const run = publish(buildId).finally(() => {
+      // Dev publishes nothing: the reload arrow means "attach again", which is what makes it
+      // useful after the user restarts their dev server. The fallback port is Vite's own default
+      // — the app always passes the Settings port, so this only applies to a caller with none.
+      const run = (options.prod === false ? attachTo(options.port ?? 5173) : publish(buildId)).finally(
+        () => {
+          inFlight = null;
+        },
+      );
+      inFlight = run;
+      return run;
+    },
+
+    attach(port) {
+      if (inFlight !== null) return inFlight;
+      const run = attachTo(port).finally(() => {
         inFlight = null;
       });
       inFlight = run;
@@ -239,12 +358,13 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
     },
 
     url() {
-      return session?.url ?? null;
+      return attach?.url ?? session?.url ?? null;
     },
 
     async stop() {
       const active = session;
       session = null;
+      await detach();
       await active?.stop();
       set({ kind: "idle" });
     },

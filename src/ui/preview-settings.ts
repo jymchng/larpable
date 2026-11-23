@@ -24,6 +24,12 @@
  * - **A build directory is workspace-relative.** An absolute path, or one that walks out with
  *   `..`, is refused rather than silently reinterpreted: reading a directory the guest cannot
  *   reach is a different question from mistyping a name.
+ * - **Prod says which of the two previews the user wants.** Off (the default) the preview
+ *   attaches to the server *they* started on the port above \u2014 `bun run dev -- -p 1234` in the
+ *   terminal plus port 1234 is the whole configuration. On, it is the older behaviour: the
+ *   project's build output is read out of the guest and served statically on that same port.
+ *   It is a boolean beside the two fields rather than a mode selector because it is one bit of
+ *   information, and `src/preview/mode.ts` is what turns it into a plan.
  */
 
 /** The guest's own loopback. The only host a guest server can be reached on. */
@@ -39,10 +45,15 @@ export const DEFAULT_BUILD_DIRECTORY = "dist";
 export const PREVIEW_SETTINGS_STORAGE_KEY = "larpable.preview";
 
 export interface PreviewSettings {
-  /** The guest port every preview server is started on. */
+  /** The guest port every preview server is started on, or attached to. */
   port: number;
   /** Build directory, workspace-relative. Never absolute, never empty. */
   buildDirectory: string;
+  /**
+   * `true` serves the built `buildDirectory` statically on `port` (the older behaviour).
+   * `false` starts nothing and attaches to the server the user already runs on `port`.
+   */
+  prod: boolean;
 }
 
 /** What the two inputs currently show, which may be a half-typed invalid value. */
@@ -52,7 +63,13 @@ export interface PreviewSettingsDraft {
 }
 
 export function defaultPreviewSettings(): PreviewSettings {
-  return { port: DEFAULT_PREVIEW_SETTINGS_PORT, buildDirectory: DEFAULT_BUILD_DIRECTORY };
+  return {
+    port: DEFAULT_PREVIEW_SETTINGS_PORT,
+    buildDirectory: DEFAULT_BUILD_DIRECTORY,
+    // Dev, because that is what a web developer means by "the port my server runs on", and
+    // because attaching starts nothing: the cheaper, more honest default.
+    prod: false,
+  };
 }
 
 export function draftOf(settings: PreviewSettings): PreviewSettingsDraft {
@@ -119,6 +136,17 @@ export function withBuildDirectory(settings: PreviewSettings, text: string): Pre
 }
 
 /**
+ * The settings to keep when the Prod switch is at `prod`; the same object when it already is.
+ *
+ * Identity is the contract here too: the hook compares the returned object with the previous
+ * one to decide whether anything is worth writing to `localStorage`, so flipping the switch
+ * off and on again must not be a write.
+ */
+export function withProd(settings: PreviewSettings, prod: boolean): PreviewSettings {
+  return settings.prod === prod ? settings : { ...settings, prod };
+}
+
+/**
  * What the previews should use, from a draft.
  *
  * The draft is what the user is typing; the answer is the last valid value for each field
@@ -133,14 +161,23 @@ export function settingsFromDraft(
 }
 
 export function serializePreviewSettings(settings: PreviewSettings): string {
-  return JSON.stringify({ v: 1, port: settings.port, buildDirectory: settings.buildDirectory });
+  return JSON.stringify({
+    // 2 added `prod`. The parser ignores the number and reads field by field, so a stored v1
+    // pair still loads; the number is for a human reading `localStorage` in devtools.
+    v: 2,
+    port: settings.port,
+    buildDirectory: settings.buildDirectory,
+    prod: settings.prod,
+  });
 }
 
 /**
  * Stored settings, or the defaults.
  *
  * Field by field, not all-or-nothing: a stored port that is no longer a number must not wipe
- * the user's build directory, and the defaults are always runnable.
+ * the user's build directory, and the defaults are always runnable. A missing or non-boolean
+ * `prod` is `false`, which is the same answer as "the user never chose" \u2014 the switch defaults
+ * to dev, so an old record cannot silently turn a static preview on.
  */
 export function parseStoredPreviewSettings(raw: string | null): PreviewSettings {
   const defaults = defaultPreviewSettings();
@@ -152,7 +189,7 @@ export function parseStoredPreviewSettings(raw: string | null): PreviewSettings 
     return defaults;
   }
   if (typeof parsed !== "object" || parsed === null) return defaults;
-  const record = parsed as { port?: unknown; buildDirectory?: unknown };
+  const record = parsed as { port?: unknown; buildDirectory?: unknown; prod?: unknown };
   const port =
     typeof record.port === "number" && Number.isInteger(record.port) && parsePort(String(record.port)) !== null
       ? record.port
@@ -161,5 +198,10 @@ export function parseStoredPreviewSettings(raw: string | null): PreviewSettings 
     typeof record.buildDirectory === "string"
       ? normaliseBuildDirectory(record.buildDirectory)
       : "";
-  return { port, buildDirectory: directory.length > 0 ? directory : defaults.buildDirectory };
+  const prod = typeof record.prod === "boolean" ? record.prod : defaults.prod;
+  return {
+    port,
+    buildDirectory: directory.length > 0 ? directory : defaults.buildDirectory,
+    prod,
+  };
 }

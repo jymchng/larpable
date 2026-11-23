@@ -106,6 +106,7 @@ function stubPreview() {
       refreshed.push(buildId);
       return phase;
     },
+    attach: async () => phase,
     url: () => null,
     stop: async () => undefined,
   };

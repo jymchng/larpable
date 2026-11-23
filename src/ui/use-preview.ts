@@ -24,10 +24,19 @@ export interface UsePreviewOptions {
   environment: ExecutionEnvironment | null;
   /** HTTP into the guest's loopback; null when there is none. */
   http: () => GuestHttpFetch | null;
-  /** Guest port for the preview server. Default: the product's default. */
+  /** Guest port for the preview server, or the port to attach to. Default: the product's. */
   port?: number;
   /** Publish directory, workspace-relative. Default `dist`. */
   root?: string;
+  /**
+   * The Settings switch: `true` publishes the build, `false` attaches to the user's server.
+   *
+   * It rebuilds the controller rather than reconfiguring it, because the two modes own different
+   * things in the guest — a published build holds a static server, an attach holds a worker
+   * forwarder — and a controller that could switch would have to stop one to start the other
+   * anyway. Rebuilding is that stop, done by the hook's own cleanup.
+   */
+  prod?: boolean;
 }
 
 export interface PreviewControl {
@@ -42,6 +51,12 @@ export interface PreviewControl {
    * caller has one; otherwise the controller fingerprints the publish directory.
    */
   refresh: (buildId?: string) => void;
+  /**
+   * Attach the pane to a guest server on `port` — the address bar's `localhost:1234`.
+   *
+   * Separate from `refresh` because the port is the address bar's, not Settings'.
+   */
+  attach: (port: number) => void;
   /** Stop the guest's preview server (called automatically when the machine goes away). */
   stop: () => void;
   /**
@@ -54,7 +69,7 @@ export interface PreviewControl {
 }
 
 export function usePreview(options: UsePreviewOptions): PreviewControl {
-  const { environment, http, port, root } = options;
+  const { environment, http, port, root, prod } = options;
 
   const controller = useMemo(() => {
     if (environment === null) return null;
@@ -63,8 +78,9 @@ export function usePreview(options: UsePreviewOptions): PreviewControl {
       http,
       ...(port !== undefined ? { port } : {}),
       ...(root !== undefined ? { root } : {}),
+      ...(prod !== undefined ? { prod } : {}),
     });
-  }, [environment, http, port, root]);
+  }, [environment, http, port, root, prod]);
 
   const [phase, setPhase] = useState<PreviewPhase>({ kind: "idle" });
 
@@ -102,6 +118,14 @@ export function usePreview(options: UsePreviewOptions): PreviewControl {
     void controller?.stop().catch(() => undefined);
   }, [controller]);
 
+  const attach = useCallback(
+    (target: number) => {
+      if (controller === null) return;
+      void controller.attach(target).catch(() => undefined);
+    },
+    [controller],
+  );
+
   const agentPort = useMemo(() => (controller === null ? null : createPreviewPort(controller)), [controller]);
 
   return {
@@ -109,6 +133,7 @@ export function usePreview(options: UsePreviewOptions): PreviewControl {
     busy: phase.kind === "starting" || phase.kind === "publishing",
     available: environment !== null && environment.status() === "ready",
     refresh,
+    attach,
     stop,
     port: agentPort,
   };

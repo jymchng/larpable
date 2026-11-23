@@ -49,6 +49,7 @@ describe("createPreviewPort", () => {
       phase: () => ready,
       subscribe: () => () => undefined,
       refresh: vi.fn(async () => ready),
+      attach: vi.fn(async () => ready),
       url: () => ready.kind === "ready" ? ready.url : null,
       stop: async () => undefined,
     } satisfies PreviewController;
@@ -66,6 +67,7 @@ describe("createPreviewPort", () => {
       phase: () => ({ kind: "idle" }) as PreviewPhase,
       subscribe: () => () => undefined,
       refresh: vi.fn(async () => ({ kind: "idle" }) as PreviewPhase),
+      attach: vi.fn(async () => ({ kind: "idle" }) as PreviewPhase),
       url: () => null,
       stop: async () => undefined,
     } satisfies PreviewController;

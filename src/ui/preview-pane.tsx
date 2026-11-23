@@ -63,10 +63,12 @@ import {
 import { useCallback, useEffect, useReducer, useRef, type ReactNode } from "react";
 
 import type { PreviewPhase } from "@/preview/controller";
+import { describePreviewMode, modeBuilds, previewPlan } from "@/preview/mode";
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
 import { IconButton } from "@/ui/components/icon-button";
 import { describeBuildProgress, type BuildStatus } from "@/ui/build-state";
+import { parsePreviewAddress } from "@/ui/preview-address";
 import { PreviewPanel, previewUrlFor, type PreviewState } from "@/ui/preview-frame";
 import {
   beginBrowser,
@@ -106,7 +108,12 @@ export function toPreviewState(phase: PreviewPhase): PreviewState {
     case "publishing":
       return { kind: "building", buildId: phase.buildId };
     case "ready":
-      return { kind: "ready", buildId: phase.buildId, title: "Website preview" };
+      return {
+        kind: "ready",
+        buildId: phase.buildId,
+        title: "Website preview",
+        forwarded: phase.forwarded ?? null,
+      };
     case "failed":
       return { kind: "error", status: null, message: phase.message };
   }
@@ -217,6 +224,28 @@ export interface PreviewPaneProps {
   build?: BuildControl;
   /** The viewport the pane opens at. A prop so a test can render the tablet/mobile frames. */
   initialViewport?: ViewportName;
+  /**
+   * The Prod switch, as the pane needs it: which of the two previews this is.
+   *
+   * Off (the default) means the reload arrow attaches to the server the user runs, so the empty
+   * state points at their terminal instead of at the hammer. On means the build-and-publish path
+   * the pane has always had.
+   */
+  prod?: boolean;
+  /** The port in Settings, used for the address bar's own examples. */
+  port?: number;
+  /**
+   * Point the pane at a guest server on `port` — the address bar's `localhost:1234`.
+   *
+   * Absent leaves the address bar's guest addresses unopenable, which is honest for a caller
+   * with no controller: the parser still refuses with a sentence, and nothing pretends.
+   */
+  onAttach?: (port: number, path: string) => void;
+  /**
+   * Where a refused address is announced: an error toast, by the app's own rule that a
+   * notification follows the user rather than the layout.
+   */
+  onRefuseAddress?: (message: string) => void;
   className?: string;
 }
 
@@ -227,6 +256,10 @@ export function PreviewPane({
   app,
   build,
   initialViewport = "desktop",
+  prod = false,
+  port = 5173,
+  onAttach,
+  onRefuseAddress,
   className,
 }: PreviewPaneProps) {
   // One reducer for the browser bits: history, what the frame was told to load, and the device.
@@ -235,6 +268,10 @@ export function PreviewPane({
   const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   const state = mergePreviewStates(phase, app);
+  // The plan is what the mode *means*, which the pane says out loud in the empty state: a user
+  // who switched Prod off should be told that the preview now expects their own server, not
+  // handed a hammer that builds output nobody asked for.
+  const plan = previewPlan({ prod, port });
   const preset = viewportFor(browser.viewport);
   const ready = state.kind === "ready";
   const buildId = state.kind === "ready" ? state.buildId : null;
@@ -252,6 +289,57 @@ export function PreviewPane({
     const observed = pathFromFrameUrl(readFrameUrl(frameRef.current), buildId);
     if (observed !== null) dispatch({ type: "visit", path: observed });
   }, [buildId]);
+
+  // A typed address that names a *path* on a guest server (`localhost:1234/app`) needs one more
+  // step than a typed path: attaching produces a new document at the session's root, so the path
+  // is replayed once the new build id is on screen. A ref rather than state, because it must
+  // survive the reset without causing the render that reset would cause.
+  const pendingPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (buildId === null) return;
+    const wanted = pendingPath.current;
+    if (wanted === null) return;
+    pendingPath.current = null;
+    dispatch({ type: "navigate", path: wanted });
+  }, [buildId]);
+
+  /**
+   * What the address bar's Enter key does, in one place.
+   *
+   * Three answers and no fourth: a path stays on the page on screen, a guest address either
+   * re-attaches (a different port) or simply navigates (the port already attached), and a refusal
+   * becomes a toast with the parser's own sentence. Nothing here guesses a host, a scheme or a
+   * default port — `preview-address.ts` has already decided, and it refuses rather than guessing.
+   */
+  const navigateTo = useCallback(
+    (text: string) => {
+      const target = parsePreviewAddress(text, { currentPort: port });
+      if (target.kind === "refused") {
+        onRefuseAddress?.(target.message);
+        return;
+      }
+      if (target.kind === "path") {
+        dispatch({ type: "navigate", path: target.path });
+        return;
+      }
+      // The same guest server the pane is already showing: a navigation, not a new session. That
+      // keeps the page's own state and avoids re-registering a worker for an address the pane is
+      // already attached to.
+      if (state.kind === "ready" && state.forwarded?.port === target.port) {
+        dispatch({ type: "navigate", path: target.path });
+        return;
+      }
+      if (onAttach === undefined) {
+        onRefuseAddress?.(
+          `This preview cannot be pointed at guest port ${String(target.port)} from here.`,
+        );
+        return;
+      }
+      pendingPath.current = target.path;
+      onAttach(target.port, target.path);
+    },
+    [onAttach, onRefuseAddress, port, state],
+  );
 
   // A previewed site can navigate itself — a link, `pushState`, a hash — and none of those fire
   // an event the parent can hear. Reading the frame's location on a slow timer is what keeps
@@ -316,6 +404,7 @@ export function PreviewPane({
         }
         frameStyle={viewportStyle(preset)}
         path={path}
+        onNavigate={navigateTo}
         framePath={browser.navigation.path}
         reloads={browser.navigation.nonce}
         // The empty pane points at the one control that fills it (user request: "when there is no

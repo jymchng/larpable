@@ -75,6 +75,9 @@ export function App() {
     http: environment.guestHttp,
     port: previewSettings.settings.port,
     root: previewSettings.settings.buildDirectory,
+    // The Settings switch: off (the default) attaches to the server the user runs, on the same
+    // port; on is the build-and-serve preview this app has always had.
+    prod: previewSettings.settings.prod,
   });
   // The other preview: the project's own server (`next start`), for projects that have no
   // `dist/` because they render per request. It is idle until the user clicks "Run the app",
@@ -240,11 +243,24 @@ export function App() {
         <PreviewPane
           phase={preview.phase}
           // The reload arrow hands back the build id it is showing, so a reload re-publishes
-          // that build rather than whatever happens to be in `dist/` now.
+          // that build rather than whatever happens to be in `dist/` now. In dev mode the same
+          // arrow attaches to the user's server again, which is what makes it useful after they
+          // restart it.
           onRefresh={(buildId) => preview.refresh(buildId)}
           available={preview.available}
           app={appPreview}
           build={build}
+          prod={previewSettings.settings.prod}
+          port={previewSettings.settings.port}
+          // The address bar's `localhost:1234`: a guest server of the user's choosing, which is
+          // not necessarily the port in Settings.
+          onAttach={(port) => preview.attach(port)}
+          // A refused address is news, and news is a toast (the app's own rule): the frame keeps
+          // the page it had, so a strip of chrome under the bar would push the page down to say
+          // something the user can read over it.
+          onRefuseAddress={(message) =>
+            toast.raise({ id: "preview-address", message, tone: "danger" })
+          }
         />
       }
       />

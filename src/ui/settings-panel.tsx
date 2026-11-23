@@ -65,7 +65,7 @@ export interface SettingsPanelProps {
 /** Just enough of the preview control to paint the fields, for tests and static renders. */
 export type PreviewFields = Pick<
   PreviewSettingsControl,
-  "settings" | "draft" | "setPort" | "setBuildDirectory" | "problem"
+  "settings" | "draft" | "setPort" | "setBuildDirectory" | "setProd" | "problem"
 >;
 
 export function SettingsPanel({
@@ -226,13 +226,37 @@ export function SettingsPanel({
                 className="font-mono text-[12px]"
               />
             </label>
+
+            {/* Prod, beside the two fields it modifies. A checkbox and not a two-button mode
+                selector: it is one bit, the label says what it turns on, and the note below says
+                what each state does. `TOUCH_TARGET_BLOCK` keeps the label a fingertip tall on a
+                phone without stretching the row on a desktop. */}
+            <label
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1",
+                TOUCH_TARGET_BLOCK,
+                preview.settings.prod ? "border-primary bg-primary/10" : "border-input",
+              )}
+            >
+              <input
+                data-testid="settings-prod"
+                type="checkbox"
+                checked={preview.settings.prod}
+                onChange={(event) => preview.setProd(event.target.checked)}
+                aria-label="Prod: build the project and serve its output statically"
+                className="accent-primary size-3.5"
+              />
+              <span className="text-[11px] font-semibold">Prod</span>
+            </label>
           </div>
 
-          {/* The two fields are one sentence: what the currently-useful settings actually mean.
-              It quotes the *last valid* pair, not the draft, because that is what a server
-              would be started with right now. */}
+          {/* The fields and the switch are one sentence: what the currently-useful settings
+              actually do. It quotes the *last valid* pair, not the draft, because that is what
+              the preview would do right now. */}
           <p data-testid="settings-preview-note" className="text-muted-foreground text-[11px]">
-            {`Both previews start their server inside the guest, on ${baseUrlFor(preview.settings)}, and a static build is read from ${preview.settings.buildDirectory}.`}
+            {preview.settings.prod
+              ? `The preview reads ${preview.settings.buildDirectory}/ out of the guest and serves it statically on ${baseUrlFor(preview.settings)}.`
+              : `The preview attaches to whatever is already listening on ${baseUrlFor(preview.settings)} \u2014 start it in the terminal, for example \`bun run dev -- -p ${String(preview.settings.port)}\`. No build and no server of the preview's own.`}
           </p>
 
           {preview.problem !== null ? (

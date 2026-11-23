@@ -20,6 +20,17 @@
 export const FORWARD_REQUEST_MESSAGE = "larpable:preview:forward";
 export const FORWARD_REPLY_MESSAGE = "larpable:preview:forward:reply";
 
+/**
+ * Told to the worker so it knows which session it forwards.
+ *
+ * It is the third leg of the handshake: the page listens (`attachPreviewForwarder`), the worker
+ * is told the session id, and only then do the frame's requests for
+ * `/__preview__/<id>/…` reach the page instead of the network. A `null` build id is the
+ * documented "forward nothing" value — see `attach.ts`, which uses it to stand down without
+ * dropping a published build the way `clear` would.
+ */
+export const FORWARD_INSTALL_MESSAGE = "larpable:preview:forward:install";
+
 /** What the worker posts. */
 export interface ForwardRequestMessage {
   type: typeof FORWARD_REQUEST_MESSAGE;
