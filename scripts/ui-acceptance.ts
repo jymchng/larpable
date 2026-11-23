@@ -141,6 +141,39 @@ async function text(page: Page, selector: string): Promise<string | null> {
   return value !== undefined && value.length > 0 ? value : null;
 }
 
+/**
+ * How opaque the preset's tooltip bubble is right now, as the browser paints it.
+ *
+ * The device toolbar's dimensions live in a `role="tooltip"` bubble (`components/tooltip.tsx`)
+ * that is always in the DOM and revealed by CSS, so "is it shown?" is a question about computed
+ * opacity rather than about a node existing. Reading the number here is the only way to prove
+ * the row is quiet until the user asks — the markup looks identical either way.
+ */
+async function bubbleOpacity(page: Page, name: string): Promise<number> {
+  const bubble = page.locator(`[data-testid=preview-viewport-hint-${name}]`).first();
+  if ((await bubble.count()) === 0) return -1;
+  return Number(
+    await bubble.evaluate((node) => window.getComputedStyle(node).opacity),
+  );
+}
+
+/** Hover a preset button and wait for its bubble to finish fading in (150 ms transition). */
+async function hoverPreset(page: Page, name: string): Promise<number> {
+  const selector = `[data-testid=preview-viewport-${name}]`;
+  await page.locator(selector).hover();
+  await page
+    .waitForFunction(
+      (sel) => {
+        const node = document.querySelector(sel);
+        return node !== null && Number(getComputedStyle(node).opacity) > 0.9;
+      },
+      `[data-testid=preview-viewport-hint-${name}]`,
+      { timeout: 4_000 },
+    )
+    .catch(() => undefined);
+  return bubbleOpacity(page, name);
+}
+
 interface PerfSample {
   frames: number;
   maxGapMs: number;
@@ -468,10 +501,14 @@ async function main(): Promise<void> {
     const addressValue = await page.locator("[data-testid=preview-address]").inputValue();
     const backDisabled = await page.locator("[data-testid=preview-back]").isDisabled();
     const forwardDisabled = await page.locator("[data-testid=preview-forward]").isDisabled();
-    const deviceSize = await text(page, "[data-testid=preview-device-size]");
+    // The dimensions are a tooltip now, so there is no size readout in the row to read; the
+    // count is asserted rather than assumed, because a resurrected readout would silently make
+    // the hover check below pass for the wrong reason.
+    const inlineSizeReadout = await page.locator("[data-testid=preview-device-size]").count();
+    const mobileHintIdle = await bubbleOpacity(page, "mobile");
     note(
       "browser chrome",
-      `tab="${chromeTab ?? ""}" build=${buildInTab} address=${addressValue} back=${String(backDisabled)} forward=${String(forwardDisabled)} device="${deviceSize ?? ""}"`,
+      `tab="${chromeTab ?? ""}" build=${buildInTab} address=${addressValue} back=${String(backDisabled)} forward=${String(forwardDisabled)} inline-size-readouts=${String(inlineSizeReadout)} mobile-bubble-opacity=${String(mobileHintIdle)}`,
     );
     expect(
       "the pane is wrapped in browser chrome that names the build it shows",
@@ -509,17 +546,26 @@ async function main(): Promise<void> {
       `${String(Math.round(desktopBox?.width ?? 0))} px -> ${String(Math.round(mobileBox?.width ?? 0))} px`,
     );
 
-    // The device toolbar is a toolbar, not a decoration: it states the size it is applying, and
-    // the site inside the frame is still the real build at that size.
-    const mobileSize = await text(page, "[data-testid=preview-device-size]");
+    // The device toolbar is a toolbar, not a decoration: it states the size it is applying —
+    // but only while the pointer is over the button, in a styled bubble rather than in a
+    // permanent readout — and the site inside the frame is still the real build at that size.
+    const mobileHintShown = await hoverPreset(page, "mobile");
+    const mobileHint = (await text(page, "[data-testid=preview-viewport-hint-mobile]")) ?? "";
     const mobileBody = await frame.locator("body").innerText().catch(() => "");
     const mobileScreenshot = join(evidenceDir, "preview-browser-mobile.png");
     await previewPane.screenshot({ path: mobileScreenshot });
     lines.push("", `screenshot: ${mobileScreenshot}`, "");
     expect(
-      "the device toolbar names the mobile size and the site still renders inside it",
-      mobileSize === "390 × 844" && /counter/i.test(mobileBody),
-      `size="${mobileSize ?? "(none)"}" body: ${mobileBody.replace(/\s+/g, " ").slice(0, 60)}…`,
+      "the mobile size is a tooltip over its own button, invisible until hovered",
+      inlineSizeReadout === 0 && mobileHintIdle < 0.05 && mobileHintShown > 0.9,
+      `readouts=${String(inlineSizeReadout)} opacity ${String(mobileHintIdle)} -> ${String(mobileHintShown)}`,
+    );
+    expect(
+      "the tooltip states the exact size and its limit, and the site still renders inside it",
+      mobileHint.includes("390 × 844") &&
+        mobileHint.includes("no touch events or device pixel ratio") &&
+        /counter/i.test(mobileBody),
+      `bubble="${mobileHint.replace(/\s+/g, " ").trim()}" body: ${mobileBody.replace(/\s+/g, " ").slice(0, 60)}…`,
     );
     await page.locator("[data-testid=preview-viewport-desktop]").click();
 

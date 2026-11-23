@@ -28,6 +28,35 @@ import { viewportFor } from "../src/ui/viewport";
 
 const BUILD = "build-mf3k2-1";
 
+/** The opening tag of the one button with this test id, as written. */
+function buttonTag(html: string, testId: string): string {
+  return new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`).exec(html)?.[0] ?? "";
+}
+
+/** The opening tag of the tooltip bubble with this id — the element `aria-describedby` names. */
+function tooltipTag(html: string, id: string): string {
+  return new RegExp(`<div[^>]*\\bid="${id}"[^>]*>`).exec(html)?.[0] ?? "";
+}
+
+/**
+ * The words inside that bubble.
+ *
+ * The first `</div>` after the opening tag closes it: its children are spans (lines) and the
+ * caret, so a non-greedy slice is exact and cannot swallow the next preset's tooltip.
+ */
+function tooltipText(html: string, id: string): string {
+  const tag = tooltipTag(html, id);
+  if (tag === "") return "";
+  const from = html.indexOf(tag) + tag.length;
+  const to = html.indexOf("</div>", from);
+  return to === -1 ? "" : html.slice(from, to);
+}
+
+function attribute(tag: string, name: string): string | null {
+  const match = new RegExp(`\\b${name}="([^"]*)"`).exec(tag);
+  return match === null ? null : (match[1] ?? "");
+}
+
 const ready: PreviewPhase = {
   kind: "ready",
   buildId: BUILD,
@@ -136,7 +165,7 @@ describe("PreviewBrowserBar", () => {
 });
 
 describe("PreviewDeviceToolbar", () => {
-  it("lists the three presets, marks the current one, and states its size", () => {
+  it("lists the three presets, marks the current one, and paints no size readout of its own", () => {
     const desktop = renderToStaticMarkup(
       <PreviewDeviceToolbar viewport={viewportFor("desktop")} />,
     );
@@ -146,21 +175,70 @@ describe("PreviewDeviceToolbar", () => {
     }
     expect(desktop).toMatch(/data-testid="preview-viewport-desktop"[^>]*aria-pressed="true"/);
     expect(desktop).toMatch(/data-testid="preview-viewport-mobile"[^>]*aria-pressed="false"/);
-    // Desktop is not a size, so there is no size readout to print — removed on request:
-    // "full width", which repeated what the pressed Desktop button already said.
+    // The row carries three pictograms and nothing else: "full width" went first (it repeated
+    // what the pressed Desktop button said) and the `834 x 1112` readout went with it, into the
+    // tooltip of the button that applies the size.
     expect(desktop).not.toContain("full width");
     expect(desktop).not.toContain('data-testid="preview-device-size"');
   });
 
-  it("prints the exact size it is claiming, and the limit of that claim", () => {
+  it("keeps the size and its limit as a tooltip on the button, not as a line in the row", () => {
     const mobile = renderToStaticMarkup(<PreviewDeviceToolbar viewport={viewportFor("mobile")} />);
 
-    expect(mobile).toContain("390 × 844");
-    expect(mobile).toMatch(/data-testid="preview-viewport-mobile"[^>]*aria-pressed="true"/);
-    // The honesty note still travels with the control, as the tooltip: sizes the frame only, no
-    // touch, no DPR. It left the visible row with the two spans removed on request.
-    expect(mobile).toContain("no touch events or device pixel ratio");
+    const button = buttonTag(mobile, "preview-viewport-mobile");
+    const hintId = attribute(button, "aria-describedby");
+
+    // The button *names* the bubble: that is what makes the sentence a description a screen
+    // reader announces rather than text only a mouse can find.
+    expect(hintId).toBe("preview-viewport-hint-mobile");
+    // ...and the native `title` is gone, because two tooltips over one control is one too many.
+    expect(attribute(button, "title")).toBeNull();
+    // The pictogram did not lose its name in the process.
+    expect(attribute(button, "aria-label")).toBe("Mobile");
+
+    const bubble = tooltipTag(mobile, hintId ?? "");
+    expect(bubble).not.toBe("");
+    // Hidden by CSS, not by absence: `opacity-0` until `group-hover/tip` (or a keyboard
+    // `:focus-visible` inside the anchor) turns it on. A `hidden`/`display:none` bubble would
+    // also be invisible to the screen reader the `aria-describedby` is pointing at.
+    expect(bubble).toContain("opacity-0");
+    expect(bubble).toContain("group-hover/tip:opacity-100");
+    expect(bubble).toContain("group-has-[:focus-visible]/tip:opacity-100");
+    expect(bubble).toContain("pointer-events-none");
+
+    // The exact claim, and the limit of it, in the words `viewport.ts` owns.
+    const words = tooltipText(mobile, hintId ?? "");
+    expect(words).toContain("390 \u00d7 844");
+    expect(words).toContain("no touch events or device pixel ratio");
+    // Per preset, not shared: the phone's bubble does not quote the tablet's size.
+    expect(words).not.toContain("834 \u00d7 1112");
     expect(mobile).not.toContain('data-testid="preview-viewport-status"');
+  });
+
+  it("says in words what the preset that fills the pane does", () => {
+    const desktop = renderToStaticMarkup(
+      <PreviewDeviceToolbar viewport={viewportFor("desktop")} />,
+    );
+
+    const words = tooltipText(desktop, "preview-viewport-hint-desktop");
+
+    expect(words).toContain("Fills the pane");
+    expect(words).toContain("Follows your window.");
+    // No disclaimer for a preset that emulates nothing, and no size to disclaim.
+    expect(words).not.toContain("no touch events or device pixel ratio");
+  });
+
+  it("admits the scale factor when the pressed preset is drawn smaller than it claims", () => {
+    const scaled = renderToStaticMarkup(
+      <PreviewDeviceToolbar viewport={viewportFor("tablet")} zoom={0.47} />,
+    );
+
+    const tablet = tooltipText(scaled, "preview-viewport-hint-tablet");
+    expect(tablet).toContain("834 \u00d7 1112");
+    expect(tablet).toContain("Drawn at 47 % to fit this pane.");
+    // Only the pressed preset can be scaled, so the other two bubbles stay quiet about it.
+    expect(tooltipText(scaled, "preview-viewport-hint-desktop")).not.toContain("Drawn at");
+    expect(tooltipText(scaled, "preview-viewport-hint-mobile")).not.toContain("Drawn at");
   });
 });
 
@@ -237,6 +315,27 @@ describe("PreviewPane as a browser", () => {
     expect(html.indexOf('data-testid="preview-toolbar"')).toBeLessThan(
       html.indexOf('data-testid="preview-iframe"'),
     );
+  });
+
+  it("puts the popout beside the fullscreen control, in the device row", () => {
+    const html = renderPane(ready);
+    const newTab = html.indexOf('data-testid="preview-new-tab"');
+    const fullscreen = html.indexOf('data-testid="preview-fullscreen"');
+
+    // Inside the browser's device row, which is where the frame is sized (user request: the
+    // popout "must be beside the full screen button in the Preview tab") — not in the row below.
+    expect(newTab).toBeGreaterThan(html.indexOf('data-testid="preview-device-toolbar"'));
+    expect(newTab).toBeLessThan(html.indexOf('data-testid="preview-toolbar"'));
+    expect(fullscreen).toBeGreaterThan(newTab);
+
+    // Beside, not merely nearby: nothing but the link's own markup and the fullscreen button
+    // sits between them — no third control was slipped in on the way.
+    const between = html.slice(newTab + 'data-testid="preview-new-tab"'.length, fullscreen);
+    expect(between).not.toContain("data-testid=");
+    // A real link to the build on screen, opened in a real tab.
+    expect(between).toContain(`href="/__preview__/${BUILD}/"`);
+    expect(between).toContain('target="_blank"');
+    expect(between).toContain('aria-label="Open the preview in a new tab"');
   });
 
   it("keeps the error surface, chrome and all", () => {

@@ -8,8 +8,8 @@
  * `<button>` out of the markup, and asserts that
  *
  * - the accessible name (aria-label, else the text) is non-empty, and
- * - a button whose only content is a pictogram also carries a `title` (the mouse user's
- *   tooltip), a hit target of at least 32 px, and a visible focus ring.
+ * - a button whose only content is a pictogram also carries a tooltip (a `title`, or a bubble
+ *   it names in `aria-describedby`), a hit target of at least 32 px, and a visible focus ring.
  *
  * The one documented exception is `data-inline="true"`: the terminal's per-tab `×` lives inside
  * a single tab, where 32 px would make the strip taller than the thing it labels. It takes
@@ -91,6 +91,23 @@ function isIconOnly(button: RenderedButton): boolean {
 function hasHitTarget(attrs: string): boolean {
   const className = attribute(attrs, "class") ?? "";
   return /\bsize-(8|9|10|11|12)\b/.test(className);
+}
+
+/**
+ * True when the button *paints* its own tooltip: an `aria-describedby` pointing at a
+ * `role="tooltip"` bubble in the same markup.
+ *
+ * The sweep below used to accept only a `title` attribute, because a native tooltip was the only
+ * kind this app had. The device toolbar now draws its own (`components/tooltip.tsx`) so the
+ * dimensions it has to state can be monospaced, wrapped and styled — and a native `title` on the
+ * same button would arrive a second later on top of it. What the rule is actually protecting is
+ * "a pictogram is not a riddle", so it accepts either channel and neither is a failure.
+ */
+function paintedTooltip(attrs: string, html: string): boolean {
+  const id = attribute(attrs, "aria-describedby");
+  if (id === null || id.trim().length === 0) return false;
+  const bubble = new RegExp(`<div[^>]*\\bid="${id}"[^>]*>`).exec(html)?.[0] ?? "";
+  return bubble.includes('role="tooltip"');
 }
 
 function hasInlineFloor(attrs: string): boolean {
@@ -294,7 +311,10 @@ describe("every rendered button", () => {
         const className = attribute(button.attrs, "class") ?? "";
         const key = `${surface.name} [${label}]`;
 
-        if (title === null || title.trim().length === 0) problems.push(`${key}: no title`);
+        const hasTitle = title !== null && title.trim().length > 0;
+        if (!hasTitle && !paintedTooltip(button.attrs, surface.html)) {
+          problems.push(`${key}: no tooltip, native or painted`);
+        }
         if (inline ? !hasInlineFloor(button.attrs) : !hasHitTarget(button.attrs)) {
           problems.push(`${key}: target too small (${inline ? "inline" : "standalone"})`);
         }
@@ -310,7 +330,9 @@ describe("every rendered button", () => {
  * A tooltip is allowed to say *more* than the name ("Back" -> "Back to the previous page in
  * this build"), because the name is what a screen reader announces and the tooltip is where the
  * "why" lives. What it may not be is absent: that is the check above, and it is the one that
- * matters, because a pictogram with no tooltip is a riddle for a mouse user.
+ * matters, because a pictogram with no tooltip is a riddle for a mouse user. Which channel the
+ * tooltip arrives through is a presentation decision (`paintedTooltip` above records why the
+ * device toolbar paints its own); whether one arrives at all is not.
  */
 
 /* ------------------------------------------------------------------ *

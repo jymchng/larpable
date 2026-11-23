@@ -31,6 +31,9 @@
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --success: oklch(0.65 0.15 156);
   --warning: oklch(0.79 0.15 82);
+  /* The notification blue. It is not `--primary`: primary is the app's *action* colour and is
+     near-black in this palette, while a toast has to read as blue in both themes. */
+  --info: oklch(0.55 0.18 258);
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
   --ring: oklch(0.704 0.04 256.788);
@@ -68,6 +71,9 @@
   --destructive-foreground: oklch(0.155 0.008 265);
   --success: oklch(0.723 0.16 158);
   --warning: oklch(0.806 0.15 82);
+  /* Lighter than the light palette's blue, because the tint behind it is dark: the toast is
+     `bg-info/20 text-info`, so the *text* is what carries the colour. */
+  --info: oklch(0.7 0.15 252);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.551 0.027 264.364);
@@ -105,6 +111,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

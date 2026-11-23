@@ -20,10 +20,11 @@
  *   carries the build id in mono so a screenshot of the pane says which build it shows.
  * - **The device toolbar sizes the frame and says so.** It is not a phone: no touch events, no
  *   device pixel ratio. The size is exact (`834 × 1112`) and the note that accompanies it is the
- *   one `viewport.ts` already writes for the vow of the same claim. Both live in the tooltip of
- *   the button that applies them rather than in a readout of their own: the row was printing a
- *   number nobody needed once, permanently, and now prints it while the pointer is over the
- *   preset \u2014 which is also the only moment the user is choosing between them.
+ *   one `viewport.ts` already writes for the claim. Both now live in the *tooltip* of the button
+ *   that applies them rather than in a readout of their own: the row used to print a number
+ *   permanently that is only interesting while the user is choosing between the three, so it is
+ *   printed exactly then — on hover, or on a keyboard focus — and the row goes back to three
+ *   pictograms. `components/tooltip.tsx` owns the bubble; this file owns the words in it.
  */
 
 import {
@@ -38,8 +39,15 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { VIEWPORTS, describeViewport, type ViewportName, type ViewportPreset } from "@/ui/viewport";
+import {
+  VIEWPORTS,
+  viewportLimit,
+  viewportSize,
+  type ViewportName,
+  type ViewportPreset,
+} from "@/ui/viewport";
 import { IconButton } from "@/ui/components/icon-button";
+import { TOOLTIP_ANCHOR, Tooltip } from "@/ui/components/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -255,7 +263,7 @@ export interface PreviewDeviceToolbarProps {
   onChange?: (name: ViewportName) => void;
   /**
    * The factor the frame is drawn at when the preset is wider than the pane. `1` (the default)
-   * means "not scaled", and the readout says nothing extra.
+   * means "not scaled", and the tooltip says nothing extra.
    */
   zoom?: number;
   /**
@@ -267,12 +275,60 @@ export interface PreviewDeviceToolbarProps {
 }
 
 /**
+ * What the bubble over one preset button says: the preset's name, the exact size it applies, and
+ * the limit of that claim.
+ *
+ * Three lines and a caption, because each answers a different question. The name is what the
+ * user is choosing (*tablet*), the number is what they get (`834 × 1112`), and the caption is
+ * what they must not conclude from the number (a frame, not a device). The preset that fills the
+ * pane says so in words instead, since it has no size to be exact about.
+ */
+function ViewportHint({ preset, zoom }: { preset: ViewportPreset; zoom: number }): ReactNode {
+  const size = viewportSize(preset);
+
+  return (
+    <>
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="text-muted-foreground text-[9.5px] font-semibold tracking-[0.14em] uppercase">
+          {preset.label}
+        </span>
+        {/* The unit rides on the same line as the label so the number below is bare: a mono
+            `390 × 844` with `CSS px` glued to it is read as one token. */}
+        <span className="text-muted-foreground/70 text-[9px] font-medium tracking-[0.1em] uppercase">
+          {size === null ? "pane" : "CSS px"}
+        </span>
+      </span>
+      <span
+        data-testid={`preview-viewport-size-${preset.name}`}
+        className="text-foreground mt-1 block font-mono text-[13px] leading-none font-medium tabular-nums"
+      >
+        {size ?? "Fills the pane"}
+      </span>
+      <span className="text-muted-foreground mt-1.5 block text-[10.5px] leading-snug">
+        {viewportLimit(preset)}
+      </span>
+      {zoom < 1 ? (
+        // The frame is narrower than the number above says it is, so the bubble admits it:
+        // `834 × 1112` printed over a frame drawn at 45 % would be the lie this row exists to
+        // avoid. Only the *pressed* preset can be scaled, which is why the caller passes `zoom`
+        // for that one and `1` for the others.
+        <span className="text-muted-foreground mt-1 block text-[10.5px] leading-snug">
+          {`Drawn at ${String(Math.round(zoom * 100))} % to fit this pane.`}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * Desktop / tablet / mobile, as the device toolbar of a devtools pane.
  *
  * `aria-pressed` and not a `<select>`: the three choices are visible at once and the current one
- * has to be readable by a screen reader. The size readout next to them is the *claim* \u2014 exact
- * CSS pixels for a preset, "full width" for the one that follows the window \u2014 and the note
- * under it is the limit: no touch events, no device pixel ratio.
+ * has to be readable by a screen reader. The size is the *claim* — exact CSS pixels for a preset,
+ * "Fills the pane" for the one that follows the window — and the caption under it is the limit:
+ * no touch events, no device pixel ratio. Both are painted in a tooltip rather than in a readout
+ * of their own, so a dense row stays three buttons wide; the bubble is `aria-describedby` on the
+ * button, so the same sentence reaches a screen reader on focus without being on screen.
  */
 export function PreviewDeviceToolbar({
   viewport,
@@ -285,9 +341,6 @@ export function PreviewDeviceToolbar({
     tablet: <Tablet aria-hidden="true" className="size-3.5" />,
     mobile: <Smartphone aria-hidden="true" className="size-3.5" />,
   };
-  // Below 100 % the readout must admit it, or the number describes a frame the user is not
-  // actually looking at that size.
-  const scaled = zoom < 1;
 
   return (
     <div
@@ -300,53 +353,71 @@ export function PreviewDeviceToolbar({
         data-testid="preview-viewports"
         role="group"
         aria-label="Preview viewport"
-        className="border-border bg-background flex items-center overflow-hidden rounded-md border"
+        // No `overflow-hidden` here, and it is not an oversight: a bubble nested inside this
+        // row would be clipped by it, so the rounded end is put on the first and last *button*
+        // instead. The clipping that was doing that job is now those two radii.
+        className="border-border bg-background flex items-center rounded-md border"
       >
         {VIEWPORTS.map((preset) => {
           const selected = preset.name === viewport.name;
+          // Deterministic, and derived from the preset rather than from a `useId`: one toolbar
+          // per pane, and a test can name the bubble it means without reading the DOM twice.
+          const hintId = `preview-viewport-hint-${preset.name}`;
           return (
-            <IconButton
+            // The anchor is what the pointer hovers and what the bubble is measured against;
+            // the button inside it is unchanged. `TOOLTIP_ANCHOR` carries `group/tip`, which is
+            // the half of that contract the bubble names.
+            <span
               key={preset.name}
-              testId={`preview-viewport-${preset.name}`}
-              // The pictogram is the monitor, the tablet or the phone; the preset's name is the
-              // accessible name and its exact size is the tooltip, which is what makes an
-              // icon-only control honest here rather than a guessing game.
-              label={preset.label}
-              hint={describeViewport(preset)}
-              tone="nav"
-              aria-pressed={selected}
-              data-selected={selected ? "true" : "false"}
-              onClick={onChange === undefined ? undefined : () => onChange(preset.name)}
+              // `[&:first-child>button]`: the segmented control's outer corners, which used to
+              // be an `overflow-hidden` on the row. Written against the child button because
+              // this span is the row's child, and the radius has to land on the painted box.
               className={cn(
-                "rounded-none",
-                selected ? "bg-primary/10 text-foreground" : "text-muted-foreground",
+                TOOLTIP_ANCHOR,
+                "[&:first-child>button]:rounded-l-md [&:last-child>button]:rounded-r-md",
               )}
             >
-              {ICONS[preset.name]}
-            </IconButton>
+              <IconButton
+                testId={`preview-viewport-${preset.name}`}
+                // The pictogram is the monitor, the tablet or the phone; the preset's name is
+                // the accessible name, and the size it applies is the description below rather
+                // than a native `title` — `hint={null}` is what keeps the browser from drawing
+                // a second, greyer tooltip a second later on top of this one.
+                label={preset.label}
+                hint={null}
+                aria-describedby={hintId}
+                tone="nav"
+                aria-pressed={selected}
+                data-selected={selected ? "true" : "false"}
+                onClick={onChange === undefined ? undefined : () => onChange(preset.name)}
+                className={cn(
+                  "rounded-none",
+                  selected ? "bg-primary/10 text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {ICONS[preset.name]}
+              </IconButton>
+              <Tooltip
+                id={hintId}
+                testId={hintId}
+                side="bottom"
+                align="start"
+                // One width for all three bubbles, so moving along the row does not make the
+                // tooltip jump; bounded by the viewport so a 360 px phone cannot clip it.
+                className="w-[min(13.5rem,calc(100vw-1.5rem))]"
+              >
+                <ViewportHint preset={preset} zoom={selected ? zoom : 1} />
+              </Tooltip>
+            </span>
           );
         })}
       </div>
 
-      {/*
-       * Two spans used to sit here: the current width ("full width" for the preset that follows
-       * the window, "390 × 844" for the others) and the note from `describeViewport`. Both were
-       * removed on request ("Remove: full width / Desktop: Fills the pane at your window's
-       * size"), and both were saying what the three buttons beside them already say — the active
-       * preset is the one with `aria-pressed="true"`. The note survives where it is still the only
-       * way to know something: the `title` on each button, which no layout has to pay for.
-       */}
+      {/* The row used to carry two more spans — the current width ("full width" for the preset
+          that follows the window, "390 × 844" for the others) and the note from `describeViewport`
+          — and the second one became the tooltips above. Nothing is lost: the pressed preset is
+          still the one with `aria-pressed="true"`, and its size is a hover away. */}
       {actions}
-
-      {viewport.width === null || viewport.height === null ? null : (
-        <span
-          data-testid="preview-device-size"
-          className="text-muted-foreground shrink-0 font-mono text-[10.5px]"
-          title={describeViewport(viewport)}
-        >
-          {`${String(viewport.width)} × ${String(viewport.height)}`}
-        </span>
-      )}
     </div>
   );
 }

@@ -285,18 +285,18 @@ export function PreviewPane({
           onRefresh(id ?? undefined);
         }}
         toolbar={
-          <PreviewToolbar
-            phase={phase}
-            app={app}
-            ready={ready}
-            url={url}
-            onFullscreen={toggleFullscreen}
-          />
+          <PreviewToolbar phase={phase} app={app} />
         }
         strip={build !== undefined ? <BuildStrip build={build} /> : null}
         deviceActions={
           <>
             {build !== undefined ? <BuildActions build={build} /> : null}
+            {/* The frame's two ways out, side by side (user request: the popout "must be beside
+                the full screen button in the Preview tab"): the popout opens this build's own URL
+                in a real tab, then fullscreen puts this frame over the window. Both act on the
+                frame the three width buttons just sized, which is why they are here and not in
+                the row below. */}
+            {url !== null ? <NewTabLink url={url} /> : null}
             <IconButton
               testId="preview-fullscreen"
               label="Fullscreen"
@@ -428,71 +428,75 @@ function BuildActions({ build }: { build: BuildControl }): ReactNode {
   );
 }
 
+/**
+ * "Open the preview in a new tab": the same build, in a tab that is not a preview.
+ *
+ * A real `<a href>` rather than a `window.open` call, because a popup a browser blocks looks
+ * like a broken button while a link survives a middle-click, a ctrl-click and a "copy link
+ * address" — and the href is the pane's own preview URL, so what opens is exactly the build on
+ * screen (`/__preview__/<buildId>/`).
+ *
+ * It sits beside the fullscreen control in the device row (user request), not in the row below:
+ * both are ways out of this frame, and the row that sizes the frame is where a user looks when
+ * they want it bigger or elsewhere.
+ */
+function NewTabLink({ url }: { url: string }): ReactNode {
+  return (
+    <Button
+      asChild
+      size="icon"
+      variant="ghost"
+      data-testid="preview-new-tab"
+      // The same box as the `IconButton`s beside it, phone floor included, so the row's controls
+      // stay one height and one hit size (see `touch.ts`).
+      className="size-8 max-lg:size-9 tap-target shrink-0"
+    >
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label="Open the preview in a new tab"
+        title="Open the preview in a new tab"
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <ExternalLink aria-hidden="true" className="size-4" />
+      </a>
+    </Button>
+  );
+}
+
 export interface PreviewToolbarProps {
   phase: PreviewPhase;
   app?: AppPreviewControl;
-  /** True when a frame is actually rendered: fullscreen and "open in a new tab" need a URL. */
-  ready?: boolean;
-  /** The preview URL, when there is one. */
-  url?: string | null;
-  onFullscreen?: () => void;
 }
 
 /**
- * The pane's own controls: the status sentence and the served-by badge. The publish button and
- * "Run the app" that used to lead this row were removed on request — publishing is the browser
- * bar's Reload, and running the app had a second control in the same pane.
+ * The pane's own words: the status sentence and the served-by badge.
  *
- * Tabs, arrows, the address bar and the device
- * toolbar belong to `preview-chrome.tsx`, because those are a browser's words for a browser's
- * controls; this row is the app talking about what it did.
+ * Four controls used to live in this row and each has moved to a better home: the publish button
+ * (the browser bar's circling arrow publishes), "Run the app" (the same pane's chrome), the file
+ * count (removed — nobody acts on it), and the popout link, which is now beside the fullscreen
+ * control in the device row (user request: "must be beside the full screen button in the Preview
+ * tab"). What is left is the app talking about what it did, which is the one thing no other row
+ * says.
+ *
+ * Tabs, arrows, the address bar and the device toolbar belong to `preview-chrome.tsx`, because
+ * those are a browser's words for a browser's controls.
  */
-export function PreviewToolbar({
-  phase,
-  app,
-  ready = phase.kind === "ready",
-  url = phase.kind === "ready" ? previewUrlFor(phase.buildId) : null,
-  onFullscreen,
-}: PreviewToolbarProps) {
+export function PreviewToolbar({ phase, app }: PreviewToolbarProps) {
   const appNote = describeAppPreview(app?.state);
   const sentence = describePreviewPhase(phase);
   const served = phase.kind === "ready" || app?.state.kind === "running";
 
-  // Every part of this row is now optional — the publish button, the run-app button and the file
-  // count are gone — so an empty one is not rendered at all rather than left as a bordered div.
-  if (url === null && appNote === null && sentence.length === 0 && !served) return null;
+  // Every part of this row is optional, so an empty one is not rendered at all rather than left
+  // as a bordered div with nothing in it.
+  if (appNote === null && sentence.length === 0 && !served) return null;
 
   return (
     <div
       data-testid="preview-toolbar"
       className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1.5"
     >
-      {/*
-       * The publish button and "Run the app" used to sit here. Both are gone on request: the
-       * circling arrow in the browser bar (`preview-reload`) already publishes — it hands back the
-       * build id and the pane refreshes through `onReload` — and the terminal pictogram was a
-       * second, competing way to fill the same frame. One control per job, in the row that
-       * already owns it.
-       */}
-      <div className="ml-auto flex items-center gap-1">
-        {url !== null ? (
-          // A real link, not a window.open call: a popup that the browser blocks would look
-          // like a broken button, and the user's own middle-click works here.
-          <Button asChild size="icon" variant="ghost" data-testid="preview-new-tab" className="size-8">
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label="Open the preview in a new tab"
-              title="Open the preview in a new tab"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink aria-hidden="true" className="size-4" />
-            </a>
-          </Button>
-        ) : null}
-      </div>
-
       {/*
        * Only rendered when there is something to say. A ready preview used to fill this line with
        * a file count ("Serving 3 files from the preview worker."), which is not a thing a person
