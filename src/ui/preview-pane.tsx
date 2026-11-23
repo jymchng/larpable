@@ -345,11 +345,13 @@ export function PreviewPane({
  */
 function BuildStrip({ build }: { build: BuildControl }): ReactNode {
   const { status } = build;
-  const sentence = describeBuildProgress(status);
 
-  // Nothing to say and nothing wrong: no row, no border, no empty div. Before the first build
-  // this used to be a band whose only content was the sentence removed above.
-  if (sentence.length === 0 && build.problem === null) return null;
+  // News is a toast now (see `components/toast.tsx`): the install step, the build step and the
+  // success all announce themselves in colour over whichever pane the user is looking at. What is
+  // left in this row is the half a toast cannot do — *stay readable after it has gone*. A failed
+  // build's reason and a "you cannot build yet, because…" line are state, not news, and a person
+  // debugging an install should not have to catch a sentence that leaves after eight seconds.
+  if (status.kind !== "failed" && build.problem === null) return null;
 
   return (
     <div
@@ -357,21 +359,14 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
       data-kind={status.kind}
       className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 py-1"
     >
-      {/*
-       * The Hammer and its Cancel button live in the device row now (user request: "Put the full
-       * screen button and the Hammer button on the same div as the 3 adjust width buttons"), so
-       * this line is only the build's sentence. It is not rendered when the sentence is empty.
-       */}
-      {sentence.length > 0 ? (
+      {status.kind === "failed" ? (
         <p
           data-testid="preview-build-status"
-          aria-live="polite"
-          className={cn(
-            "min-w-0 flex-1 truncate font-mono text-[11.5px]",
-            status.kind === "failed" ? "text-destructive" : "text-muted-foreground",
-          )}
+          // No `aria-live` here: the danger toast already announced it, and two politeness
+          // regions reading the same sentence is a stutter, not a courtesy.
+          className="text-destructive min-w-0 flex-1 truncate font-mono text-[11.5px]"
         >
-          {sentence}
+          {describeBuildProgress(status)}
         </p>
       ) : null}
 
@@ -484,45 +479,22 @@ export interface PreviewToolbarProps {
  * those are a browser's words for a browser's controls.
  */
 export function PreviewToolbar({ phase, app }: PreviewToolbarProps) {
-  const appNote = describeAppPreview(app?.state);
-  const sentence = describePreviewPhase(phase);
+  // The row exists to say *how* the bytes are arriving, and nothing else: `served` is "there is a
+  // frame on screen, and something is answering for it". Every sentence this row used to print was
+  // a notification, and notifications are toasts now (user request), including the ones that were
+  // only ever visible from this pane.
   const served = phase.kind === "ready" || app?.state.kind === "running";
-
-  // Every part of this row is optional, so an empty one is not rendered at all rather than left
-  // as a bordered div with nothing in it.
-  if (appNote === null && sentence.length === 0 && !served) return null;
+  if (!served) return null;
 
   return (
     <div
       data-testid="preview-toolbar"
+      // The controller's own reason for the guest answering instead of the worker. It used to be
+      // the `title` of the transient sentence; the sentence is a toast now, but the note is a fact
+      // about *this* preview, and the acceptance run reads it from here.
+      data-note={phase.kind === "ready" ? (phase.note ?? "") : ""}
       className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1.5"
     >
-      {/*
-       * Only rendered when there is something to say. A ready preview used to fill this line with
-       * a file count ("Serving 3 files from the preview worker."), which is not a thing a person
-       * acts on and is already answered by the served-by badge beside it — removed on request, and
-       * with it the empty row that a silent phase would otherwise leave behind.
-       */}
-      {sentence.length > 0 || appNote !== null ? (
-        <p
-          data-testid="preview-status"
-          // The controller's own words for why the guest is answering. It used to reach the DOM
-          // nowhere at all, which made "served by the guest" an unexplained downgrade and hid
-          // the reason a publish failed from both the user and the acceptance run.
-          data-note={phase.kind === "ready" ? (phase.note ?? "") : ""}
-          title={phase.kind === "ready" ? (phase.note ?? undefined) : undefined}
-          aria-live="polite"
-          className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11.5px]"
-        >
-          {sentence}
-          {appNote !== null ? (
-            <span data-testid="preview-app-status" className="block truncate">
-              {appNote}
-            </span>
-          ) : null}
-        </p>
-      ) : null}
-
       <ServedBy phase={phase} app={app} />
     </div>
   );

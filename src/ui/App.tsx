@@ -6,6 +6,7 @@ import { summarizeDistro } from "@/env/distro";
 import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
 import { ChatPanel } from "@/ui/chat-panel";
+import { ToastHost } from "@/ui/components/toast";
 import { detectHandset } from "@/ui/mobile";
 import { DEFAULT_STAGE, stageFromSearch } from "@/ui/stage";
 import { Dashboard } from "@/ui/dashboard";
@@ -21,8 +22,10 @@ import { useBuild } from "@/ui/use-build";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 import { useAppPreview } from "@/ui/use-app-preview";
 import { useLlmSettings } from "@/ui/use-llm-settings";
+import { useNotifications } from "@/ui/use-notifications";
 import { useNetlify } from "@/ui/use-netlify";
 import { usePreview } from "@/ui/use-preview";
+import { useToast } from "@/ui/use-toast";
 
 /**
  * Container: owns the async reads and the booted environment, and hands plain values
@@ -95,6 +98,23 @@ export function App() {
     preview: preview.port,
   });
 
+  // Everything the app has to *announce* is a toast (user request: "ALL NOTIFICATIONS SHOULD BE
+  // TOASTS IN APPROPRIATE COLORS"). `notifications.ts` derives one notification per source from
+  // the objects above — the machine, the build, the preview, the app server, the Netlify check —
+  // and names its colour; this hook raises whatever is new and forgets whatever has gone quiet.
+  //
+  // One call site, on purpose: a second place that raised toasts would be a second place where the
+  // colours, the ids and the durations could disagree.
+  const toast = useToast();
+  useNotifications(toast.raise, {
+    environment: environment.snapshot,
+    bootStage: environment.stage,
+    build: build.status,
+    preview: preview.phase,
+    app: appPreview.state,
+    netlify: netlify.status,
+  });
+
   const distroQuery = useQuery(distroAssetsQueryOptions);
   const distro = summarizeDistro(
     distroQuery.data ?? null,
@@ -113,7 +133,8 @@ export function App() {
   };
 
   return (
-    <Dashboard
+    <>
+      <Dashboard
       version={__APP_VERSION__}
       support={support}
       environment={environment.snapshot}
@@ -179,6 +200,10 @@ export function App() {
           build={build}
         />
       }
-    />
+      />
+      {/* Outside the shell, not inside it: the toast stack is `fixed`, and a `fixed` child of a
+          container with `overflow-x-clip` would be clipped by it. */}
+      <ToastHost toasts={toast.toasts} onDismiss={toast.dismiss} />
+    </>
   );
 }
