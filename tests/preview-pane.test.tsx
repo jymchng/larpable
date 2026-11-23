@@ -88,15 +88,16 @@ describe("PreviewPane", () => {
     expect(html).toContain('data-testid="preview-iframe"');
   });
 
-  it("offers publishing through the bar's reload arrow before anything is published", () => {
+  it("offers publishing through the bar's reload arrow with no idle sentence", () => {
     const html = render({ kind: "idle" });
 
     // The toolbar's own publish button was removed on request; the circling arrow beside the
     // address bar is the publish control now, so it must be live before the first build lands.
     expect(html).not.toContain('data-testid="preview-build"');
     expect(html).toMatch(/data-testid="preview-reload"(?![^>]*disabled)/);
-    expect(html).toContain('data-testid="preview-status"');
-    expect(html).toContain("No preview published yet.");
+    // The idle sentence was removed on request, so there is no status row to read either.
+    expect(html).not.toContain("No preview published yet.");
+    expect(html).not.toContain('data-testid="preview-status"');
     // No iframe: there is no URL to point one at, and a blank frame is indistinguishable
     // from a site that renders nothing.
     expect(html).not.toContain("<iframe");

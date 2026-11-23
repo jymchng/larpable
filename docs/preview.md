@@ -217,7 +217,7 @@ The phases are the user's experience, not the implementation's:
 
 | Phase | The pane shows |
 | --- | --- |
-| `idle` | "No preview published yet." with a **Preview build** control |
+| `idle` | nothing on the status line, and no publish button of its own: the browser bar's reload arrow publishes |
 | `starting` | `Starting the guest's server for dist/…` — this is a real `node` start, seconds to a minute |
 | `publishing` | `Reading N files out of the guest…` |
 | `ready` | the iframe, plus whether a **worker** or the **guest** is serving |

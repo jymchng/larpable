@@ -170,7 +170,9 @@ export function describeAppPreview(state: AppPreviewState | undefined): string |
 export function describePreviewPhase(phase: PreviewPhase): string {
   switch (phase.kind) {
     case "idle":
-      return "No preview published yet.";
+      // Silent. "No preview published yet." was removed on request: the frame's own empty state
+      // says what to do, and this row is chrome, not guidance.
+      return "";
     case "starting":
       return phase.detail;
     case "publishing":
@@ -343,6 +345,11 @@ export function PreviewPane({
  */
 function BuildStrip({ build }: { build: BuildControl }): ReactNode {
   const { status } = build;
+  const sentence = describeBuildProgress(status);
+
+  // Nothing to say and nothing wrong: no row, no border, no empty div. Before the first build
+  // this used to be a band whose only content was the sentence removed above.
+  if (sentence.length === 0 && build.problem === null) return null;
 
   return (
     <div
@@ -355,7 +362,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
        * screen button and the Hammer button on the same div as the 3 adjust width buttons"), so
        * this line is only the build's sentence. It is not rendered when the sentence is empty.
        */}
-      {describeBuildProgress(status).length > 0 ? (
+      {sentence.length > 0 ? (
         <p
           data-testid="preview-build-status"
           aria-live="polite"
@@ -364,7 +371,7 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
             status.kind === "failed" ? "text-destructive" : "text-muted-foreground",
           )}
         >
-          {describeBuildProgress(status)}
+          {sentence}
         </p>
       ) : null}
 
@@ -448,6 +455,12 @@ export function PreviewToolbar({
   onFullscreen,
 }: PreviewToolbarProps) {
   const appNote = describeAppPreview(app?.state);
+  const sentence = describePreviewPhase(phase);
+  const served = phase.kind === "ready" || app?.state.kind === "running";
+
+  // Every part of this row is now optional — the publish button, the run-app button and the file
+  // count are gone — so an empty one is not rendered at all rather than left as a bordered div.
+  if (url === null && appNote === null && sentence.length === 0 && !served) return null;
 
   return (
     <div
@@ -486,7 +499,7 @@ export function PreviewToolbar({
        * acts on and is already answered by the served-by badge beside it — removed on request, and
        * with it the empty row that a silent phase would otherwise leave behind.
        */}
-      {describePreviewPhase(phase).length > 0 || appNote !== null ? (
+      {sentence.length > 0 || appNote !== null ? (
         <p
           data-testid="preview-status"
           // The controller's own words for why the guest is answering. It used to reach the DOM
@@ -497,7 +510,7 @@ export function PreviewToolbar({
           aria-live="polite"
           className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11.5px]"
         >
-          {describePreviewPhase(phase)}
+          {sentence}
           {appNote !== null ? (
             <span data-testid="preview-app-status" className="block truncate">
               {appNote}
