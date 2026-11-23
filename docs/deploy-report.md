@@ -113,3 +113,97 @@ Booted in production with Playwright Chromium against the live URL:
 This deploy also settles the image-name half of goal #17: the production asset is now
 `debian.erofs` at its measured 72 593 408 bytes, so the older `alpine.erofs`
 (4 046 848 bytes) acceptance figure is history, not a current expectation.
+
+## The preview on production (commit `1ee61eb`, measured 2026-11-23)
+
+### How it was deployed
+
+`netlify deploy --dir=dist --prod` could not be used from this host in this session: the CLI
+reaches for a stored token and gets
+
+```
+Warning: Could not read your Netlify auth token from your keychain: Couldn't access platform storage: KeyRevoked
+Error: Authentication required. NETLIFY_AUTH_TOKEN is not set and `netlify login --request <message>` can be used to authenticate.
+```
+
+The site is git-linked, so the deploy came from the push of `1ee61eb` to `main` — the same
+`bun run build` (with `prebuild` → `fetch:distros`) that a CLI deploy would have run. That
+this deploy is the one serving is measured, not assumed: the live entry point changed hash
+within the minute, and the served bundle is byte-identical to the local build.
+
+| Field | Value |
+| --- | --- |
+| Origin commit | `1ee61eb` "Stop the terminal's DOM mirror starving the last line of a command" |
+| Live entry point before | `index-S3Z4iNDk.js` (06:11:25 UTC) |
+| Live entry point after | `index-B9YhbDcW.js` (06:11:56 UTC) |
+| `sha256` of `GET /assets/index-B9YhbDcW.js` | `8cf2f7ac3860178e75a9f15bbc0921c5e4b2591ae5bccf61286f72f6a469e8e5` |
+| `sha256` of the local `dist/assets/index-B9YhbDcW.js` | same value |
+| `sha256` of `GET /preview-sw.js` | `6df33f54a00c5df72dc331cec354aa6ada932b6eef6f01eb70798dfef78499c9` |
+| `sha256` of `public/preview-sw.js` | same value |
+
+The Netlify deploy id is **not** recorded: the API needs a token, which this session does
+not have. The two hash equalities above are what proves *which* code production is running,
+and they are stronger evidence than a deploy id for this question.
+
+### Headers, measured after the deploy
+
+| Request | Result |
+| --- | --- |
+| `GET /` | `200`, `text/html; charset=UTF-8`, `cross-origin-opener-policy: same-origin`, `cross-origin-embedder-policy: require-corp`, `cache-control: public,max-age=0,must-revalidate` |
+| `GET /preview-sw.js` | `200`, `application/javascript; charset=UTF-8`, **8525 bytes** — the worker script is served as JavaScript, not as the SPA entry point |
+| `GET /assets/index-B9YhbDcW.js` | `200`, `application/javascript`, 298 333 bytes, `cache-control: public,max-age=31536000,immutable` |
+| `GET /distros/distros.json` | `200`, `application/json`, 290 bytes (still `max-age=86400`; goal `18e0c110` owns that change) |
+| `GET /distros/debian.erofs` | `200`, `application/octet-stream`, 72 593 408 bytes |
+| `GET /distros/nope.erofs` | `404`, `text/html`, 1116 bytes — a real 404, still carrying `max-age=86400` |
+
+### First production run: 7/8, FAIL — recorded, then fixed
+
+The first run against the live site got through boot, the shell, the runtime warm-up and
+three file writes, then failed:
+
+```
+the build is in the guest's dist/ — …printf "LARPABLE-%s\n" "LS $(find dist -type f | sort | tr '\n' ' ')"\r
+\x1b[C…\x1b[Kprintf "LARPABLE-%s\n" "LS $(find dist -type f | sort | tr '\n' ' ')"\r\n\x1b[?2004l\r\n
+```
+
+The guest had accepted the command — the transcript ends with Enter being pressed — but the
+page's DOM mirror never showed the listing, so the run waited 30 s for a marker that had
+already been printed.
+
+Cause: `src/ui/terminal-panel.tsx` throttled the mirror on arrival only. A chunk arriving
+less than 100 ms after the previous flush was parked in a local `pending` and waited for the
+*next* chunk to carry it. The last line of a command has no next chunk, so it could stay
+there indefinitely — invisible to a screen reader and to any browser test that asserts on
+the mirror. One-line commands are exactly the shape that triggers it.
+
+Fix (`1ee61eb`): `src/ui/terminal-transcript.ts#TranscriptBuffer` owns the buffer and always
+schedules its own trailing flush, so every chunk reaches React within one interval whether
+or not anything follows it. Six unit tests in `tests/terminal-transcript.test.ts` cover it,
+including "emits a chunk that arrives immediately after a flush without more output" — the
+exact sequence the production run lost.
+
+### Second production run: 17/17 PASS
+
+`LARPABLE_ACCEPTANCE_URL=https://larpable.netlify.app bun run acceptance:preview`, against
+the deployment of `1ee61eb`, exit 0, report `docs/preview-browser-report.md`
+(run started `2026-11-23T05:12:02.638Z`, Chromium 159.0.8154.6, page
+`https://larpable.netlify.app`):
+
+- Boot → **Ready** in **5126 ms**; distro `debian`, 2 CPUs, 1024 MiB.
+- Warming the runtime through the Wisp proxy: `LARPABLE-RUNTIME node=v26.13.1`.
+- The guest wrote `dist/index.html` (282 bytes), `dist/assets/index-abc123.css` (159 bytes)
+  and `dist/assets/index-def456.js` (204 bytes), each byte count measured by the guest
+  itself with `wc -c`, and listed all three back with `find`.
+- The pane published build `b-19w7puy`; the service worker holds it (`served by worker`),
+  the iframe URL is `/__preview__/b-19w7puy/`.
+- Read out of the iframe's own document: `getComputedStyle(body).backgroundColor` =
+  `rgb(18, 52, 86)` (the build's `#123456`), `#answer` = `42` (the build's module ran).
+- Deep link `…/__preview__/b-19w7puy/app/editor`: `#answer` = `42` and `#route` =
+  `/__preview__/b-19w7puy/app/editor`, so the fallback served the entry document and the
+  pathname survived for a client router.
+- Screenshots written by that run: `docs/evidence/preview-pane.png` and
+  `docs/evidence/preview-deep-link.png` (1400×950, 201 237 and 202 104 bytes). In both, the
+  build's `rgb(18, 52, 86)` covers ~266 000 pixels — the stylesheet is visibly applied, not
+  just reported.
+
+![The preview rendering a real guest build, on production](evidence/preview-pane.png)
