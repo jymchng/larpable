@@ -48,7 +48,7 @@ import {
 
 import type { ShellOptions, TerminalSession } from "@/env/execution";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
-import { Button } from "@/ui/components/button";
+import { IconButton } from "@/ui/components/icon-button";
 import {
   NO_MODIFIERS,
   TERMINAL_KEYS,
@@ -361,10 +361,13 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
               <button
                 type="button"
                 data-testid={`terminal-tab-close-${tab.id}`}
+                // Inline in a 24 px tab row, so it takes the WCAG 2.5.8 floor (24 px) rather
+                // than the 32 px the standalone actions use; the test reads `data-inline`.
+                data-inline="true"
                 aria-label={`Close ${tab.label}`}
                 title={`Close ${tab.label}`}
                 onClick={() => closeShell(tab.id)}
-                className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-100"
+                className="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 outline-none hover:bg-slate-700 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70"
               >
                 <X aria-hidden="true" className="size-3" />
               </button>
@@ -378,7 +381,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
           title="New shell tab"
           onClick={openTab}
           disabled={!ready}
-          className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
+          className="flex size-8 shrink-0 items-center justify-center rounded text-slate-400 outline-none hover:bg-slate-800 hover:text-slate-100 focus-visible:ring-[3px] focus-visible:ring-sky-400/70 disabled:opacity-40"
         >
           <Plus aria-hidden="true" className="size-4" />
         </button>
@@ -390,54 +393,51 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         <StatusDot testId="terminal-status" tone={badge.tone} label={badge.label} className="ml-auto" />
 
         <div className="flex items-center gap-0.5">
-          <Button
-            data-testid="terminal-copy"
-            aria-label="Copy the selection"
-            title="Copy the selection"
-            size="sm"
-            variant="ghost"
-            className="size-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+          {/* Pictograms, and the terminal's own palette rather than the app's: this strip sits on
+              a near-black screen, where `text-muted-foreground` would be unreadable. `IconButton`
+              still supplies the accessible name, the tooltip and the 32 px target. */}
+          <IconButton
+            testId="terminal-copy"
+            label="Copy the selection"
+            hint="Copy the terminal's selection, not the page's"
+            className="size-8 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
             onClick={() => void copySelection()}
             disabled={!attached}
           >
             <Copy aria-hidden="true" className="size-3.5" />
-          </Button>
-          <Button
-            data-testid="terminal-paste"
-            aria-label="Paste from the clipboard"
-            title="Paste from the clipboard"
-            size="sm"
-            variant="ghost"
-            className="size-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+          </IconButton>
+          <IconButton
+            testId="terminal-paste"
+            label="Paste from the clipboard"
+            hint="Paste into the shell at the cursor"
+            className="size-8 text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-40"
             onClick={() => void paste()}
             disabled={!attached}
           >
             <ClipboardPaste aria-hidden="true" className="size-3.5" />
-          </Button>
-          <Button
-            data-testid="terminal-cut"
-            aria-label="Cut: copy the selection and clear the highlight"
-            title="Cut: copy the selection and clear the highlight (a shell's scrollback cannot be removed)"
-            size="sm"
-            variant="ghost"
-            className="size-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+          </IconButton>
+          <IconButton
+            testId="terminal-cut"
+            label="Cut: copy the selection and clear the highlight"
+            hint="Copy the selection and clear the highlight (a shell's scrollback cannot be removed)"
+            tone="stop"
+            className="size-8 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
             onClick={() => void cut()}
             disabled={!attached}
           >
             <Scissors aria-hidden="true" className="size-3.5" />
-          </Button>
-          <Button
-            data-testid="terminal-clear"
-            aria-label="Clear the terminal"
-            title="Clear the terminal's scrollback"
-            size="sm"
-            variant="ghost"
-            className="size-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+          </IconButton>
+          <IconButton
+            testId="terminal-clear"
+            label="Clear the terminal"
+            hint="Clear the terminal's scrollback"
+            tone="stop"
+            className="size-8 text-red-300 hover:bg-red-950/60 hover:text-red-100 disabled:opacity-40"
             onClick={clearScreen}
             disabled={!attached}
           >
             <Trash2 aria-hidden="true" className="size-3.5" />
-          </Button>
+          </IconButton>
         </div>
       </div>
 

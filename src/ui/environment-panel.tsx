@@ -10,15 +10,15 @@
  * all: offering a button that cannot work is the silent failure PRD §5.3 forbids.
  */
 
-import { Check, Cpu, Power, TriangleAlert, X } from "lucide-react";
+import { Check, Cpu, FlaskConical, Loader2, Power, PowerOff, TriangleAlert, X } from "lucide-react";
 
 import type { SelfTestResult } from "@/env/self-test";
 import type { EnvironmentSnapshot } from "@/env/status";
 import { statusLabel } from "@/env/status";
 import type { SupportReport } from "@/env/support";
 import { Badge } from "@/ui/components/badge";
-import { Button } from "@/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
+import { IconButton } from "@/ui/components/icon-button";
 
 export interface EnvironmentPanelProps {
   support: SupportReport;
@@ -128,34 +128,47 @@ export function EnvironmentPanel({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                data-testid="boot-button"
-                size="sm"
+            {/* Three pictograms, because this row is read once and then recognised: a green
+                power arrow for "boot", a flask for "prove it", a red one for "stop". The words
+                are the accessible name and the tooltip, not painted text (see icon-button.tsx). */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <IconButton
+                testId="boot-button"
+                label={busy ? "Booting…" : "Boot Linux"}
+                hint="Boot a Debian machine from WebAssembly in this tab"
+                tone="run"
                 onClick={onBoot}
                 disabled={busy || ready || snapshot.status === "booting"}
               >
-                <Power aria-hidden="true" />
-                {busy ? "Booting…" : "Boot Linux"}
-              </Button>
-              <Button
-                data-testid="self-test-button"
-                size="sm"
-                variant="outline"
+                {busy ? (
+                  <Loader2 aria-hidden="true" className="animate-spin" />
+                ) : (
+                  <Power aria-hidden="true" />
+                )}
+              </IconButton>
+              <IconButton
+                testId="self-test-button"
+                label={selfTestBusy ? "Checking…" : "Run self-test"}
+                hint="Prove the guest answers and the workspace round-trips"
                 onClick={onSelfTest}
                 disabled={!ready || selfTestBusy}
               >
-                {selfTestBusy ? "Checking…" : "Run self-test"}
-              </Button>
-              <Button
-                data-testid="shutdown-button"
-                size="sm"
-                variant="ghost"
+                {selfTestBusy ? (
+                  <Loader2 aria-hidden="true" className="animate-spin" />
+                ) : (
+                  <FlaskConical aria-hidden="true" />
+                )}
+              </IconButton>
+              <IconButton
+                testId="shutdown-button"
+                label="Shut down"
+                hint="Stop the guest and end every shell attached to it"
+                tone="stop"
                 onClick={onShutdown}
                 disabled={!ready || busy}
               >
-                Shut down
-              </Button>
+                <PowerOff aria-hidden="true" />
+              </IconButton>
             </div>
 
             {stage && (

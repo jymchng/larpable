@@ -15,7 +15,8 @@ This repository is under active construction against
 [`prds/01-whole-prd.md`](prds/01-whole-prd.md). The scaffolding, environment
 abstraction and agent runtime land first; the PRD's §21 Definition of Done is the
 acceptance list, and the current evidence for each item lives in
-`docs/definition-of-done.md` once that document exists.
+[`docs/definition-of-done.md`](docs/definition-of-done.md) — one line per requirement, the
+file or test that proves it, and an explicit list of what is still open.
 
 Nothing in this README claims a capability that is not implemented and measured. Where
 a limitation is known, it is written down rather than worked around.
@@ -58,12 +59,12 @@ src/
   ui/          React application: chat, preview, status
   env/         ExecutionEnvironment abstraction + unkernel adapter
   agent/       Tool-calling loop, system prompt, conversation state
-  llm/         LLMProvider implementations (OpenAI-compatible, Anthropic, mock)
-  tools/       Tool definitions and argument validation
+  agent/tools/ Tool definitions and argument validation
+  llm/         LLMProvider implementations (OpenAI-compatible, Anthropic, mock, demo)
   runtime/     Guest runtime detection (Bun, else Node) and scaffolding
   build/       Dependency installation and production builds
   preview/     Guest HTTP server, host proxy, iframe renderer
-  persistence/ IndexedDB projects, session restore, conversation history
+  projects/    IndexedDB projects, session restore, conversation history
   netlify/     netlify.toml generation and validation
 ```
 
@@ -102,18 +103,47 @@ require-corp` and under strict proxy rules.
 ## Networking inside the guest
 
 Browsers cannot open raw TCP sockets, so the guest reaches the network through a
-[Wisp](https://github.com/MercuryWorkshop/wisp-protocol) proxy. The default proxy
-accepts a fixed list of origins, so `bun install` inside the guest only works when the
-app is served from an allowed origin or from a proxy you host yourself. This is a
-real constraint on a client-side npm install, not something the UI pretends away.
+[Wisp](https://github.com/MercuryWorkshop/wisp-protocol) proxy. This app defaults to
+`wss://wisp.mercurywork.shop/` rather than unkernel's built-in default, because that one
+rejects pages on other origins — measured from the deployed site as a bare WebSocket error
+on the handshake, which leaves the guest with no network while looking perfectly healthy.
+
+Point it somewhere else without a rebuild:
+
+| Override | Scope |
+| --- | --- |
+| `?wisp=wss://your-proxy/` in the URL | One page load, no rebuild |
+| `VITE_WISP_SERVERS=wss://a/,wss://b/` | A deployment, tried in order |
+| `VITE_LINUX_NETWORK=none` | Boots the guest with no network at all |
+
+Any Wisp server works, including one you host yourself (`wisp-server-node`) — nothing here
+depends on the default host staying up. The operator of whichever proxy you use can see
+non-TLS guest traffic, which is one more reason to host your own if that matters.
 
 ## Security boundaries
 
-Generated code is untrusted. The preview renders in a sandboxed iframe without access
-to the host origin, its storage or its credentials; API keys stay in the app's own
-storage and are never written into the guest filesystem or a generated project.
-WebAssembly isolation is not treated as a complete security boundary — the precise
-limits are documented with the hardening work rather than implied here.
+Generated code is untrusted. The preview renders in a sandboxed iframe with no top
+navigation, no popups, no modals and no downloads; API keys are never written into the
+guest filesystem or a generated project; the host-side filesystem API refuses any path that
+escapes `/workspace`; and every command has a time budget, an output cap and a cancel that
+kills it.
+
+The precise boundaries — including the ones this app does **not** have, such as an approval
+gate before destructive commands, and the fact that a previewed page shares this app's origin
+and can therefore read its `localStorage` — are written down in
+[`docs/security.md`](docs/security.md). WebAssembly isolation is not treated as a complete
+security boundary.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [`docs/definition-of-done.md`](docs/definition-of-done.md) | PRD §21, item by item, with the evidence for each and what is still open |
+| [`docs/security.md`](docs/security.md) | §15/§16: sandbox, filesystem and command limits, keys, network, known limitations |
+| [`docs/performance.md`](docs/performance.md) | §17: measured boot/install/build timings, bundle split, responsiveness |
+| [`docs/preview.md`](docs/preview.md) | How the preview is served, and why the iframe needs `allow-same-origin` |
+| [`docs/deploy-report.md`](docs/deploy-report.md) | Production deployment measurements and headers |
+| [`docs/feasibility-report.md`](docs/feasibility-report.md) | The measured unkernel probes behind every runtime decision |
 
 ## License
 

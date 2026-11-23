@@ -21,6 +21,25 @@
   BUN_VERSION = "1.3.13"
   NODE_VERSION = "22"
 
+# The OpenRouter proxy, in production.
+#
+# `vite.config.ts` installs `/api/openrouter` for the dev and preview servers, which is all a
+# developer ever sees. A Netlify deploy is static files, so without this rule the path does not
+# exist: measured, a **POST** to `/api/openrouter/chat/completions` was answered by Netlify's own
+# `404 text/html` page (3984 bytes) — the SPA fallback below only catches GET — and the app
+# printed that HTML page as "the model could not be reached". This rewrite hands the same path
+# to `netlify/functions/openrouter.ts`, which forwards it to OpenRouter and adds the key from
+# `LARPABLE_OPENROUTER_DEFAULT_API_KEY`. `force = true` so it wins over the SPA rule below, and
+# it is declared first because Netlify evaluates redirects in order.
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/openrouter/*"
+  to = "/.netlify/functions/openrouter/:splat"
+  status = 200
+  force = true
+
 # Cross-origin isolation is not optional: unkernel's worker transport and
 # multi-CPU guests need SharedArrayBuffer, which browsers only expose to isolated
 # pages. Without these two headers the app still loads but the guest must run on

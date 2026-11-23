@@ -36,6 +36,7 @@ import {
 import type { ReactNode } from "react";
 
 import { VIEWPORTS, describeViewport, type ViewportName, type ViewportPreset } from "@/ui/viewport";
+import { IconButton } from "@/ui/components/icon-button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -91,7 +92,14 @@ export function PreviewTabStrip({
   );
 }
 
-/** One arrow or the reload control. A real `button`, sized for a mouse and a thumb. */
+/**
+ * One arrow or the reload control: a pictogram that moves the user, so `tone="nav"`.
+ *
+ * The wrapper stays because the title is not the label: an enabled arrow explains where it
+ * goes ("Back to the previous page in this build") while a disabled one explains why it cannot
+ * ("No earlier page in this build to go back to"). That difference is the honesty rule the
+ * whole bar is built on, so it is passed as `hint`.
+ */
 function NavButton({
   testId,
   label,
@@ -108,23 +116,19 @@ function NavButton({
   children: ReactNode;
 }): ReactNode {
   return (
-    <button
-      type="button"
-      data-testid={testId}
-      aria-label={label}
-      title={title}
+    <IconButton
+      testId={testId}
+      label={label}
+      hint={title}
+      tone="nav"
       disabled={disabled ?? false}
       onClick={onClick}
-      className={cn(
-        "text-foreground/80 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors",
-        "hover:bg-accent hover:text-foreground",
-        // A disabled arrow must look disabled, not merely be unclickable: the whole point of
-        // the two arrows here is that the user can see there is no history yet.
-        "disabled:text-muted-foreground/50 disabled:hover:bg-transparent disabled:cursor-default",
-      )}
+      // A disabled arrow must look disabled, not merely be unclickable: the whole point of
+      // the two arrows here is that the user can see there is no history yet.
+      className="text-foreground/80 hover:bg-accent hover:text-foreground disabled:text-muted-foreground/50"
     >
       {children}
-    </button>
+    </IconButton>
   );
 }
 
@@ -278,22 +282,25 @@ export function PreviewDeviceToolbar({
         {VIEWPORTS.map((preset) => {
           const selected = preset.name === viewport.name;
           return (
-            <button
+            <IconButton
               key={preset.name}
-              type="button"
-              data-testid={`preview-viewport-${preset.name}`}
-              data-selected={selected ? "true" : "false"}
+              testId={`preview-viewport-${preset.name}`}
+              // The pictogram is the monitor, the tablet or the phone; the preset's name is the
+              // accessible name and its exact size is the tooltip, which is what makes an
+              // icon-only control honest here rather than a guessing game.
+              label={preset.label}
+              hint={describeViewport(preset)}
+              tone="nav"
               aria-pressed={selected}
-              title={describeViewport(preset)}
+              data-selected={selected ? "true" : "false"}
               onClick={onChange === undefined ? undefined : () => onChange(preset.name)}
               className={cn(
-                "flex h-7 items-center gap-1 px-1.5 font-mono text-[10.5px] transition-colors",
-                selected ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted/60",
+                "rounded-none",
+                selected ? "bg-primary/10 text-foreground" : "text-muted-foreground",
               )}
             >
               {ICONS[preset.name]}
-              {preset.label}
-            </button>
+            </IconButton>
           );
         })}
       </div>

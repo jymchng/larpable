@@ -65,6 +65,7 @@ import { useCallback, useEffect, useReducer, useRef, type ReactNode } from "reac
 import type { PreviewPhase } from "@/preview/controller";
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
+import { IconButton } from "@/ui/components/icon-button";
 import { describeBuildProgress, type BuildStatus } from "@/ui/build-state";
 import { PreviewPanel, previewUrlFor, type PreviewState } from "@/ui/preview-frame";
 import {
@@ -327,36 +328,34 @@ function BuildStrip({ build }: { build: BuildControl }): ReactNode {
       data-kind={status.kind}
       className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5"
     >
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        data-testid="preview-install-build"
+      <IconButton
+        testId="preview-install-build"
+        label={status.kind === "ok" ? "Rebuild" : "Install & build"}
+        hint={
+          build.problem ??
+          "Run npm install and npm run build inside the guest, then publish the result"
+        }
+        tone="run"
         onClick={build.run}
         disabled={disabled}
-        title={build.problem ?? "Run npm install and npm run build inside the guest"}
-        className="gap-1.5"
       >
         {running ? (
-          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+          <Loader2 aria-hidden="true" className="animate-spin" />
         ) : (
-          <Hammer aria-hidden="true" className="size-3.5" />
+          <Hammer aria-hidden="true" />
         )}
-        {status.kind === "ok" ? "Rebuild" : "Install & build"}
-      </Button>
+      </IconButton>
 
       {build.busy ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          data-testid="preview-cancel-build"
+        <IconButton
+          testId="preview-cancel-build"
+          label="Cancel the build"
+          hint="Stop the install or build running in the guest"
+          tone="stop"
           onClick={build.cancel}
-          className="gap-1.5"
         >
-          <CircleStop aria-hidden="true" className="size-3.5" />
-          Cancel
-        </Button>
+          <CircleStop aria-hidden="true" />
+        </IconButton>
       ) : null}
 
       <p
@@ -416,53 +415,60 @@ export function PreviewToolbar({
       data-testid="preview-toolbar"
       className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-2"
     >
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        data-testid="preview-build"
+      {/* Publish is the pane's primary action, so its pictogram is green: play to publish the
+          first build, a circling arrow to publish again. The words are the accessible name. */}
+      <IconButton
+        testId="preview-build"
+        label={label}
+        hint={
+          available
+            ? "Publish the finished dist/ and show it in the frame"
+            : "Boot the machine before publishing a build"
+        }
+        tone="run"
         onClick={onRefresh}
         disabled={!available || busy}
-        className="gap-1.5"
       >
         {busy ? (
-          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+          <Loader2 aria-hidden="true" className="animate-spin" />
         ) : phase.kind === "ready" ? (
-          <RotateCw aria-hidden="true" className="size-3.5" />
+          <RotateCw aria-hidden="true" />
         ) : (
-          <Play aria-hidden="true" className="size-3.5" />
+          <Play aria-hidden="true" />
         )}
-        {label}
-      </Button>
+      </IconButton>
 
       {app !== undefined ? <RunAppButton app={app} available={available} /> : null}
 
       <div className="ml-auto flex items-center gap-1">
         {url !== null ? (
-          <Button asChild size="sm" variant="ghost" data-testid="preview-new-tab" className="gap-1.5">
-            {/* A real link, not a window.open call: a popup that the browser blocks would
-                look like a broken button, and the user's own middle-click works here. */}
-            <a href={url} target="_blank" rel="noreferrer noopener">
-              <ExternalLink aria-hidden="true" className="size-3.5" />
-              New tab
+          // A real link, not a window.open call: a popup that the browser blocks would look
+          // like a broken button, and the user's own middle-click works here.
+          <Button asChild size="icon" variant="ghost" data-testid="preview-new-tab" className="size-8">
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="Open the preview in a new tab"
+              title="Open the preview in a new tab"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink aria-hidden="true" className="size-4" />
             </a>
           </Button>
         ) : null}
 
         {onFullscreen !== undefined ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            data-testid="preview-fullscreen"
+          <IconButton
+            testId="preview-fullscreen"
+            label="Fullscreen"
+            hint={ready ? "Fullscreen preview" : "Publish a build before going fullscreen"}
+            tone="muted"
             onClick={onFullscreen}
             disabled={!ready}
-            title={ready ? "Fullscreen preview" : "Publish a build before going fullscreen"}
-            className="gap-1.5"
           >
-            <Maximize2 aria-hidden="true" className="size-3.5" />
-            <span className="sr-only">Fullscreen</span>
-          </Button>
+            <Maximize2 aria-hidden="true" />
+          </IconButton>
         ) : null}
       </div>
 
@@ -499,17 +505,17 @@ export function PreviewToolbar({
 function RunAppButton({ app, available }: { app: AppPreviewControl; available: boolean }): ReactNode {
   if (app.state.kind === "running") {
     return (
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        data-testid="preview-stop-app"
+      // A square in red: this ends a server, so it must not look like the green run control
+      // next to it. The words live in the accessible name ("Stop app").
+      <IconButton
+        testId="preview-stop-app"
+        label="Stop app"
+        hint="Stop the project's own start script and its server"
+        tone="stop"
         onClick={app.stop}
-        className="gap-1.5"
       >
-        <Square aria-hidden="true" className="size-3.5" />
-        Stop app
-      </Button>
+        <Square aria-hidden="true" />
+      </IconButton>
     );
   }
 
@@ -517,24 +523,28 @@ function RunAppButton({ app, available }: { app: AppPreviewControl; available: b
   const failed = app.state.kind === "failed";
 
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      data-testid="preview-run-app"
+    <IconButton
+      testId="preview-run-app"
+      // The name says which question the button answers: a first run reads the project's
+      // `scripts.start`, so a project without one is told why rather than silently failing.
+      label={failed ? "Run the app again" : "Run the app"}
+      hint={
+        available
+          ? "Start the project's own start script and forward its requests to the guest"
+          : "Boot the machine before running the app"
+      }
+      tone="run"
       onClick={app.run}
       // A device that is booting has nothing to run yet, and a start in flight must not be
       // started twice: both would spawn a second server on the same port.
       disabled={!available || starting}
-      className="gap-1.5"
     >
       {starting ? (
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+        <Loader2 aria-hidden="true" className="animate-spin" />
       ) : (
-        <SquareTerminal aria-hidden="true" className="size-3.5" />
+        <SquareTerminal aria-hidden="true" />
       )}
-      {failed ? "Run the app again" : "Run the app"}
-    </Button>
+    </IconButton>
   );
 }
 

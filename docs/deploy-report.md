@@ -72,9 +72,15 @@ worker/SMP path need.
 
 ## Known gaps in this deployment
 
-- Guest network access (needed by `npm install`) goes through unkernel's default Wisp
-  proxy; the self-test proves the shell and the mount, not that the proxy allows a
-  registry. A self-hosted proxy is configured with `VITE_WISP_SERVER`.
+- Guest network access (needed by `npm install`) goes through a Wisp proxy. This app
+  defaults to `wss://wisp.mercurywork.shop/` (`DEFAULT_WISP_SERVERS`, `src/env/boot.ts`)
+  rather than unkernel's own default, which refuses pages on this origin. The proxy is
+  configured with `VITE_WISP_SERVERS` (a comma-separated list, tried in order) or per page
+  load with `?wisp=wss://…`; `VITE_LINUX_NETWORK=none` boots with no network at all. The
+  deployed guest has since proven real egress (`curl https://example.com` → `HTTP=200`,
+  `docs/evidence/curl-production-transcript.md`), so this is no longer only a shell-and-mount
+  check — but the proxy operator can still see non-TLS guest traffic
+  (`docs/security.md` §7).
 - Deployment is not yet automated from Git in this repository's CI. The CLI deploy above
   used the same `bun run build` Netlify would run, and `prebuild` makes a Git build
   equivalent.

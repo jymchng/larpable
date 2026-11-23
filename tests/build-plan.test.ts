@@ -166,6 +166,7 @@ describe("classifyFailure", () => {
 
   const kinds: Array<[string, BuildFailureKind, string]> = [
     ["missing script", "missing-script", 'npm ERR! Missing script: "build"'],
+    ["an exhausted guest", "out-of-memory", "FATAL ERROR: Reached heap limit: JavaScript heap out of memory"],
     ["network", "network", "npm ERR! code EAI_AGAIN"],
     ["permission", "permission", "npm ERR! code EACCES, mkdir '/root/.npm'"],
     ["missing dependency", "missing-dependency", "Error: Cannot find module 'vite'"],
@@ -208,6 +209,25 @@ describe("classifyFailure", () => {
     expect(failure.summary).toContain("killed by a signal");
     expect(failure.hint).toMatch(/nothing here was invented/);
     expect(failure.detail).toBe("something odd happened");
+  });
+
+  it("names the memory budget it can be raised with when the guest runs out", () => {
+    const failure = classify("napi: ENOMEM: Cannot allocate memory\n");
+
+    expect(failure.kind).toBe("out-of-memory");
+    expect(failure.summary).toContain("ran out of memory");
+    // The hint has to be actionable: the limit is a boot option, so name it and its ceiling.
+    expect(failure.hint).toContain("VITE_LINUX_MEMORY_MIB");
+    expect(failure.hint).toContain("1024 MiB");
+    expect(failure.hint).toContain("4096");
+  });
+
+  it("does not call a bare SIGKILL an out-of-memory failure", () => {
+    // A timeout, a cancel and a user's `kill -9` all end this way. Guessing "memory" from
+    // the word "Killed" alone would blame the wrong thing with full confidence.
+    const failure = classify("Killed\n", { exitCode: null });
+
+    expect(failure.kind).toBe("unknown");
   });
 });
 

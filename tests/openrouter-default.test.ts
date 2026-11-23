@@ -167,3 +167,55 @@ describe("the wiring nobody can see in a unit test", () => {
     expect(example).toContain("NOT `VITE_`-prefixed");
   });
 });
+
+describe("a failure that is a web page, not an API answer", () => {
+  it("names the deployment gap instead of printing the HTML body", async () => {
+    // Measured in production before netlify/functions/openrouter.ts existed: a POST to
+    // /api/openrouter/chat/completions came back as Netlify's own 404 page, and the chat panel
+    // printed that page — kilobytes of markup — as "the model could not be reached".
+    const provider = new OpenAICompatibleProvider({
+      apiKey: "",
+      model: OPENROUTER_FREE_MODEL,
+      baseUrl: OPENROUTER_PROXY_PATH,
+      fetch: (async () =>
+        new Response("<!DOCTYPE html><html><head><title>Page not found</title></head></html>", {
+          status: 404,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })) as typeof fetch,
+    });
+
+    const error = await provider.generate([], []).then(
+      () => null,
+      (cause: unknown) => cause as { message: string },
+    );
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain("HTTP 404");
+    expect(error?.message).toContain("HTML page instead of JSON");
+    expect(error?.message).toContain(OPENROUTER_PROXY_PATH);
+    // The remedy, and none of the page itself.
+    expect(error?.message).toContain("netlify/functions/openrouter.ts");
+    expect(error?.message).not.toContain("<!DOCTYPE");
+    expect(error?.message).not.toContain("<html");
+  });
+
+  it("still quotes a JSON error, because OpenRouter's own words are the useful part", async () => {
+    const provider = new OpenAICompatibleProvider({
+      apiKey: "sk-test",
+      model: OPENROUTER_FREE_MODEL,
+      fetch: (async () =>
+        new Response(JSON.stringify({ error: { message: "No endpoints found" } }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        })) as typeof fetch,
+    });
+
+    const error = await provider.generate([], []).then(
+      () => null,
+      (cause: unknown) => cause as { message: string },
+    );
+
+    // `LLMRequestError` prefixes the provider id; the detail is the provider's own words.
+    expect(error?.message).toBe("openai: HTTP 404 — No endpoints found");
+  });
+});

@@ -25,6 +25,7 @@ import { useState, type ReactNode } from "react";
 
 import { Badge } from "@/ui/components/badge";
 import { Button } from "@/ui/components/button";
+import { IconButton } from "@/ui/components/icon-button";
 import { describeChat, type ChatEntry, type ChatState, type ChatToolEntry } from "@/ui/chat";
 import { cn } from "@/lib/utils";
 
@@ -78,17 +79,15 @@ export function ChatPanel({
           {describeChat(state)}
         </p>
         {state.running ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            data-testid="chat-stop"
+          <IconButton
+            testId="chat-stop"
+            label="Stop the run"
+            hint="Stop the agent after the current tool call"
+            tone="stop"
             onClick={onStop}
-            className="gap-1.5"
           >
-            <CircleStop aria-hidden="true" className="size-3.5" />
-            Stop
-          </Button>
+            <CircleStop aria-hidden="true" />
+          </IconButton>
         ) : null}
       </div>
 
@@ -138,19 +137,22 @@ export function ChatPanel({
             }
             className="border-input bg-background focus-visible:ring-ring min-h-[44px] flex-1 resize-none rounded-md border px-2.5 py-2 font-mono text-[12.5px] outline-none focus-visible:ring-[3px] disabled:opacity-60"
           />
+          {/* Send is the prompt's primary action, so it keeps the filled (primary) variant
+              rather than the ghost one: the pictogram is the label, the fill is the emphasis. */}
           <Button
             type="submit"
-            size="sm"
+            size="icon"
             data-testid="chat-send"
+            aria-label={state.running ? "Sending…" : "Send the prompt"}
+            title="Send the prompt (Enter)"
             disabled={!canSend}
-            className="h-11 gap-1.5"
+            className="size-11"
           >
             {state.running ? (
-              <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
             ) : (
-              <Send aria-hidden="true" className="size-3.5" />
+              <Send aria-hidden="true" className="size-4" />
             )}
-            Send
           </Button>
         </div>
         {blocked ? (

@@ -17,3 +17,91 @@ All notable changes to Larpable are documented here. The format follows
   the shell's status bar so the UI never claims more than the environment manager knows.
 - Cross-origin isolation headers for `dev`, `preview` and production (`netlify.toml`),
   including cache policy for hashed assets and the pinned Linux images.
+
+- **The machine.** unkernel boots in a Web Worker from the Debian 13 image served from this
+  origin, with an IndexedDB data disk (the root overlay survives a reload) and guest
+  networking through a Wisp proxy. The kernel is lazily imported, so the 10.2 MB WebAssembly
+  binary and its 533 kB loader are not in the entry bundle.
+- **The environment contract.** `ExecutionEnvironment` (`src/env/execution.ts`) with one
+  unkernel adapter: a `ready`-gated state machine, streamed output, a per-command time budget
+  (`VITE_COMMAND_TIMEOUT_MS`), `SIGKILL` cancellation, an 8 MiB per-stream output cap, and
+  typed errors for timeout, cancellation, not-ready and paths outside the workspace.
+- **Guest toolchain.** Runtime detection (Bun when it works, Node + npm otherwise) with a
+  first-use `node` shim that is warmed once, retried once, and cached in `~/.local` on the
+  persistent disk — measured at 51.8 s cold and 15.8 s on the next boot.
+- **Builds.** Scaffolding (React+TS, vanilla, Vue, Svelte), in-guest install and production
+  build, real output-directory resolution, build ids, and classified failures
+  (`missing-script`, `missing-dependency`, `compile`, `network`, `permission`, `timeout`,
+  `out-of-memory`, `unknown`) that quote the guest's own log lines.
+- **`netlify.toml`.** Generated from inspected project facts, kept current, and validated —
+  including a cross-product test over every framework × package-manager pair.
+- **Preview.** A guest HTTP server behind a host proxy, build-id routing that cannot serve a
+  stale build, a service worker at `/__preview__/`, and a sandboxed iframe. The pane is
+  dressed as a browser: a tab strip naming the build, back/forward, a read-only address bar
+  that follows the frame's own navigation, reload, and a device toolbar — with disabled
+  arrows that are genuinely disabled and no invented history.
+- **Agent.** OpenAI-compatible, Anthropic, mock and demo providers; a tool-calling loop with
+  multi-call turns, streamed text, cancellation, an iteration limit and build-claim checking;
+  filesystem, shell, build, preview, project and Netlify tools with validated arguments; and
+  a system prompt that encodes the create/modify/recover procedures.
+- **UI.** Split agent/preview layout, streaming chat with inspectable tool rows, build strip
+  with cancel, live environment panel, terminal with tabs, sticky modifiers and
+  selection-accurate clipboard actions, settings for provider/model/key, and a status bar
+  driven by real state.
+- **Projects.** IndexedDB-backed project store and manager: create, open, rename, delete,
+  session restore, rule-based Netlify config, per-project workspace roots.
+- **A second provider path.** A "Default" option that talks to OpenRouter's free models
+  through this app's own `/api/openrouter` proxy, so a deployment can supply the key
+  server-side. The key is deliberately not `VITE_`-prefixed, never enters the bundle, and is
+  never logged.
+
+### Changed
+
+- **Controls are pictograms, not sentences.** Every button in the chat box, the environment
+  card, the build strip, the preview toolbar, the browser chrome, the settings panel and the
+  terminal is now a lucide icon whose colour states what kind of action it is — green to run,
+  red to stop or destroy, grey when it is secondary, plain foreground when it only moves you —
+  through one `IconButton` (`src/ui/components/icon-button.tsx`) that cannot be built without
+  an accessible name. The words are unpainted, not deleted: `aria-label` is the name and
+  `title` is the tooltip, so a screen reader announces "Install & build" and a mouse user reads
+  the same sentence on hover. The 32 px hit target, the visible focus ring and the
+  name/tooltip pairing are asserted by `tests/icon-buttons.test.tsx`, which sweeps every button
+  on thirteen rendered states and fails on an empty name; `scripts/icon-buttons-evidence.ts`
+  repeats the audit against the running page in Chromium (measured: 33 buttons, 20 icon-only,
+  0 unnamed, 0 untitled, 0 below the floor at 1440 px and at 390 px) and writes
+  `docs/evidence/icon-buttons-desktop.png` / `-mobile.png`.
+- The dev and preview servers bind to `127.0.0.1` by default; exposing them requires an
+  explicit `LARPABLE_DEV_HOST`, because a Vite dev server can execute code. Permissive
+  `Host` headers and CORS follow the same opt-in.
+- The preview iframe's sandbox includes `allow-same-origin`, because a service worker cannot
+  serve an opaque-origin frame — measured, with the consequence (the frame shares this
+  origin's storage) documented in `docs/security.md` rather than glossed over.
+- Guest images are pinned to the installed unkernel release and fetched by
+  `bun run fetch:distros`; the runtime decisions that used to say "Alpine" now name the image
+  they were measured on.
+
+### Fixed
+
+- The guest terminal showed a bash `PS1` template verbatim (`\[\033[36m\]\w …`) because the
+  shell was `dash`; it now spawns an interactive login bash with a POSIX-safe fallback.
+- Copy/Cut in the terminal panel acted on the whole panel instead of the selection; the
+  actions now read the terminal's own selection and paste targets the active tab only.
+- The preview pane rendered blank for real builds: the frame needed `allow-same-origin` to be
+  a worker client, and the proxied documents needed COOP/COEP to survive this app's
+  cross-origin isolation. Both are asserted by test so they cannot regress quietly.
+- A reload in the preview re-published whatever was in `dist/`; it now re-publishes the build
+  on screen and loads a fresh document at the same URL.
+- A guest killed by memory pressure was reported as "unknown"; it is now classified as
+  `out-of-memory` with the memory budget and how to raise it, while a bare `SIGKILL` is still
+  reported as what it is.
+
+### Documentation
+
+- `docs/definition-of-done.md` — PRD §21, item by item, with per-item evidence and an
+  explicit list of what is still open.
+- `docs/security.md` — the §15/§16 controls, the measured constraints, and five named
+  limitations.
+- `docs/performance.md` — measured boot, install, build and first-frame timings, the bundle
+  split behind lazy loading, and the frame-gap measurement taken during a real build.
+- README: current setup, the Wisp caveat with a self-hosted proxy option, the security
+  summary, and a documentation index.

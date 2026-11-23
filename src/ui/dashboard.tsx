@@ -9,6 +9,9 @@ import { Badge } from "@/ui/components/badge";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
 import { MIN_SPLIT, clampSplit, splitAfterKey, splitFromPointer } from "@/ui/split";
+import { DEFAULT_STAGE, type PaneStage } from "@/ui/stage";
+import { StageSwitcher } from "@/ui/stage-switcher";
+import { useAppHeight } from "@/ui/use-app-height";
 import { cn } from "@/lib/utils";
 
 export interface DashboardProps {

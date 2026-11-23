@@ -202,6 +202,7 @@ export type BuildFailureKind =
   | "compile"
   | "network"
   | "permission"
+  | "out-of-memory"
   | "missing-entry"
   | "timeout"
   | "unknown";
@@ -226,7 +227,7 @@ export function errorLines(output: string, limit = 6): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .filter((line) =>
-      /error|ERR!|failed|cannot|can't|unexpected|not found|ENOENT|EACCES|EAI_AGAIN|ENOTFOUND|exited|Rollup|SyntaxError|TS\d{4}/i.test(
+      /error|ERR!|failed|cannot|can't|unexpected|not found|ENOENT|EACCES|EAI_AGAIN|ENOTFOUND|exited|Rollup|SyntaxError|TS\d{4}|out of memory|ENOMEM|OOMKilled|bad_alloc/i.test(
         line,
       ),
     );
@@ -256,6 +257,17 @@ export function classifyFailure(options: {
       summary: `\`${options.command}\` ${status}: the script it names does not exist in package.json.`,
       detail,
       hint: "Add the script to package.json (a `build` script is required) or run the command the project actually defines.",
+    };
+  }
+
+  if (/out of memory|OOMKilled|ENOMEM|cannot allocate memory|memory exhausted|heap out of memory|bad_alloc/i.test(output)) {
+    return {
+      kind: "out-of-memory",
+      summary: `\`${options.command}\` ${status}: the guest ran out of memory.`,
+      detail,
+      hint:
+        "The guest's memory is fixed when it boots: `VITE_LINUX_MEMORY_MIB` (1024 MiB by default, at most 4096). " +
+        "Raise it and rebuild, or make the step hold less in memory at once.",
     };
   }
 

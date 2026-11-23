@@ -27,5 +27,11 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "scripts/**/*.ts",
+    "netlify/functions/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

@@ -12,7 +12,9 @@
  */
 
 import type { ReactNode } from "react";
+import { RotateCcw } from "lucide-react";
 
+import { IconButton } from "@/ui/components/icon-button";
 import { Input } from "@/ui/components/input";
 import { cn } from "@/lib/utils";
 import {
@@ -140,14 +142,16 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
         </p>
       ) : null}
 
-      <button
-        type="button"
-        data-testid="settings-reset"
+      {/* A pictogram with the sentence as its accessible name: the reset is rare and
+          reversible, so it costs no words in a panel that is mostly fields. */}
+      <IconButton
+        testId="settings-reset"
+        label="Reset to the demo provider"
+        hint="Reset the provider, model and key to the demo defaults"
         onClick={() => onChange(defaultSettings())}
-        className="text-muted-foreground hover:text-foreground font-mono text-[10.5px] underline-offset-2 hover:underline"
       >
-        Reset to the demo provider
-      </button>
+        <RotateCcw aria-hidden="true" />
+      </IconButton>
     </section>
   );
 }

@@ -130,7 +130,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     if (!response.ok) {
-      throw new LLMRequestError(this.id, await describeFailure(response), response.status);
+      throw new LLMRequestError(
+        this.id,
+        await describeFailure(response, `${this.#baseUrl}/chat/completions`),
+        response.status,
+      );
     }
 
     const contentType = response.headers.get("content-type") ?? "";
@@ -270,12 +274,37 @@ function mapFinishReason(reason: string | null, hasToolCalls: boolean): LLMRespo
   return "stop";
 }
 
-/** Status plus the provider's own explanation, cut short. Never includes the request headers. */
-export async function describeFailure(response: Response): Promise<string> {
+/**
+ * Status plus the provider's own explanation, cut short. Never includes the request headers.
+ *
+ * An HTML body is called out rather than quoted. A static host (or a single-page-app fallback)
+ * answers a path it does not serve with a *page*, and printing that page as the error is how
+ * "the model could not be reached: HTTP 404 — <!DOCTYPE html> … Netlify" happened in production:
+ * the deployment had no `/api/openrouter` proxy, so a POST fell through to the host's own 404.
+ * The sentence now says what the body was and where the fix lives, and the page's markup — a few
+ * kilobytes of stylesheet and boilerplate — never reaches the chat transcript.
+ */
+export async function describeFailure(response: Response, endpoint?: string): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "";
   const body = await response.text().catch(() => "");
+  if (looksLikeHtml(contentType, body)) {
+    const where = endpoint === undefined ? "The endpoint" : `\`${endpoint}\``;
+    return (
+      `HTTP ${String(response.status)} — ${where} answered with an HTML page instead of JSON, so ` +
+      `no API proxied the request. If this is the app's own /api/openrouter path, the deployment ` +
+      `has no proxy for it (netlify/functions/openrouter.ts); see docs/deploy-report.md.`
+    );
+  }
   const detail = extractMessage(body);
   const suffix = detail === null ? "" : ` — ${detail}`;
   return `HTTP ${String(response.status)}${suffix}`;
+}
+
+/** True for a document, not an API answer: by content type, or by a body that starts with a tag. */
+export function looksLikeHtml(contentType: string, body: string): boolean {
+  if (contentType.toLowerCase().includes("text/html")) return true;
+  const head = body.trimStart().slice(0, 64).toLowerCase();
+  return head.startsWith("<!doctype") || head.startsWith("<html");
 }
 
 function extractMessage(body: string): string | null {
