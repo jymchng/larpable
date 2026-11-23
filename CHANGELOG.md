@@ -54,6 +54,16 @@ All notable changes to Larpable are documented here. The format follows
   through this app's own `/api/openrouter` proxy, so a deployment can supply the key
   server-side. The key is deliberately not `VITE_`-prefixed, never enters the bundle, and is
   never logged.
+- **`install_dependencies`, and it runs Bun only.** The install is a tool again, for the
+  reason it was removed: a model that sends `npm install` through `execute_command` and never
+  reads the log can go on to "fix" a build that failed because `node_modules/` was empty. The
+  tool makes one claim checkable — *installed, or here is the guest's own error* — and it
+  never substitutes a package manager: on a machine whose runtime detection chose npm it
+  refuses before running anything, and when `bun` itself is missing it returns the guest's 127
+  instead of re-running with npm. `BuildManager` gained `packageManager`/`fallbackToNpm`
+  (default off, so the tool's "Bun only" is the manager's default rather than a tool's private
+  convention), and the pane's manager now prefers Bun because that is what the supported guest
+  was measured to run (`docs/performance.md`).
 
 ### Changed
 

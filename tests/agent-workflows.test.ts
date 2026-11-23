@@ -5,7 +5,7 @@
  * quietly faked the interesting half would prove nothing:
  *
  * - **Real:** the tool set (`scaffold_project`, `write_file`, `edit_file`,
- *   `execute_command` for the install, `ensure_netlify_config`, `build_project`, `publish_preview`),
+ *   `install_dependencies` for the install, `ensure_netlify_config`, `build_project`, `publish_preview`),
  *   the `BuildManager` (command detection, log capture, failure classification, the
  *   entry-point check), `ensureNetlifyConfig` (facts, generation, validation of the file on
  *   disk), the preview controller's state machine, the loop's ordering and validation, the
@@ -223,10 +223,11 @@ async function harness(options: HarnessOptions): Promise<Harness> {
   const environment = new FakeEnvironment({ tree });
   await environment.initialize();
 
-  // The install, as npm would answer it. Real npm is minutes and needs the network; what
-  // this test needs from it is the exit status and the log line the agent reads.
-  environment.script("npm install --no-audit --no-fund", () => ({
-    stdout: "added 84 packages, and audited 85 packages in 5s\n",
+  // The install, as the guest's Bun answers it. A real `bun install` is tens of seconds and
+  // needs the network (`docs/performance.md`: 41.9 s for 67 packages); what this test needs
+  // from it is the exit status and the log line the agent reads.
+  environment.script("bun install", () => ({
+    stdout: "Resolved, downloaded and extracted [84]\nSaved lockfile\n",
     durationMs: 5_000,
   }));
 
@@ -236,7 +237,7 @@ async function harness(options: HarnessOptions): Promise<Harness> {
    * is what makes the recovery flow causal: the agent's edit is the only thing that changes
    * the verdict.
    */
-  environment.script("npm run build", async () => {
+  environment.script("bun run build", async () => {
     const source = decode(await environment.readFile(`${WORKSPACE}/src/App.tsx`));
     if (source.includes("<<<BROKEN>>>")) {
       return { exitCode: 2, stdout: "", stderr: COMPILE_ERROR, durationMs: 412 };
@@ -269,7 +270,9 @@ async function harness(options: HarnessOptions): Promise<Harness> {
   const manager = new BuildManager({
     environment,
     framework: "react-ts",
-    packageManager: "npm",
+    // The app's own manager prefers Bun (`src/ui/use-build.ts`), so the flow is driven the
+    // way the product drives it rather than through a manager the product no longer uses.
+    packageManager: "bun",
     now: () => (clock += 10),
     nextId: (sequence) => `build-${String(sequence)}`,
   });
@@ -284,7 +287,7 @@ async function harness(options: HarnessOptions): Promise<Harness> {
     ensure: (ensureOptions) =>
       ensureNetlifyConfig(environment, {
         ...(ensureOptions?.root === undefined ? {} : { root: ensureOptions.root }),
-        hints: { framework: "react-ts", packageManager: "npm", packageManagerVersion: "10.9.0" },
+        hints: { framework: "react-ts", packageManager: "bun", packageManagerVersion: "1.4.5" },
         build: buildOutput(),
       }),
   };
@@ -327,7 +330,7 @@ async function harness(options: HarnessOptions): Promise<Harness> {
   // that modify an existing project.
   if (options.seed === "project") {
     await ensureNetlifyConfig(environment, {
-      hints: { framework: "react-ts", packageManager: "npm", packageManagerVersion: "10.9.0" },
+      hints: { framework: "react-ts", packageManager: "bun", packageManagerVersion: "1.4.5" },
     });
     const first = await manager.build();
     expect(first.ok, `the seeded project must build: ${first.failure?.summary ?? ""}`).toBe(true);
@@ -343,7 +346,7 @@ async function harness(options: HarnessOptions): Promise<Harness> {
     build: manager,
     netlify,
     preview,
-    project: options.seed === "empty" ? { exists: false } : { exists: true, framework: "react-ts", packageManager: "npm" },
+    project: options.seed === "empty" ? { exists: false } : { exists: true, framework: "react-ts", packageManager: "bun" },
     onEvent: (event: AgentEvent) => {
       if (event.type !== "tool-end" || event.execution.name !== "build_project") return;
       const data = event.execution.data as { buildId?: unknown } | undefined;
@@ -383,13 +386,9 @@ describe("§18.3 create: a landing page from nothing to a published build", () =
             { name: "write_file", arguments: { path: "src/style.css", content: CSS } },
           ],
         }),
-        // 4-6: install, configure, build. The install is a command, not a tool: that is the
-        // whole point of not having an `install_dependencies` in the registry.
-        () => ({
-          calls: [
-            { name: "execute_command", arguments: { command: "npm install --no-audit --no-fund" } },
-          ],
-        }),
+        // 4-6: install, configure, build. The install goes through `install_dependencies`,
+        // which is Bun-only and reports the guest's own failure instead of substituting npm.
+        () => ({ calls: [{ name: "install_dependencies" }] }),
         () => ({ calls: [{ name: "ensure_netlify_config" }] }),
         () => ({ calls: [{ name: "build_project" }] }),
         // 7: publish the build the tool just reported.
@@ -413,7 +412,7 @@ describe("§18.3 create: a landing page from nothing to a published build", () =
 
     // netlify.toml: written at the root, derived from the project, and validated.
     const toml = await h.read(`${WORKSPACE}/netlify.toml`);
-    expect(toml).toContain('command = "npm run build"');
+    expect(toml).toContain('command = "bun run build"');
     expect(toml).toContain('publish = "dist"');
     expect(h.session.evidence().netlify).toEqual({ attempted: true, ok: true, errors: [] });
 

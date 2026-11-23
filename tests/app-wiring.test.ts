@@ -70,6 +70,7 @@ function installResult(overrides: Partial<InstallResult> = {}): InstallResult {
     packageManager: "npm",
     lockfile: "package-lock.json",
     failure: null,
+    note: null,
     ...overrides,
   };
 }
@@ -80,6 +81,8 @@ function stubManager(options: { build?: BuildResult } = {}) {
   const built = options.build ?? buildResult();
   const history: BuildResult[] = [];
   const manager: BuildPort = {
+    packageManager: "npm",
+    runtimeNote: null,
     install: async () => installed,
     build: async () => {
       history.push(built);
@@ -133,6 +136,34 @@ describe("the objects the app shell builds", () => {
 
     expect(defaultBuildManager(env, undefined)).toBeInstanceOf(BuildManager);
     expect(defaultBuildRuntime(env)).toBeInstanceOf(RuntimeBootstrap);
+  });
+
+  it("installs with Bun, because that is what the guest was measured to run", async () => {
+    const env = await environment();
+
+    const manager = defaultBuildManager(env, undefined);
+
+    expect(manager.packageManager).toBe("bun");
+    expect(manager.runtimeNote).toBeNull();
+  });
+
+  it("still works on an image without Bun: the pane's manager may fall back, and says why", async () => {
+    const env = await environment();
+    // The un-scripted `bun install` answers 127, which is the guest saying "no bun here".
+    env.script("npm install --no-audit --no-fund", {
+      stdout: "added 84 packages, and audited 85 packages in 5s\n",
+      durationMs: 5_000,
+    });
+    const manager = defaultBuildManager(env, undefined);
+
+    const result = await manager.install();
+
+    expect(result.ok).toBe(true);
+    expect(result.packageManager).toBe("npm");
+    expect(result.note).toContain("no usable `bun`");
+    // The fallback is recorded, not hidden: the tool that refuses after it reads this.
+    expect(manager.packageManager).toBe("npm");
+    expect(manager.runtimeNote).toContain("npm installed the dependencies instead");
   });
 });
 

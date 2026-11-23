@@ -60,6 +60,14 @@ export interface BuildControl {
  * The real objects the shell builds, exported so a test can assert the app uses *them* rather
  * than a stub: the manager is what installs and builds inside the guest, and the bootstrap is
  * the gate that pays the shim's ~147 s once per machine instead of once per build.
+ *
+ * The manager is built to prefer **Bun** (`packageManager: "bun"`): `bun install` and
+ * `bun run build` are measured to work in the supported guest, and `src/runtime/detect.ts`
+ * already answers "Bun when it works". `fallbackToNpm` is the one concession the pane makes
+ * and the agent's install tool does not: if the image turns out to have no `bun` binary at all
+ * (exit 127), the install is re-run with npm and the result says so — a button labelled
+ * "Install & build" should still work there. The tool gets the same manager through the
+ * controller, and it refuses rather than letting npm stand in silently.
  */
 export const defaultBuildRuntime = (environment: ExecutionEnvironment): WarmGate =>
   new RuntimeBootstrap({ environment, persistentDataDisk: true });
@@ -67,7 +75,13 @@ export const defaultBuildRuntime = (environment: ExecutionEnvironment): WarmGate
 export const defaultBuildManager = (
   environment: ExecutionEnvironment,
   root: string | undefined,
-): BuildPort => new BuildManager({ environment, ...(root === undefined ? {} : { root }) });
+): BuildPort =>
+  new BuildManager({
+    environment,
+    packageManager: "bun",
+    fallbackToNpm: true,
+    ...(root === undefined ? {} : { root }),
+  });
 
 export function useBuild(options: UseBuildOptions): BuildControl {
   const {

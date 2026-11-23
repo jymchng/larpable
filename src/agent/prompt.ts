@@ -66,7 +66,7 @@ export const CREATE_PROCEDURE: readonly string[] = [
   "Select an appropriate framework. React + TypeScript + Vite (`react-ts`) is the default; `vue`, `svelte` and `vanilla` are available.",
   "Scaffold the project with `scaffold_project`. Do not run a generator such as `npm create vite`: the templates ship with the app, and the guest's package manager costs minutes on a cold start.",
   "Create the necessary source files with `write_file`. Write real content for the request — a landing page needs its sections, not placeholders.",
-  "Install dependencies by running the package manager in the guest with `execute_command` (for example `npm install`). Do this before building, and again after changing `package.json`; there is no separate install tool.",
+  "Install dependencies with `install_dependencies`, which runs the guest's Bun. If `bun --version` fails first, install Bun (see \"Bun is the package manager\") and retry. Do this before building, and again after changing `package.json`. It never falls back to npm: if this guest cannot run Bun even after you installed it, report the guest's own error instead of installing some other way.",
   "Generate `netlify.toml` with `ensure_netlify_config`.",
   "Verify the deployment configuration. `ensure_netlify_config` validates the file it wrote; a validation error is a problem in the project, not a message to reword.",
   "Execute the production build with `build_project`.",
@@ -93,6 +93,27 @@ export const NETLIFY_RULES: readonly string[] = [
   "Run `ensure_netlify_config` after dependencies are installed (it reads `package.json` to derive the build command) and again after any change to the build command, publish directory, SPA routing or functions.",
   "Never write `netlify.toml` by hand with `write_file`. The generator derives it from what the project actually is; a hand-written file is how a publish directory drifts away from the real build output.",
   "If validation reports an error, fix the project (the build script, the output directory, the router) and run `ensure_netlify_config` again. Do not describe a project as ready to deploy while its configuration is invalid.",
+];
+
+/**
+ * Bun, and what to do when it is not there (§7.1–7.3).
+ *
+ * This section is stronger than "prefer Bun", because the product is: the guest is measured
+ * to run Bun (`docs/performance.md`), `install_dependencies` refuses to substitute npm, and a
+ * manager the model picked for itself would make the tool's refusal look arbitrary. So the
+ * instruction is a pair — *use Bun* and, when it is missing, *install Bun* — that leaves npm
+ * nowhere to go.
+ *
+ * The installer command below is the upstream one and is **not** measured in this guest: no
+ * goal has run it inside the kernel yet (tracked as an open goal). That is exactly why the
+ * rule makes the model verify with `bun --version` and quote the guest's output: the prompt
+ * may suggest a command, but only the guest's answer counts as evidence.
+ */
+export const BUN_RULES: readonly string[] = [
+  "Bun is this machine's package manager and its JavaScript runtime. Reach for it first: `bun install` (or the `install_dependencies` tool) for dependencies, `bun run <script>` for any script in `package.json` — including the build — `bun add <package>` to add a dependency, `bunx <tool>` for a one-off binary, `bun test` for tests. Do not use `npm`, `npx`, `yarn` or `pnpm` in its place.",
+  "If `bun --version` exits 127 or prints `bun: not found`, install Bun before you conclude anything: `curl -fsSL https://bun.sh/install | bash`, then `~/.bun/bin/bun --version` (or export `BUN_INSTALL=\"$HOME/.bun\"` and put `$BUN_INSTALL/bin` on `PATH` so plain `bun` resolves). Then retry the install.",
+  "Quote what the guest said. If the installer failed — no network, no `curl`, a missing shared library — report those lines; they are the reason the user cannot build, and they are not a sentence you can improve by rewording.",
+  "Never \"make it work\" by installing with npm. This product is Bun-only: a package manager you substituted behind the user's back is a fact you would then have to hide, and `install_dependencies` will not do it for you either.",
 ];
 
 /** The rules that make the agent's report trustworthy. Repeated at the end of the prompt. */
@@ -147,6 +168,14 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       "# netlify.toml is mandatory",
       "",
       bulletList(NETLIFY_RULES),
+    ].join("\n"),
+  );
+
+  sections.push(
+    [
+      "# Bun is the package manager",
+      "",
+      bulletList(BUN_RULES),
     ].join("\n"),
   );
 

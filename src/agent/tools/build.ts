@@ -18,6 +18,7 @@
  */
 
 import { clampText, defineTool, failure, success, type AgentTool, type ToolContext } from "./types";
+import { installDependenciesTool } from "./install";
 import type { BuildFailure } from "@/build/plan";
 import type { BuildResult } from "@/build/manager";
 
@@ -97,4 +98,4 @@ export const buildProjectTool: AgentTool = defineTool(
   },
 );
 
-export const BUILD_TOOLS: readonly AgentTool[] = [buildProjectTool];
+export const BUILD_TOOLS: readonly AgentTool[] = [installDependenciesTool, buildProjectTool];

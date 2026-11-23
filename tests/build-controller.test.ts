@@ -55,6 +55,7 @@ function installResult(overrides: Partial<InstallResult> = {}): InstallResult {
     packageManager: "npm",
     lockfile: "package-lock.json",
     failure: null,
+    note: null,
     ...overrides,
   };
 }
@@ -69,6 +70,8 @@ function stubManager(options: {
   const builds = [...(options.builds ?? [buildResult()])];
   const calls = { install: 0, build: 0 };
   const manager: BuildPort = {
+    packageManager: "npm",
+    runtimeNote: null,
     async install() {
       calls.install += 1;
       const next = installs.shift() ?? installResult();
@@ -214,6 +217,8 @@ describe("createBuildController", () => {
 
   it("restores the status implied by history when a run throws", async () => {
     const manager: BuildPort = {
+      packageManager: "npm",
+      runtimeNote: null,
       install: async () => installResult(),
       build: async () => {
         throw new Error("the guest went away");
@@ -230,6 +235,8 @@ describe("createBuildController", () => {
 
   it("treats a cancellation as no verdict: the last completed attempt stands", async () => {
     const manager: BuildPort = {
+      packageManager: "npm",
+      runtimeNote: null,
       install: async () => installResult(),
       build: (options = {}) =>
         new Promise((_resolve, reject) => {

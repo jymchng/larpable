@@ -60,12 +60,31 @@ export interface CommandLog {
 export interface InstallResult {
   ok: boolean;
   log: CommandLog;
-  /** The script/manager command that ran, e.g. `npm ci --no-audit --no-fund`. */
+  /** The script/manager command that ran, e.g. `bun install` or `npm ci --no-audit --no-fund`. */
   command: string;
+  /** The manager that actually ran: `bun` unless a measured fallback replaced it with npm. */
   packageManager: PackageManager;
   /** The lockfile that made `ci`-style installation possible, or null. */
   lockfile: string | null;
   failure: BuildFailure | null;
+  /**
+   * Why npm ran instead of Bun, in the guest's own words, or null when Bun did the install.
+   *
+   * This is a measurement, not a preference: it is set only when `bun` itself answered 127 or
+   * "not found", which is the one failure that says "this image has no Bun" rather than "this
+   * install has a problem".
+   */
+  note: string | null;
+}
+
+/** Extra decisions a single install call may take. */
+export interface InstallCallOptions extends ExecutionOptions {
+  /**
+   * Re-run with npm when the guest has no `bun` binary. Off by default: the product prefers
+   * Bun, and a caller that must not swap managers (the agent's `install_dependencies` tool)
+   * needs a failure it can report rather than a silent substitution.
+   */
+  fallbackToNpm?: boolean;
 }
 
 export interface BuildResult {
@@ -96,7 +115,16 @@ export interface BuildManagerOptions {
   runtime?: WarmRuntime;
   /** Project root in the guest. Defaults to the environment's workspace. */
   root?: string;
+  /** The manager to install with. Defaults to `npm`; the app passes `bun`. */
   packageManager?: PackageManager;
+  /**
+   * Let npm stand in when `bun` itself is missing (exit 127).
+   *
+   * Off by default, so the agent's install tool gets a failure it can report instead of a
+   * silent substitution. The pane turns it on: a button labelled "Install & build" should
+   * still work on an image without Bun.
+   */
+  fallbackToNpm?: boolean;
   /** Framework hint for build-command and output-dir defaults. */
   framework?: Framework;
   /** Budget for an install. Default 600 s (a cold npm install is minutes). */
@@ -114,7 +142,10 @@ export class BuildManager {
   readonly #environment: ExecutionEnvironment;
   readonly #runtime: WarmRuntime | undefined;
   readonly #root: string;
-  readonly #packageManager: PackageManager;
+  #packageManager: PackageManager;
+  readonly #fallbackToNpm: boolean;
+  /** The guest's own words the first time Bun turned out not to exist, or null. */
+  #bunNote: string | null = null;
   readonly #framework: Framework | undefined;
   readonly #installTimeoutMs: number;
   readonly #buildTimeoutMs: number;
@@ -130,6 +161,7 @@ export class BuildManager {
     this.#runtime = options.runtime;
     this.#root = options.root ?? options.environment.workspacePath;
     this.#packageManager = options.packageManager ?? "npm";
+    this.#fallbackToNpm = options.fallbackToNpm ?? false;
     this.#framework = options.framework;
     this.#installTimeoutMs = options.installTimeoutMs ?? 600_000;
     this.#buildTimeoutMs = options.buildTimeoutMs ?? 300_000;
@@ -154,14 +186,56 @@ export class BuildManager {
   }
 
   /**
+   * Which package manager this machine installs with, after any measured fallback.
+   *
+   * The agent's install tool reads this before it runs: when it is not `bun`, that tool must
+   * refuse rather than let npm stand in for a Bun it was told about.
+   */
+  get packageManager(): PackageManager {
+    return this.#packageManager;
+  }
+
+  /** Why npm replaced Bun, in the guest's own words, or null while Bun is in use. */
+  get runtimeNote(): string | null {
+    return this.#bunNote;
+  }
+
+  /**
    * Install dependencies inside the guest.
    *
-   * `npm ci` is chosen only when a lockfile exists, because `ci` fails loudly without
-   * one — and a failing install is not a useful way to learn that a project has no lock.
+   * `ci`-style installation is chosen only when a lockfile for *that manager* exists, because
+   * `npm ci` / `bun install --frozen-lockfile` fail loudly without one — and a failing install
+   * is not a useful way to learn that a project has no lock.
+   *
+   * The one fallback is measured, never assumed: when `bun` itself answers 127 (or "not found")
+   * and the caller allowed it, the same install runs again with npm and the result carries the
+   * guest's own explanation in `note`. Any other Bun failure is reported as a failure, because
+   * a missing `react` in `package.json` is not a reason to change package manager.
    */
-  async install(options: ExecutionOptions = {}): Promise<InstallResult> {
-    const lockfile = await this.#findLockfile();
-    const command = installCommand(this.#packageManager, { ci: lockfile !== null });
+  async install(options: InstallCallOptions = {}): Promise<InstallResult> {
+    const { fallbackToNpm = this.#fallbackToNpm, ...execution } = options;
+    const first = await this.#installOnce(this.#packageManager, execution);
+
+    if (first.ok || this.#packageManager !== "bun" || !fallbackToNpm || !missingCommand(first)) {
+      return { ...first, note: this.#bunNote };
+    }
+
+    const note =
+      `This guest has no usable \`bun\` (${guestWords(first)}), so npm installed the ` +
+      `dependencies instead. Bun is preferred here, not required: the project installs the same way.`;
+    this.#bunNote = note;
+    this.#packageManager = "npm";
+    const second = await this.#installOnce("npm", execution);
+    return { ...second, note };
+  }
+
+  /** One install attempt with one manager, with no decisions of its own. */
+  async #installOnce(
+    packageManager: PackageManager,
+    options: ExecutionOptions,
+  ): Promise<InstallResult> {
+    const lockfile = await this.#findLockfile(packageManager);
+    const command = installCommand(packageManager, { ci: lockfile !== null });
     const started = this.#now();
 
     let result: ExecutionResult;
@@ -176,9 +250,10 @@ export class BuildManager {
       return {
         ok: false,
         command,
-        packageManager: this.#packageManager,
+        packageManager,
         lockfile,
         failure,
+        note: null,
         log: {
           command,
           exitCode: null,
@@ -194,7 +269,7 @@ export class BuildManager {
     return {
       ok,
       command,
-      packageManager: this.#packageManager,
+      packageManager,
       lockfile,
       failure: ok
         ? null
@@ -204,6 +279,7 @@ export class BuildManager {
             stdout: result.stdout,
             stderr: result.stderr,
           }),
+      note: null,
       log: {
         command,
         exitCode: result.exitCode,
@@ -373,8 +449,8 @@ export class BuildManager {
     return record;
   }
 
-  async #findLockfile(): Promise<string | null> {
-    const names = LOCKFILES[this.#packageManager];
+  async #findLockfile(packageManager: PackageManager): Promise<string | null> {
+    const names = LOCKFILES[packageManager];
     let entries;
     try {
       entries = await this.#environment.listFiles(this.#root);
@@ -479,4 +555,30 @@ function logOf(result: ExecutionResult): CommandLog {
     stderr: result.stderr,
     truncated: result.truncated,
   };
+}
+
+/**
+ * Did the *binary* turn out to be missing, rather than the install going wrong?
+ *
+ * This is the whole test that permits an npm fallback, so it is deliberately narrow: a shell
+ * answers 127 for "command not found", and the musl/glibc failures write "not found" or
+ * "No such file or directory". A network error, a bad `package.json` or a compiler error never
+ * match, so those stay failures instead of silently changing package manager.
+ */
+function missingCommand(result: InstallResult): boolean {
+  if (result.log.exitCode === 127) return true;
+  return /command not found|not found|no such file or directory/i.test(
+    `${result.log.stderr}\n${result.log.stdout}`,
+  );
+}
+
+/** The guest's own sentence about a failure, trimmed for a status line. */
+function guestWords(result: InstallResult): string {
+  const text = `${result.log.stderr.trimEnd()}\n${result.log.stdout.trimEnd()}`.trim();
+  if (text.length === 0) {
+    return result.log.exitCode === null
+      ? "it did not run"
+      : `it exited ${String(result.log.exitCode)} without printing anything`;
+  }
+  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
 }

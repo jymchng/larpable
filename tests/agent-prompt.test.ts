@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUN_RULES,
   CREATE_PROCEDURE,
   MODIFY_PROCEDURE,
   NETLIFY_RULES,
@@ -64,7 +65,7 @@ describe("the procedures are PRD §10's, in order, with tool names", () => {
     const steps = CREATE_PROCEDURE.join("\n");
     expect(steps).toContain("scaffold_project"); // 3: scaffold
     expect(steps).toContain("write_file"); // 4: source files
-    expect(steps).toContain("execute_command"); // 5: install, through the shell
+    expect(steps).toContain("install_dependencies"); // 5: install, with the guest's Bun
     expect(steps).toContain("ensure_netlify_config"); // 6/7: generate and validate
     expect(steps).toContain("build_project"); // 8: build
     expect(steps).toContain("publish_preview"); // 11: preview
@@ -116,6 +117,45 @@ describe("the rules that make the agent trustworthy", () => {
 
   it("tells the model to prefer a tool over a shell command", () => {
     expect(WORKING_RULES.join("\n")).toContain("Prefer the specific tool to a shell command");
+  });
+});
+
+describe("Bun, and installing it when the guest has none", () => {
+  it("tells the model to use Bun for every dependency job, and names the commands", () => {
+    const rules = BUN_RULES.join("\n");
+    expect(rules).toContain("`bun install`");
+    expect(rules).toContain("`bun run <script>`");
+    expect(rules).toContain("`bun add <package>`");
+    expect(rules).toContain("`bunx <tool>`");
+    expect(rules).toContain("Do not use `npm`, `npx`, `yarn` or `pnpm` in its place");
+  });
+
+  it("says to install Bun when `bun --version` fails, and to verify it worked", () => {
+    const rules = BUN_RULES.join("\n");
+    expect(rules).toContain("bun.sh/install");
+    expect(rules).toContain("~/.bun/bin/bun --version");
+    // The setup command is a suggestion; the guest's own `bun --version` is the evidence.
+    expect(rules).toContain("Then retry the install");
+  });
+
+  it("forbids substituting npm, so the tool's own refusal is not a surprise", () => {
+    const rules = BUN_RULES.join("\n");
+    expect(rules).toContain('Never "make it work" by installing with npm');
+    expect(rules).toContain("Bun-only");
+  });
+
+  it("is in the system message, before the tool list it constrains", () => {
+    const text = prompt();
+    for (const rule of BUN_RULES) expect(text).toContain(rule);
+    expect(text.indexOf("# Bun is the package manager")).toBeGreaterThan(0);
+    expect(text.indexOf("# Bun is the package manager")).toBeLessThan(
+      text.indexOf("# What you can do in this session"),
+    );
+  });
+
+  it("puts installing Bun in the create procedure's own install step", () => {
+    expect(CREATE_PROCEDURE[4]).toContain("install Bun");
+    expect(CREATE_PROCEDURE[4]).toContain("`install_dependencies`");
   });
 });
 

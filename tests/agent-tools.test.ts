@@ -59,14 +59,24 @@ function decode(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
-const buildStub = (overrides: { installOk?: boolean; buildOk?: boolean } = {}): BuildPort =>
+const buildStub = (
+  overrides: {
+    installOk?: boolean;
+    buildOk?: boolean;
+    packageManager?: "npm" | "bun";
+    runtimeNote?: string | null;
+  } = {},
+): BuildPort =>
   ({
+    packageManager: overrides.packageManager ?? "npm",
+    runtimeNote: overrides.runtimeNote ?? null,
     install: async () => ({
       ok: overrides.installOk ?? true,
       command: "npm ci --no-audit --no-fund",
-      packageManager: "npm",
+      packageManager: overrides.packageManager ?? "npm",
       lockfile: "package-lock.json",
       failure: null,
+      note: null,
       log: {
         command: "npm ci --no-audit --no-fund",
         exitCode: overrides.installOk === false ? 1 : 0,
@@ -295,9 +305,16 @@ describe("shell tools", () => {
 });
 
 describe("build, Netlify and preview tools", () => {
-  it("offers no install tool: installing is a command, not a capability", async () => {
-    const names = toolsFor(contextFor(await readyEnvironment())).map((tool) => tool.definition.name);
-    expect(names).not.toContain("install_dependencies");
+  it("offers install_dependencies whenever there is a build manager, and never without one", async () => {
+    const bare = toolsFor(contextFor(await readyEnvironment())).map((tool) => tool.definition.name);
+    expect(bare).not.toContain("install_dependencies");
+
+    const names = toolsFor(
+      contextFor(await readyEnvironment(), { build: buildStub({ packageManager: "bun" }) }),
+    ).map((tool) => tool.definition.name);
+    expect(names).toContain("install_dependencies");
+    expect(names).toContain("build_project");
+    // Still a command tool: installing is a tool now, running a shell is still a capability.
     expect(names).toContain("execute_command");
   });
 

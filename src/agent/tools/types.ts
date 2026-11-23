@@ -21,12 +21,34 @@ import type { ExecutionEnvironment } from "@/env/execution";
 import type { BuildResult, InstallResult } from "@/build/manager";
 import type { PreviewPhase } from "@/preview/controller";
 import type { EnsureNetlifyConfigResult } from "@/netlify/flow";
+import type { PackageManager } from "@/runtime/detect";
 import type { ToolDefinition } from "@/llm/types";
 import type { ProcessRegistry } from "./processes";
 
+/** What a tool may ask of an install. Deliberately smaller than the manager's own options. */
+export interface BuildInstallOptions {
+  signal?: AbortSignal;
+  /**
+   * Let npm stand in when the guest has no `bun`.
+   *
+   * Tools leave this alone: `install_dependencies` is Bun or the guest's own error, because a
+   * model told "Bun" must not read a log that quietly says npm.
+   */
+  fallbackToNpm?: boolean;
+}
+
 /** The build manager, narrowed to what tools need. */
 export interface BuildPort {
-  install(options?: { signal?: AbortSignal }): Promise<InstallResult>;
+  /**
+   * The package manager this machine installs with, after any measured fallback.
+   *
+   * `install_dependencies` reads it before running: when it is not `bun`, the tool refuses and
+   * quotes {@link runtimeNote} rather than executing a package manager it did not name.
+   */
+  readonly packageManager: PackageManager;
+  /** Why npm replaced Bun, in the guest's own words, or null while Bun is in use. */
+  readonly runtimeNote: string | null;
+  install(options?: BuildInstallOptions): Promise<InstallResult>;
   build(options?: { signal?: AbortSignal }): Promise<BuildResult>;
   lastSuccessfulBuild(): BuildResult | null;
   history(): readonly BuildResult[];

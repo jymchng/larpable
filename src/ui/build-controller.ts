@@ -109,12 +109,17 @@ export function createBuildController(deps: BuildControllerDeps): BuildControlle
     publish(buildStatusFromHistory(manager.history()));
   }
 
-  async function install(options: { signal?: AbortSignal } = {}): Promise<InstallResult> {
+  async function install(
+    options: { signal?: AbortSignal; fallbackToNpm?: boolean } = {},
+  ): Promise<InstallResult> {
     const run = begin(options.signal);
     publish(applyBuildProgress(status, { kind: "installing" }));
     try {
       if (runtime !== null) await runtime.ensureReady({ signal: run.signal });
-      const result = await manager.install({ signal: run.signal });
+      const result = await manager.install({
+        signal: run.signal,
+        ...(options.fallbackToNpm === undefined ? {} : { fallbackToNpm: options.fallbackToNpm }),
+      });
       if (!result.ok) {
         publish(applyBuildProgress(status, { kind: "failed", summary: installFailure(result) }));
       }
@@ -155,6 +160,19 @@ export function createBuildController(deps: BuildControllerDeps): BuildControlle
   }
 
   return {
+    /**
+     * Forwarded from the manager, not decided here: the controller may gate and publish a
+     * run, but only the manager knows which package manager this machine actually installs
+     * with (including a measured fallback to npm).
+     */
+    get packageManager() {
+      return manager.packageManager;
+    },
+
+    get runtimeNote() {
+      return manager.runtimeNote;
+    },
+
     status() {
       return status;
     },
