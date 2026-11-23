@@ -1,12 +1,16 @@
 /**
- * The toasts themselves: a stack of tinted pills at the bottom of the window.
+ * The toasts themselves: a stack of tinted pills at the top of the window.
  *
  * Why the design is what it is:
  *
- * - **Bottom centre, over everything.** A notification is about something that just happened, not
- *   about a corner of the layout, so it sits where the eye lands last and where a thumb can reach
- *   it. `fixed` + `z-60` puts it above the panes and above the popovers (which are `z-50`), and
- *   `bottom-[max(...)]` clears the home indicator on a phone.
+ * - **Top centre, over everything.** A notification is about something that just happened, and the
+ *   top of the window is where a person looks for it (user request: "make all the toasts appear at
+ *   the top not at the bottom"). It also keeps the stack clear of the composer and the terminal
+ *   prompt, which is where the user's hands already are. `fixed` + `z-60` puts it above the panes
+ *   and above the popovers (which are `z-50`), and `top-[max(...)]` clears the notch/status area on
+ *   a phone.
+ * - **Newest last.** The list is oldest-first and the column reads downwards, so a new message
+ *   appears under the previous one rather than pushing the stack down the screen.
  * - **The colour is the meaning, and the pictogram repeats it.** Four tones, each with its own
  *   tint, border and glyph: `info` is blue (work in progress), `success` green (it worked),
  *   `warning` amber (read this before it bites), `danger` red (it failed). Nothing is *only* a
@@ -51,7 +55,7 @@ const TONE_ICON: Record<ToastTone, ReactNode> = {
 };
 
 export interface ToastHostProps {
-  /** Oldest first; the newest is painted closest to the bottom edge. */
+  /** Oldest first; the newest is painted closest to the bottom of the stack. */
   toasts: readonly Toast[];
   onDismiss: (id: string) => void;
 }
@@ -66,7 +70,9 @@ export function ToastHost({ toasts, onDismiss }: ToastHostProps): ReactNode {
       aria-label="Notifications"
       className={cn(
         "pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-1.5 px-2",
-        "bottom-[max(0.5rem,calc(var(--safe-bottom)+0.5rem))]",
+        // Top, not bottom (user request). The safe-area inset is the notch/status bar on a phone,
+        // which is the edge this stack now sits against.
+        "top-[max(0.5rem,calc(var(--safe-top)+0.5rem))]",
       )}
     >
       {toasts.map((toast) => (
@@ -80,7 +86,7 @@ export function ToastHost({ toasts, onDismiss }: ToastHostProps): ReactNode {
             "rounded-lg border py-0.5 pr-0.5 pl-2 shadow-lg backdrop-blur-md",
             // `tw-animate-css` is imported by `globals.css`; the exit is instantaneous on purpose —
             // a message that lingers to animate itself out is a message that outlives its welcome.
-            "animate-in fade-in-0 slide-in-from-bottom-1 duration-150",
+            "animate-in fade-in-0 slide-in-from-top-1 duration-150",
             TONE_SURFACE[toast.tone],
           )}
         >

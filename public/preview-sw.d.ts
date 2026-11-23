@@ -42,3 +42,44 @@ export function installSnapshot(message: PreviewSnapshotMessage): number;
 export function currentBuildId(): string | null;
 
 export function clearSnapshot(): void;
+
+/** The session a running app is being forwarded under, or null in static mode. */
+export function installForwarder(message: {
+  buildId: string | null;
+  timeoutMs?: number;
+}): string | null;
+
+export function clearForwarder(): void;
+
+export function forwarderBuildId(): string | null;
+
+export interface ForwardRequestOptions {
+  requestId?: string;
+  /** How long a *claimed* request may take. Default 30 s. */
+  timeoutMs?: number;
+  /** How long a page has to claim the request. Default 2 s. */
+  ownershipMs?: number;
+  /** What to answer when no page claims the request: the snapshot path's own response. */
+  fallback?: () => Response;
+  post: (message: unknown) => void;
+}
+
+/**
+ * Ask the pages for one request's bytes.
+ *
+ * Resolves with the claiming page's answer, with `fallback()` when no page claims it inside the
+ * ownership window, or with a 504 when a claim is never answered.
+ */
+export function forwardRequest(
+  request: { url: string; method?: string },
+  options: ForwardRequestOptions,
+): Promise<Response>;
+
+export function settleForward(message: {
+  requestId: string;
+  status?: number;
+  headers?: Record<string, string>;
+  body?: ArrayBuffer | null;
+}): boolean;
+
+export function claimForward(message: { requestId: string }): boolean;

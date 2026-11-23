@@ -314,20 +314,22 @@ describe("PreviewPane as a browser", () => {
     expect(html).toMatch(/height:844px/);
   });
 
-  it("keeps the pane's own controls and the guest badge under the chrome", () => {
-    // The worker's badge and its row are gone (user request); the guest's amber badge is the
-    // fact this row still states, so it is what this test renders.
+  it("keeps the pane's own controls inside the browser window, and states the served-by fact as data", () => {
+    // The `worker` badge, the `guest` badge and the row that held them are all gone (removed on
+    // request: in dev mode the guest answers every request, so a warning-coloured badge was the
+    // pane complaining about the mode the Prod switch exists to provide). What is left is the
+    // attribute the acceptance run reads, and the chrome around the frame.
     const html = renderPane(guestServed);
 
-    expect(html).toContain('data-testid="preview-toolbar"');
-    expect(html).toContain('data-testid="preview-served-by"');
-    expect(html).toContain("guest");
+    expect(html).toContain('data-served="guest"');
+    expect(html).not.toContain('data-testid="preview-served-by"');
+    expect(html).not.toContain('data-testid="preview-toolbar"');
     // A ready preview says nothing on the status line any more ("Serving 3 files…" was removed),
     // so the row is absent rather than empty.
     expect(html).not.toContain('data-testid="preview-status"');
     expect(html).not.toContain("Serving 3 files");
-    // …and inside the browser window, not floating over the document.
-    expect(html.indexOf('data-testid="preview-toolbar"')).toBeLessThan(
+    // …and the chrome is inside the browser window, above the document, not floating over it.
+    expect(html.indexOf('data-testid="preview-browser-bar"')).toBeLessThan(
       html.indexOf('data-testid="preview-iframe"'),
     );
   });
@@ -352,8 +354,9 @@ describe("PreviewPane as a browser", () => {
     expect(link).not.toBe("");
     expect(newTab).toBeGreaterThan(html.indexOf('data-testid="preview-device-toolbar"'));
     expect(fullscreen).toBeGreaterThan(newTab);
-    // …and it has left the row below it, which is the whole point of the move.
-    expect(newTab).toBeLessThan(html.indexOf('data-testid="preview-toolbar"'));
+    // …and it has left the row below it, which is the whole point of the move: the next thing
+    // after the device row is the frame itself, with no strip of controls between them.
+    expect(newTab).toBeLessThan(html.indexOf('data-testid="preview-frame-box"'));
 
     // Beside, not merely nearby: nothing but the two controls' own markup is between them.
     const between = html.slice(newTab + link.length, fullscreen);
@@ -392,12 +395,17 @@ describe("the frame under the chrome", () => {
 
 describe("the toolbar without the device control", () => {
   it("no longer renders a viewport control, because the device toolbar owns it", () => {
-    const html = renderToStaticMarkup(<PreviewToolbar phase={guestServed} />);
+    // The row is only rendered for the one answer that is not the expected one — a running app
+    // server — so a guest-served build renders nothing at all here, and the device control is
+    // asserted where it lives, in the chrome.
+    expect(renderToStaticMarkup(<PreviewToolbar phase={guestServed} />)).toBe("");
 
-    expect(html).not.toContain('data-testid="preview-viewport-mobile"');
+    const html = renderToStaticMarkup(<PreviewPane phase={guestServed} onRefresh={() => undefined} available />);
+    expect(html).toContain('data-testid="preview-viewports"');
+    expect(html).not.toContain('data-testid="preview-viewport-mobile" aria-pressed="true"');
     // The publish button left this row too: publishing is the browser bar's reload arrow.
     expect(html).not.toContain('data-testid="preview-build"');
-    expect(html).toContain('data-testid="preview-served-by"');
+    expect(html).not.toContain('data-testid="preview-served-by"');
   });
 });
 

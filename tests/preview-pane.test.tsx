@@ -358,18 +358,42 @@ describe("build strip", () => {
     expect(html).not.toContain('data-testid="preview-cancel-build"');
   });
 
-  it("points an empty pane at the hammer, and only when the hammer is on screen", () => {
+  it("points an empty pane at the hammer in prod, and at the user's server in dev", () => {
     // User request: "when there is no preview show that there is no preview and a hint to click on
     // the Hammer button". The hint is `PreviewPane`'s to write, because this is the file that
     // renders the hammer — `PreviewPanel` owns the chrome, not the build manager.
     const withHammer = renderToStaticMarkup(
-      <PreviewPane phase={{ kind: "idle" }} onRefresh={() => undefined} available build={control()} />,
+      <PreviewPane
+        phase={{ kind: "idle" }}
+        onRefresh={() => undefined}
+        available
+        prod
+        build={control()}
+      />,
     );
 
     expect(withHammer).toContain('data-kind="idle"');
     expect(withHammer).toContain("No preview yet.");
     expect(withHammer).toContain("Click the hammer above");
     expect(withHammer).toContain("Install &amp; build");
+
+    // Prod off is the default, and in that mode nothing is built and nothing is served from
+    // `dist/`: the same empty pane points at the server the user runs, on the port in Settings,
+    // and at the reload arrow that attaches to it — never at a hammer that builds output nobody
+    // asked for.
+    const dev = renderToStaticMarkup(
+      <PreviewPane
+        phase={{ kind: "idle" }}
+        onRefresh={() => undefined}
+        available
+        port={1234}
+        build={control()}
+      />,
+    );
+
+    expect(dev).not.toContain("Click the hammer above");
+    expect(dev).toContain("guest port 1234");
+    expect(dev).toContain("reload arrow");
 
     // A caller with no build control has no hammer, so the placeholder must not name one.
     const withoutHammer = renderToStaticMarkup(
