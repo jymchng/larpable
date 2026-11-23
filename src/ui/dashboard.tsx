@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Cog, GripVertical, Terminal, TriangleAlert } from "lucide-react";
+import { Cog, FolderTree, GripVertical, Terminal, TriangleAlert } from "lucide-react";
 
 import type { DistroSummary } from "@/env/distro";
 import type { EnvironmentSnapshot } from "@/env/status";
@@ -57,6 +57,26 @@ export interface DashboardProps {
    * because they are about the pane's chrome rather than about a provider.
    */
   settings?: ReactNode;
+  /**
+   * The project list. The *body* of the popover the folder button opens, for the same reason as
+   * `settings`: the surface is chrome, and a dashboard that renders the list without owning a
+   * store, a bridge or a guest stays a pure function of its props.
+   *
+   * Conditional on the trigger: a folder glyph that opened an empty surface would be worse than
+   * no glyph, so a test with no projects to show renders none.
+   */
+  projects?: ReactNode;
+  /**
+   * The open project's name, worn as a badge beside the folder glyph — the one place "which site
+   * am I editing" stays visible while the popover is shut. Null (or absent) renders no badge
+   * rather than a placeholder word.
+   */
+  projectName?: string | null;
+  /**
+   * Whether the projects popover is open on the first render, for the same reason as
+   * `initialSettingsOpen`: a static-markup test can only see the state it is given.
+   */
+  initialProjectsOpen?: boolean;
   /** The starting split, in percent. A prop so a test can render a non-default layout. */
   initialSplit?: number;
   /**
@@ -110,10 +130,13 @@ export function Dashboard({
   preview,
   statusFacts,
   settings,
+  projects,
+  projectName = null,
   boot,
   initialSplit = 50,
   initialStage = DEFAULT_STAGE,
   initialSettingsOpen = false,
+  initialProjectsOpen = false,
 }: DashboardProps) {
   // The browser report is debugging, not product: it starts closed at every width now that it
   // lives behind the `d` glyph in the header instead of occupying a band above the footer.
@@ -127,10 +150,16 @@ export function Dashboard({
   // closed until asked for. Closed by default is the phone's answer too, where four provider
   // buttons and two fields were the most expensive vertical space in the app.
   const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
+  // The project list is the same kind of thing: a surface behind a glyph, not a band. It starts
+  // closed (a person picks a project about as often as a provider) and stays mounted, so a
+  // half-typed new name survives a glance at the app behind it.
+  const [projectsOpen, setProjectsOpen] = useState(initialProjectsOpen);
   const splitContainer = useRef<HTMLDivElement | null>(null);
   // The wrapper around the cog and its popover: it is both the "not outside" test for a press
   // and the place focus returns to when the popover closes.
   const settingsAnchor = useRef<HTMLDivElement | null>(null);
+  // The folder glyph, its badge and its popover, anchored the same way as the cog.
+  const projectsAnchor = useRef<HTMLDivElement | null>(null);
   // The `d` and its popover: the trigger is the anchor for dismissal and for focus returning,
   // while the *surface* hangs off the header (which is `relative`) so it can align to the
   // window's edge instead of to a button that sits 120 px from it.
@@ -305,13 +334,64 @@ export function Dashboard({
             </div>
           </div>
         </Popover>
+        {/* The project glyph and the open project's name, immediately left of the cog: the two
+            header controls that are about the whole app rather than about a pane. `ml-auto` moves
+            here when the glyph is present, so the pair stays pinned to the right edge and the cog
+            keeps its `ml-auto` for the tests and pages that render the shell without projects. */}
+        {projects ? (
+          <div
+            ref={projectsAnchor}
+            data-testid="projects-anchor"
+            className="relative ml-auto flex min-w-0 items-center gap-1"
+          >
+            {projectName === null ? null : (
+              <Badge
+                data-testid="active-project"
+                variant="secondary"
+                className="max-w-[7rem] truncate font-normal"
+                title={projectName}
+              >
+                {projectName}
+              </Badge>
+            )}
+            <IconButton
+              testId="projects-toggle"
+              label={projectName === null ? "Projects" : `Projects: ${projectName}`}
+              hint="Create, open, rename or delete a project"
+              tone="nav"
+              aria-expanded={projectsOpen}
+              aria-controls={PROJECTS_POPOVER_ID}
+              onClick={() => setProjectsOpen((open) => !open)}
+            >
+              <FolderTree aria-hidden="true" />
+            </IconButton>
+            <Popover
+              id={PROJECTS_POPOVER_ID}
+              title="Projects"
+              open={projectsOpen}
+              onClose={() => setProjectsOpen(false)}
+              anchorRef={projectsAnchor}
+              className="top-full right-0 w-[min(20rem,calc(100vw-1rem))]"
+            >
+              {projects}
+            </Popover>
+          </div>
+        ) : null}
         {/* The cog, at the header's right edge. `ml-auto` is what pins it there: the header is
             `flex flex-wrap`, so the trigger takes the remaining space on the first row and the
             popover hangs off it (`top-full right-0`) with its right edge on the window's. The
             wrapper is the anchor — a press on the cog is not a dismissal, so it toggles instead
             of closing then reopening, and focus returns to it when the surface closes. */}
         {settings ? (
-          <div ref={settingsAnchor} className="relative ml-auto flex items-center">
+          <div
+            ref={settingsAnchor}
+            className={cn(
+              "relative flex items-center",
+              // Only claim the row's free space when nothing else has: two `ml-auto` siblings
+              // split the space and the second one stops being pinned to the edge.
+              projects ? "" : "ml-auto",
+            )}
+          >
             <IconButton
               testId="settings-toggle"
               label="Settings"
@@ -485,6 +565,14 @@ function DebugGlyph(): ReactNode {
  * string: a hand-copied id in a script is a check that passes after the surface was renamed.
  */
 export const DEBUG_POPOVER_ID = "diagnostics-popover";
+
+/**
+ * The id the folder trigger's `aria-controls` names and the projects surface carries.
+ *
+ * Exported for the same reason as `DEBUG_POPOVER_ID`: an acceptance run and a markup test point
+ * at this string, so renaming the surface cannot leave a hand-copied id passing on its own.
+ */
+export const PROJECTS_POPOVER_ID = "projects-popover";
 
 /**
  * How many of the three requirements are met, as a dot colour.

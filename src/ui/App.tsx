@@ -12,6 +12,7 @@ import { DEFAULT_STAGE, stageFromSearch } from "@/ui/stage";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
 import { PreviewPane } from "@/ui/preview-pane";
+import { ProjectSwitcher } from "@/ui/project-switcher";
 import { SettingsPanel } from "@/ui/settings-panel";
 import { StatusFacts } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
@@ -27,6 +28,7 @@ import { usePreviewSettings } from "@/ui/use-preview-settings";
 import { useNotifications } from "@/ui/use-notifications";
 import { useNetlify } from "@/ui/use-netlify";
 import { usePreview } from "@/ui/use-preview";
+import { useProjects } from "@/ui/use-projects";
 import { useToast } from "@/ui/use-toast";
 
 /**
@@ -86,6 +88,11 @@ export function App() {
   });
 
   const settings = useLlmSettings();
+  // Projects: the manager, the store that remembers them and the autosave watcher, bound to the
+  // booted machine. Null until boot, because a project is files in `/workspace` and there is no
+  // `/workspace` before the kernel is up \u2014 the hook says so rather than listing nothing.
+  const projects = useProjects({ environment: environment.environment });
+  const activeProjectName = projects.state.active?.name ?? null;
   // The build: one controller per machine, behind the warm-runtime gate, publishing into the
   // pane's strip and the status bar. Its successful id is what the preview publishes, so the
   // frame always shows exactly the bytes that were built.
@@ -144,7 +151,7 @@ export function App() {
   // connection state.
   const statusInput: StatusInput = {
     environment: environment.snapshot,
-    project: { name: null, root: DEFAULT_WORKSPACE_PATH },
+    project: { name: activeProjectName, root: DEFAULT_WORKSPACE_PATH },
     build: build.status,
     netlify: netlify.status,
     preview: preview.phase,
@@ -166,6 +173,20 @@ export function App() {
         onRetry: environment.boot,
       }}
       statusFacts={<StatusFacts input={statusInput} />}
+      projects={
+        <ProjectSwitcher
+          state={projects.state}
+          persistent={projects.persistent}
+          unavailable={projects.unavailable}
+          busy={projects.busy}
+          error={projects.error ?? projects.state.error}
+          onCreate={projects.create}
+          onOpen={projects.open}
+          onRename={projects.rename}
+          onRemove={projects.remove}
+        />
+      }
+      projectName={activeProjectName}
       settings={
         <SettingsPanel
           settings={settings.settings}
