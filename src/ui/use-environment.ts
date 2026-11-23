@@ -17,9 +17,24 @@ import { createBrowserEnvironment } from "@/env/boot";
 import type { ExecutionEnvironment, ShellOptions, TerminalSession } from "@/env/execution";
 import { runEnvironmentSelfTest, type SelfTestResult } from "@/env/self-test";
 import { INITIAL_ENVIRONMENT, type EnvironmentSnapshot } from "@/env/status";
+import type { GuestHttpFetch } from "@/env/unkernel-kernel";
 
 export interface EnvironmentBootState {
   snapshot: EnvironmentSnapshot;
+  /**
+   * The booted machine, or null before boot — always the `ExecutionEnvironment` interface,
+   * never the unkernel adapter, so a caller can only do what the contract allows.
+   */
+  environment: ExecutionEnvironment | null;
+  /**
+   * HTTP into the guest's loopback, resolved on every call.
+   *
+   * A function rather than a value because both of its answers are honest and both change:
+   * null before boot, null when the booted kernel exposes no `fetch()`, and a working
+   * fetcher once it does. The preview is the only caller: a server inside the machine
+   * listens on a port that does not exist on the host.
+   */
+  guestHttp: () => GuestHttpFetch | null;
   /** The PRD §5.3 step currently running, e.g. `runtime: Detecting JavaScript runtimes`. */
   stage: string | null;
   /** True while `initialize()` is running. */
@@ -42,6 +57,7 @@ export interface EnvironmentBootState {
 
 export function useEnvironmentBoot(): EnvironmentBootState {
   const [snapshot, setSnapshot] = useState<EnvironmentSnapshot>(INITIAL_ENVIRONMENT);
+  const [booted, setBooted] = useState<ExecutionEnvironment | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selfTest, setSelfTest] = useState<SelfTestResult | null>(null);
@@ -74,6 +90,9 @@ export function useEnvironmentBoot(): EnvironmentBootState {
       try {
         const env = await createBrowserEnvironment();
         environment.current = env;
+        // Published as state, not only as a ref: callers that need the machine itself (the
+        // preview) must re-render when it appears, and a ref read during render would not.
+        setBooted(env);
         unsubscribing.current = env.onStatus(setSnapshot);
         setSnapshot(env.snapshot());
 
@@ -114,6 +133,18 @@ export function useEnvironmentBoot(): EnvironmentBootState {
     return env.openShell(options);
   }, []);
 
+  /**
+   * The guest's HTTP door, as a stable callback.
+   *
+   * Stable on purpose: it is a dependency of the preview controller, which must survive
+   * re-renders. Reading the ref (rather than the `booted` state) keeps it correct when the
+   * machine is replaced, and `null` stays a real answer either way.
+   */
+  const guestHttp = useCallback(
+    () => environment.current?.guestHttp?.() ?? null,
+    [],
+  );
+
   const shutdown = useCallback(() => {
     const env = environment.current;
     if (!env) return;
@@ -126,6 +157,7 @@ export function useEnvironmentBoot(): EnvironmentBootState {
         unsubscribing.current?.();
         unsubscribing.current = null;
         environment.current = null;
+        setBooted(null);
         setBusy(false);
       }
     })();
@@ -133,6 +165,8 @@ export function useEnvironmentBoot(): EnvironmentBootState {
 
   return {
     snapshot,
+    environment: booted,
+    guestHttp,
     stage,
     busy,
     selfTest,

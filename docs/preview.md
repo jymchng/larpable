@@ -135,5 +135,59 @@ not arrive in time, the publish is reported as a failure.
 | proxy decisions and snapshot collection | `tests/preview-proxy.test.ts` |
 | registration, publish protocol, timeouts | `tests/preview-client.test.ts` |
 | sandbox policy and pane states | `tests/preview-frame.test.tsx` |
+| the app's state machine, phases and wording | `tests/preview-controller.test.ts` |
+| the build id and the publish-directory listing | `tests/preview-build-id.test.ts` |
+| the pane's phase → state mapping and controls | `tests/preview-pane.test.tsx` |
 | the guest server itself | `tests/preview-guest-server.test.ts` |
 | a real guest serving a real build | `LARPABLE_GUEST_TESTS=1 bun run test:guest` |
+
+## How the app drives it
+
+The modules above are each honest about one step. The order they run in, and what the pane
+says while they do, lives in two files:
+
+| File | Job |
+| --- | --- |
+| `src/preview/controller.ts` | The state machine: booted machine → listed `dist/` → build id → published snapshot. Plain TypeScript, so `scripts/` can drive the same object the app does. |
+| `src/ui/use-preview.ts` | The React binding: owns the controller's lifetime and turns phases into renders. |
+| `src/ui/preview-pane.tsx` | Maps a phase onto the sandboxed frame and says how the bytes are arriving. |
+| `src/preview/build-id.ts` | The id in the URL, and the recursive listing it is derived from. |
+
+The phases are the user's experience, not the implementation's:
+
+| Phase | The pane shows |
+| --- | --- |
+| `idle` | "No preview published yet." with a **Preview build** control |
+| `starting` | `Starting the guest's server for dist/…` — this is a real `node` start, seconds to a minute |
+| `publishing` | `Reading N files out of the guest…` |
+| `ready` | the iframe, plus whether a **worker** or the **guest** is serving |
+| `failed` | the reason in full, e.g. `There is no build to preview: dist/ is empty or missing in the guest.` |
+
+Three decisions in that mapping are worth knowing:
+
+- **A preview is asked for, never automatic.** Starting the guest's server costs a process
+  launch and the snapshot costs one pass over `dist/`; doing that on page load would spend a
+  user's battery on a preview of an empty directory.
+- **A failed publish keeps the server.** Only a *start* failure drops the session, so a
+  retry after a transient publish error does not pay the cold-start cost again — and the
+  previous build stays published, so the pane keeps working instead of going blank.
+- **The build id prefers the build manager's.** `BuildResult.id` names the build that
+  produced the files; when the caller has none (a preview of "whatever is in `dist` right
+  now"), `deriveBuildId()` fingerprints the recursive listing — paths and sizes, sorted.
+  Content-hashing every file would double the cost of publishing for a distinction a real
+  build rarely needs: Vite renames every asset whose bytes changed, so the listing changes
+  too. The consequence is the property the whole design exists for: a new build means a new
+  URL, so a page pinned to the old one gets a `409` instead of old bytes.
+
+```ts
+const preview = usePreview({ environment, http: environment.guestHttp });
+// …in the pane:
+<PreviewPane phase={preview.phase} onRefresh={() => preview.refresh()} available={preview.available} />
+```
+
+A caller that already knows the build id passes it through — this is what the agent flow
+will do once `BuildManager.onBuilt` is wired to the pane:
+
+```ts
+preview.refresh(build.id); // `/__preview__/build-mf3k2-1/…`
+```

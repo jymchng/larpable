@@ -50,7 +50,12 @@ export type PreviewState =
   | { kind: "idle" }
   | { kind: "building"; buildId: string | null }
   | { kind: "ready"; buildId: string; title?: string }
-  | { kind: "error"; status: number; message: string };
+  /**
+   * A failure, with the status the server sent — or null when no server was reached at all
+   * (an empty publish directory, a guest with no HTTP door, an unconfirmed publish). A null
+   * status is printed as the message alone rather than as a made-up code.
+   */
+  | { kind: "error"; status: number | null; message: string };
 
 export interface PreviewFrameProps {
   buildId: string;

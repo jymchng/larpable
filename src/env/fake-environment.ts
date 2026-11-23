@@ -29,6 +29,7 @@ import type {
 } from "./execution";
 import { joinGuestPath, resolveWorkspacePath, toMountedPath } from "./paths";
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
+import type { GuestHttpFetch } from "./unkernel-kernel";
 import { MemoryWorkspace } from "./workspace-fs";
 import type { WorkspaceFs } from "./workspace-fs";
 
@@ -64,6 +65,12 @@ export interface FakeEnvironmentOptions {
   cpus?: number;
   memoryMiB?: number;
   now?: () => number;
+  /**
+   * The guest's HTTP door, as `UnkernelEnvironment.guestHttp()` provides it. Left out, the
+   * fake has none — which is how a test asserts the preview's "no reachable guest" message
+   * without pretending such a guest answered.
+   */
+  guestHttp?: GuestHttpFetch;
 }
 
 export type FakeCall =
@@ -233,6 +240,18 @@ export class FakeEnvironment implements ExecutionEnvironment {
     return () => {
       this.#listeners.delete(listener);
     };
+  }
+
+  /**
+   * The configured guest HTTP door, gated like every other guest operation.
+   *
+   * Throws before `ready` (a half-booted guest cannot answer a request) and returns null
+   * when nothing was configured, so a caller sees the same two failure modes the real
+   * adapter produces rather than one convenient fiction.
+   */
+  guestHttp(): GuestHttpFetch | null {
+    this.#requireReady("reach the guest's HTTP stack");
+    return this.#options.guestHttp ?? null;
   }
 
   async initialize(options: InitializeOptions = {}): Promise<void> {

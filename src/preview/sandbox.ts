@@ -2,10 +2,9 @@
  * The iframe policy, kept away from the component so a browser run can apply exactly the
  * sandbox the product applies.
  *
- * `scripts/preview-browser-acceptance.ts` builds a real iframe inside a real page to prove
- * that guest bytes render. If it re-typed the attribute, the run would prove the harness's
- * sandbox rather than the product's, so the string lives here and `preview-frame.tsx`
- * imports it.
+ * The browser acceptance run builds a real iframe inside a real page to prove that guest
+ * bytes render. If it re-typed the attribute, the run would prove the harness's sandbox
+ * rather than the product's, so the string lives here and `preview-frame.tsx` imports it.
  */
 
 /**

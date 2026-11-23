@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { Dashboard } from "../src/ui/dashboard";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
+import { PreviewPane } from "../src/ui/preview-pane";
 import { summarizeDistro, type DistroAssetStatus } from "../src/env/distro";
 import { describeEnvironment, INITIAL_ENVIRONMENT, statusLabel } from "../src/env/status";
 import { applySupportSimulation, evaluateSupport } from "../src/env/support";
@@ -98,6 +99,36 @@ describe("Dashboard", () => {
     expect(html).toContain('data-testid="terminal-slot"');
     // The placeholder is what a dashboard with no terminal shows, not both at once.
     expect(html).not.toContain("The agent has nothing to work with yet.");
+  });
+
+  it("puts the preview pane in the preview section when one is supplied", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        version="9.9.9"
+        support={supported}
+        environment={INITIAL_ENVIRONMENT}
+        distro={summarizeDistro([debianAsset], null)}
+        preview={
+          <PreviewPane
+            phase={{
+              kind: "ready",
+              buildId: "build-mf3k2-1",
+              url: "/__preview__/build-mf3k2-1/",
+              files: 14,
+              served: "worker",
+              note: null,
+            }}
+            onRefresh={() => undefined}
+            available
+          />
+        }
+      />,
+    );
+
+    // A supplied pane is a real frame, not the placeholder that promises one.
+    expect(html).toContain('data-testid="preview-iframe"');
+    expect(html).toContain('data-build-id="build-mf3k2-1"');
+    expect(html).not.toContain("No production build yet.");
   });
 
   it("offers an accessible toggle for the browser report", () => {

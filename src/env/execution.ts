@@ -19,6 +19,7 @@
  */
 
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
+import type { GuestHttpFetch } from "./unkernel-kernel";
 
 /** Which pipe a streamed chunk came from. */
 export type OutputStream = "stdout" | "stderr";
@@ -173,6 +174,21 @@ export interface ExecutionEnvironment {
 
   /** Subscribe to status/snapshot changes. Returns the unsubscribe function. */
   onStatus(listener: (snapshot: EnvironmentSnapshot) => void): () => void;
+
+  /**
+   * HTTP/1.1 to a server listening inside the guest, or null when this environment has no
+   * such door.
+   *
+   * Optional because the capability belongs to the kernel, not to the contract: a test
+   * double can answer every file operation and still have no network stack. The preview is
+   * the caller — its guest-side server listens on a loopback port that only exists inside
+   * the machine, so `kernel.fetch()` is the single way in, and pretending otherwise would
+   * turn a missing capability into a `404`.
+   *
+   * The URL's port selects the guest port; the host only becomes the `Host` header. Pair it
+   * with `src/preview/transport.ts`, which owns the timeout and the header normalisation.
+   */
+  guestHttp?(): GuestHttpFetch | null;
 
   /** PRD §5.3: boot, mount, verify filesystem, verify shell, detect runtimes. */
   initialize(options?: InitializeOptions): Promise<void>;

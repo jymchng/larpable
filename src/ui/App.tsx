@@ -7,9 +7,10 @@ import { distroAssetsQueryOptions } from "@/env/queries";
 import { applySupportSimulation, detectSupport } from "@/env/support";
 import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
-import { PreviewPanel } from "@/ui/preview-frame";
+import { PreviewPane } from "@/ui/preview-pane";
 import { TerminalPanel } from "@/ui/terminal-panel";
 import { useEnvironmentBoot } from "@/ui/use-environment";
+import { usePreview } from "@/ui/use-preview";
 
 /**
  * Container: owns the async reads and the booted environment, and hands plain values
@@ -22,6 +23,12 @@ export function App() {
     [],
   );
   const environment = useEnvironmentBoot();
+  // The preview shares the booted machine with the terminal: same kernel, one HTTP door.
+  // It is created lazily and does nothing at all until the user asks for a build.
+  const preview = usePreview({
+    environment: environment.environment,
+    http: environment.guestHttp,
+  });
 
   const distroQuery = useQuery(distroAssetsQueryOptions);
   const distro = summarizeDistro(
@@ -56,6 +63,13 @@ export function App() {
           cwd={DEFAULT_WORKSPACE_PATH}
           openShell={environment.openShell}
           unavailableReason={environment.error}
+        />
+      }
+      preview={
+        <PreviewPane
+          phase={preview.phase}
+          onRefresh={() => preview.refresh()}
+          available={preview.available}
         />
       }
     />
