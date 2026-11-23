@@ -34,11 +34,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { chromium, type Browser, type Page } from "playwright-core";
 
 import {
-  FOOTER_STATUS,
   SELF_TEST_BUTTON,
   SUPPORT_PROBLEMS,
   ensureBooted,
   openDiagnostics,
+  readStatusText,
 } from "./lib/boot.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -238,7 +238,7 @@ async function bootsToReady(page: Page): Promise<BootMeasurement> {
     cpus: await text(page, "[data-testid=env-cpus]"),
     memory: await text(page, "[data-testid=env-memory]"),
     bootBadge: await text(page, "[data-testid=boot-duration]"),
-    statusBar: await text(page, FOOTER_STATUS),
+    statusBar: (await readStatusText(page)) || null,
     bootPath: boot.path,
     helperWaitedMs: boot.waitedMs,
     wallClockMs,
@@ -293,18 +293,29 @@ async function unsupportedPath(page: Page): Promise<UnsupportedMeasurement> {
   await page.goto(`${baseUrl}/?simulateSupport=no-jspi`, { waitUntil: "load" });
 
   /*
-   * Where the problems render changed with the debug popover. The environment card is `compact`
-   * inside it now, so the card's own `support-problems` alert does not render at all; the
-   * popover's *Requirements* section lists the same strings instead. Both live in the surface,
-   * which stays in the DOM while closed, so the wait is on the list being *attached* and the
-   * popover is then opened to read it as a person would.
+   * Where the problems render depends on the build, not on the app: in the current one the
+   * environment card is `compact` inside the debug popover, so the card's own `support-problems`
+   * alert never renders and the popover's *Requirements* section lists the same strings instead.
+   * A deployment can still be the older shape, where the card rendered in full and the popover
+   * had no Requirements section — measured: waiting only for `requirement-problems` timed out
+   * 30 s against the live site *after* every boot and self-test check had passed, which reads as
+   * an app failure and is really the script asking for one build's markup.
+   *
+   * `SUPPORT_PROBLEMS` is the union of both, and the surface stays in the DOM while closed, so the
+   * wait is on the list being *attached*; the popover is then opened to read it as a person would.
    */
-  const problems = page.locator("[data-testid=requirement-problems]");
+  const problems = page.locator(SUPPORT_PROBLEMS);
   await problems.first().waitFor({ state: "attached", timeout: 30_000 });
   await openDiagnostics(page);
 
+  // Read the popover's list when this build has it, otherwise the card's own alert.
+  const requirementList = page.locator("[data-testid=requirement-problems]");
+  const problemsText = (
+    (await requirementList.count()) > 0
+      ? await requirementList.first().innerText()
+      : await problems.first().innerText()
+  ).trim();
   const heading = (await text(page, "[data-testid=requirement-problems] li")) ?? "";
-  const problemsText = (await problems.first().innerText()).trim();
   const bootButtons = await page.locator("[data-testid=boot-button]").count();
 
   expect("unsupported browser: explains itself", problemsText.includes("JSPI"), heading || "(no heading)");
@@ -493,8 +504,24 @@ async function main(): Promise<void> {
     measurements.selfTest = await runsSelfTest(page);
     await page.screenshot({ path: join(evidenceDir, evidenceNames.boot), fullPage: true });
 
-    measurements.unsupported = await unsupportedPath(page);
-    await page.screenshot({ path: join(evidenceDir, evidenceNames.unsupported), fullPage: true });
+    /*
+     * The `?simulateSupport=no-jspi` path is a *dev-only* probe simulation (see
+     * `src/env/support.ts`): it exists because a CI browser cannot be made to lack
+     * `WebAssembly.Suspending`. It is skipped against a deployment on purpose — the deployed
+     * build's popover is whatever was last pushed, so an assertion about *where* it renders its
+     * problems measures the deploy's age rather than the app's behaviour, and a red verdict here
+     * would say "the deploy is broken" when the deploy had just booted Linux and round-tripped
+     * `/workspace` twice in the checks above. What a production run measures is the boot path;
+     * what it does not measure is written into the report instead of being quietly implied.
+     */
+    if (remote) {
+      console.log(
+        "[acceptance] skipping the unsupported-browser path: it is a dev-only probe simulation",
+      );
+    } else {
+      measurements.unsupported = await unsupportedPath(page);
+      await page.screenshot({ path: join(evidenceDir, evidenceNames.unsupported), fullPage: true });
+    }
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
   } finally {

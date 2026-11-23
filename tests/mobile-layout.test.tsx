@@ -177,10 +177,14 @@ describe("the stylesheet that does the hiding", () => {
     for (const edge of ["top", "bottom", "left", "right"]) {
       expect(globals).toContain(`--safe-${edge}: env(safe-area-inset-${edge}, 0px);`);
     }
-    // The shell actually spends them: the header and the footer are the two edges that matter.
+    // The shell actually spends them, at the two edges that matter: the header keeps the notch
+    // clear at the top, and the shell's own bottom padding keeps the last pane off the home
+    // indicator now that the footer band is gone (its sentence lives in the debug popover). Both
+    // were tightened from 0.5rem to 0.35rem — the padding was spending a status row's worth of
+    // height on nothing, which a 360 x 640 phone notices.
     const shell = readFileSync(resolve(root, "src/ui/dashboard.tsx"), "utf8");
-    expect(shell).toContain("pt-[max(0.5rem,var(--safe-top))]");
-    expect(shell).toContain("pb-[max(0.5rem,var(--safe-bottom))]");
+    expect(shell).toContain("pt-[max(0.35rem,var(--safe-top))]");
+    expect(shell).toContain("pb-[max(0.35rem,var(--safe-bottom))]");
   });
 
   it("stops iOS inflating text and stops the page rubber-banding under the VM", () => {
