@@ -111,12 +111,12 @@ command or a valid `netlify.toml`.
 
 Two different keys, two different arrangements:
 
-- **The user's own key** (OpenAI, Anthropic, or their own OpenRouter key) lives in this
-  browser's `localStorage` and is sent to exactly one origin — the provider's
-  (`src/llm/settings.ts`). It is never passed to a tool, never written into a project file,
-  and never reaches the guest: `tests/agent-tools.test.ts` ("never sends the key to the
-  guest, the project, the transcript or the UI") asserts this by searching every place it
-  could have leaked.
+- **A user's own key** — only reachable now for a browser that stored one before the settings
+  panel offered a single choice — lives in this browser's `localStorage` and is sent to exactly
+  one origin, the provider's (`src/llm/settings.ts`). It is never passed to a tool, never written
+  into a project file, and never reaches the guest: `tests/agent-tools.test.ts` ("never sends the
+  key to the guest, the project, the transcript or the UI") asserts this by searching every place
+  it could have leaked. The panel offers only the **Default** provider, which needs no key at all.
 - **The deployment's key** (`LARPABLE_OPENROUTER_DEFAULT_API_KEY`) is server-side only. It is
   deliberately not `VITE_`-prefixed, so Vite cannot inline it into the bundle; the dev/preview
   server's proxy (`src/lib/openrouter-proxy.ts`, wired in `vite.config.ts`) adds the

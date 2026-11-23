@@ -10,9 +10,10 @@
  *   `redactKey` is the only form in which a key may be *displayed* or logged.
  * - **A missing key is a state, not a crash.** `settingsProblem` answers the sentence the
  *   settings panel shows instead of constructing a provider that will fail on first use.
- * - **The demo provider needs nothing.** Without a key the app still works end to end (a real
- *   build in the guest, a real preview), because `src/llm/demo.ts` is a scripted conversation
- *   over the same tools — and that is what makes the product usable before anyone signs up.
+ * - **The Default provider needs nothing.** Without a key the app still works end to end (a real
+ *   build in the guest, a real preview): the request goes to this app's own `/api/openrouter`,
+ *   and the deployment's key is added there. That is the product's one answer, and it is why the
+ *   panel no longer asks the user to choose between API vendors — see `PROVIDER_OPTIONS`.
  *
  * Model ids are free text on purpose: they change faster than this repository ships, and a
  * dropdown of stale ids would fail in a way that looks like our bug.
@@ -95,13 +96,44 @@ export const PROVIDER_CHOICES: readonly ProviderChoice[] = [
 
 export const SETTINGS_STORAGE_KEY = "larpable.llm";
 
+/**
+ * The one kind the panel offers, and the one `defaultSettings()` selects.
+ *
+ * Named rather than written inline so the panel, the default and the fallback cannot drift apart:
+ * "the default provider" is one fact in three places.
+ */
+export const DEFAULT_PROVIDER_KIND: ProviderKind = "default";
+
+/**
+ * The choices the settings panel paints: exactly one.
+ *
+ * The other three are still implemented and still *reachable* — `createProvider` builds them, and
+ * `parseStoredSettings` keeps whichever one a browser already stored, because a stored OpenAI key
+ * must not silently become a request to somebody else's API. What changed is the question: the
+ * form no longer asks a person to pick an API vendor. The Default choice needs no account and no
+ * key, so the other three were a decision with one right answer — and a row of buttons that only
+ * ever invites the wrong answer.
+ *
+ * Kept as a separate export from `PROVIDER_CHOICES` (the catalogue) so the browser acceptance run
+ * can still seed the demo provider into `localStorage` and get a deterministic conversation,
+ * without the panel offering it to anyone.
+ */
+export const PROVIDER_OPTIONS: readonly ProviderChoice[] = PROVIDER_CHOICES.filter(
+  (choice) => choice.kind === DEFAULT_PROVIDER_KIND,
+);
+
+/** The choice that stands in when a stored kind is not in the catalogue at all. */
+const FALLBACK_CHOICE = PROVIDER_CHOICES.find(
+  (choice) => choice.kind === DEFAULT_PROVIDER_KIND,
+) as ProviderChoice;
+
 export function defaultSettings(): LlmSettings {
-  const demo = PROVIDER_CHOICES[0] as ProviderChoice;
-  return { provider: demo.kind, model: demo.defaultModel, apiKey: "" };
+  const choice = FALLBACK_CHOICE;
+  return { provider: choice.kind, model: choice.defaultModel, apiKey: "" };
 }
 
 export function choiceFor(kind: ProviderKind): ProviderChoice {
-  return PROVIDER_CHOICES.find((choice) => choice.kind === kind) ?? (PROVIDER_CHOICES[0] as ProviderChoice);
+  return PROVIDER_CHOICES.find((choice) => choice.kind === kind) ?? FALLBACK_CHOICE;
 }
 
 /**
@@ -109,7 +141,7 @@ export function choiceFor(kind: ProviderKind): ProviderChoice {
  *
  * Only two things are actually fatal: no model, and a provider that needs a key without one.
  * An unknown provider kind cannot reach here through the type, but a settings object restored
- * from `localStorage` can carry anything, so it is treated as the demo provider rather than
+ * from `localStorage` can carry anything, so it is treated as the default provider rather than
  * crashing the app on boot.
  */
 export function settingsProblem(settings: LlmSettings): string | null {
@@ -118,7 +150,9 @@ export function settingsProblem(settings: LlmSettings): string | null {
     return "Choose a model: the provider needs a model id and this field is empty.";
   }
   if (choice.needsKey && settings.apiKey.trim().length === 0) {
-    return `${choice.label} needs an API key. Add one, or switch to Demo to build without an account.`;
+    // Only reachable for a kind a browser stored before the panel offered one choice, so the
+    // sentence names the way out that the panel actually has: the Default provider.
+    return `${choice.label} needs an API key. Add one, or switch to Default, which needs no account.`;
   }
   return null;
 }
@@ -136,37 +170,39 @@ export function redactKey(key: string): string {
   return `…${trimmed.slice(-4)}`;
 }
 
+/** The provider the Default choice builds: same-origin proxy, deployment key added server-side. */
+function defaultProvider(model: string): LLMProvider {
+  // No key: the request goes to this app's own origin, and the proxy in front of it
+  // (`src/lib/openrouter-proxy.ts`) adds the deployment's. Sending an empty bearer here
+  // instead would be a header that means "authenticated as nobody".
+  return new OpenAICompatibleProvider({
+    apiKey: "",
+    model,
+    baseUrl: OPENROUTER_PROXY_PATH,
+    id: "openrouter",
+    // Free-tier models are rate limited hard; a shorter budget fails honestly instead of
+    // holding a chat turn open for minutes.
+    timeoutMs: 120_000,
+  });
+}
+
 /** The provider these settings describe. Throws only when `settingsProblem` would have spoken. */
 export function createProvider(settings: LlmSettings): LLMProvider {
-  const choice = choiceFor(settings.provider);
   const model = settings.model.trim();
   switch (settings.provider) {
     case "demo":
       return createDemoProvider();
     case "default":
-      // No key: the request goes to this app's own origin, and the proxy in front of it
-      // (`src/lib/openrouter-proxy.ts`) adds the deployment's. Sending an empty bearer here
-      // instead would be a header that means "authenticated as nobody".
-      return new OpenAICompatibleProvider({
-        apiKey: "",
-        model,
-        baseUrl: OPENROUTER_PROXY_PATH,
-        id: "openrouter",
-        // Free-tier models are rate limited hard; a shorter budget fails honestly instead of
-        // holding a chat turn open for minutes.
-        timeoutMs: 120_000,
-      });
+      return defaultProvider(model);
     case "openai":
       return new OpenAICompatibleProvider({ apiKey: settings.apiKey.trim(), model });
     case "anthropic":
       return new AnthropicProvider({ apiKey: settings.apiKey.trim(), model });
     default:
-      // Unreachable through the type; kept so a restored object cannot crash the app.
-      return createDemoProvider();
+      // Unreachable through the type; kept so a restored object cannot crash the app. It gets the
+      // Default provider, because that is the only choice the panel offers.
+      return defaultProvider(choiceFor(settings.provider).defaultModel);
   }
-  // `choice` is used above only for its `needsKey` in `settingsProblem`; this keeps the
-  // reference honest for readers who wonder why the label is not used here.
-  void choice;
 }
 
 /**
@@ -184,9 +220,14 @@ export function serializeSettings(settings: LlmSettings): string {
 /**
  * A settings object from whatever was in storage.
  *
- * Tolerant by design: a corrupt or older value falls back to the demo provider instead of
+ * Tolerant by design: a corrupt or older value falls back to the default provider instead of
  * throwing on boot. An unknown `provider` string is *not* trusted, because a typo in storage
  * would otherwise select a provider that does not exist.
+ *
+ * A kind that the panel no longer offers (`demo`, `openai`, `anthropic`) *is* kept: it was chosen
+ * deliberately, and rewriting it to Default would send a stored key's owner to a different API
+ * than the one they configured. The panel shows the choice in force even when it offers only the
+ * Default one, so this state is visible rather than silent.
  */
 export function parseStoredSettings(raw: string | null): LlmSettings {
   const fallback = defaultSettings();

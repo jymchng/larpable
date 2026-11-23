@@ -1,10 +1,19 @@
 # The settings popover
 
 Provider, model and API key used to sit in a band above the conversation, toggled by the cog in
-the Agent pane's heading row. It is now a popover anchored to that cog: same three fields, same
-provider choices, but a surface that appears over the conversation instead of pushing the prompt
+the Agent pane's heading row. It is now a popover anchored to that cog: same three fields, one
+provider choice, but a surface that appears over the conversation instead of pushing the prompt
 box down — which mattered most on a phone, where the band was the most expensive vertical space
 in the app.
+
+**One provider choice.** The row offers **Default** and nothing else: it reaches OpenRouter's free
+models through this app's own `/api/openrouter`, which adds the deployment's key server-side, so it
+needs no account and no key. `demo`, `openai` and `anthropic` are still implemented
+(`src/llm/settings.ts`) and a browser that already stored one keeps it — a stored OpenAI key must
+not silently become a request to somebody else's API — but nothing offers them, and the panel
+paints the choice *in force* even when it no longer offers it rather than hiding the state. The
+browser acceptance run seeds the demo provider into `localStorage` for a deterministic
+conversation (`scripts/ui-acceptance.ts`).
 
 The surface now holds the two settings that are not about the provider as well: the address the
 guest's servers listen on (`http://localhost:` + an editable port, default **5173**) and the
@@ -26,7 +35,7 @@ holds the rules (a port must be 1–65535, a directory must stay inside the work
 | A press outside closes it, a press inside or on the cog does not | `src/ui/popover.ts` → `pointerDownDismisses` | `tests/popover.test.ts` + Chromium run below |
 | Focus moves into the surface on open | `src/ui/components/popover.tsx` | Chromium run below (`document.activeElement`) |
 | Fits a 390 px screen and hangs off the cog | `w-[min(22rem,calc(100vw-1rem))] max-h-[min(70dvh,26rem)]`, `top-full right-0` | Chromium run below (rectangles) |
-| The provider fields are unchanged (provider buttons, model, key, reset) | `src/ui/settings-panel.tsx` | `tests/settings-panel.test.tsx` |
+| The provider fields (one Default button, model, key, reset) | `src/ui/settings-panel.tsx`, `PROVIDER_OPTIONS` in `src/llm/settings.ts` | `tests/settings-panel.test.tsx`, `tests/openrouter-default.test.ts` |
 | A read-only `http://localhost` beside an editable port, and a build directory field | `src/ui/settings-panel.tsx` + `src/ui/preview-settings.ts` | `tests/settings-panel.test.tsx`, `tests/preview-settings.test.ts`, Chromium run below |
 | One port for both previews; the app's start script is *told* it (`PORT`) | `src/ui/App.tsx`, `src/preview/app-server.ts` | `tests/preview-app-server.test.ts`, `tests/preview-app-preview.test.ts` |
 

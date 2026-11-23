@@ -130,7 +130,7 @@ async function observe(page: Page): Promise<Observation> {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       overflowPx: scrolling === null ? 0 : scrolling.scrollWidth - scrolling.clientWidth,
       scoped: {
-        provider: dialog.querySelector("[data-testid=settings-provider-demo]") !== null,
+        provider: dialog.querySelector("[data-testid=settings-provider-default]") !== null,
         model: dialog.querySelector("[data-testid=settings-model]") !== null,
         key: dialog.querySelector("[data-testid=settings-key]") !== null,
         close: dialog.querySelector("[data-testid=settings-region-close]") !== null,

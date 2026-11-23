@@ -396,7 +396,7 @@ describe("Dashboard §13 layout", () => {
     expect(html.indexOf('id="settings-region"')).toBeLessThan(
       html.indexOf('data-testid="settings-panel"'),
     );
-    for (const testId of ["settings-provider-demo", "settings-model", "settings-key"]) {
+    for (const testId of ["settings-provider-default", "settings-model", "settings-key"]) {
       expect(html).toContain(`data-testid="${testId}"`);
     }
   });

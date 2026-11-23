@@ -19,8 +19,9 @@
  *    ran, because "no gaps recorded" is not evidence of responsiveness.
  *
  * Nothing here is a test-only shortcut: the prompt is typed into the real prompt box, the
- * provider is the keyless demo one (so the conversation is deterministic), the build is the
- * app's own `Install & build` control reaching `BuildManager` in the guest, and the preview is
+ * provider is the keyless demo one, seeded into `localStorage` before the page loads (so the
+ * conversation is deterministic; the panel itself now offers one choice, Default), the build is
+ * the app's own `Install & build` control reaching `BuildManager` in the guest, and the preview is
  * the app's own publish path. Every value below is read out of the live page.
  *
  *   bun run acceptance:ui
@@ -260,6 +261,27 @@ const INIT_SAMPLER = () => {
   };
 };
 
+/**
+ * The demo provider, seeded before the page's own script runs.
+ *
+ * The settings panel offers one choice — Default, which reaches a real model through the
+ * deployment's OpenRouter key — and a real model is not reproducible: the tool calls, their
+ * order and their number are its own, while this run asserts three `write_file` rows in
+ * particular. The demo provider is still implemented and `parseStoredSettings` honours a stored
+ * choice, so seeding `larpable.llm` gives this run the same conversation every time without
+ * putting the demo back in front of a user.
+ */
+const INIT_DEMO_SETTINGS = () => {
+  try {
+    localStorage.setItem(
+      "larpable.llm",
+      JSON.stringify({ v: 1, provider: "demo", model: "demo-1", apiKey: "" }),
+    );
+  } catch {
+    // Storage disabled: the run falls back to Default and the tool-row check says so.
+  }
+};
+
 async function main(): Promise<void> {
   mkdirSync(evidenceDir, { recursive: true });
 
@@ -294,6 +316,7 @@ async function main(): Promise<void> {
     });
     page.on("pageerror", (error) => lines.push(`pageerror: ${error.message}`));
     await page.addInitScript(INIT_SAMPLER);
+    await page.addInitScript(INIT_DEMO_SETTINGS);
     await page.goto(`${baseUrl}/`, { waitUntil: "load" });
     await page.bringToFront();
 
@@ -322,11 +345,11 @@ async function main(): Promise<void> {
         .getAttribute("data-basis")) ?? "?"} %`,
     );
     expect(
-      "settings offer the keyless demo provider first, and the key field is a password",
+      "settings paint the seeded provider as the one in force, and the key field is a password",
       (await page.locator("[data-testid=settings-provider-demo]").getAttribute("aria-pressed")) ===
         "true" &&
         (await page.locator("[data-testid=settings-key]").getAttribute("type")) === "password",
-      "demo pressed, key field type=password",
+      "seeded demo pressed, key field type=password",
     );
 
     // ---------------------------------------------------------------- boot

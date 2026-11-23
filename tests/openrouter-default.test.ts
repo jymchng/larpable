@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { OpenAICompatibleProvider } from "../src/llm/openai";
-import { PROVIDER_CHOICES, createProvider, choiceFor, defaultSettings, parseStoredSettings, settingsProblem, serializeSettings } from "../src/llm/settings";
+import { PROVIDER_CHOICES, PROVIDER_OPTIONS, createProvider, choiceFor, defaultSettings, parseStoredSettings, settingsProblem, serializeSettings } from "../src/llm/settings";
 import {
   OPENROUTER_API_ORIGIN,
   OPENROUTER_FREE_MODEL,
@@ -76,11 +76,22 @@ describe("the proxy rule", () => {
 });
 
 describe("the Default provider choice", () => {
-  it("is offered in the panel, after the demo that needs nothing", () => {
-    const kinds = PROVIDER_CHOICES.map((choice) => choice.kind);
+  it("is the only choice the panel offers", () => {
+    // One right answer is not a question: the panel paints exactly this choice.
+    expect(PROVIDER_OPTIONS.map((choice) => choice.kind)).toEqual(["default"]);
+    // The catalogue still holds the other three — they are implemented, and a stored choice is
+    // honoured — but nothing offers them any more.
+    expect(PROVIDER_CHOICES.map((choice) => choice.kind)).toEqual([
+      "demo",
+      "default",
+      "openai",
+      "anthropic",
+    ]);
+  });
 
-    expect(kinds[0]).toBe("demo");
-    expect(kinds).toContain("default");
+  it("is what a browser with nothing stored starts on", () => {
+    expect(defaultSettings().provider).toBe("default");
+    expect(defaultSettings().model).toBe(OPENROUTER_FREE_MODEL);
   });
 
   it("routes to the proxy path with the free model and needs no browser key", () => {
@@ -119,6 +130,17 @@ describe("the Default provider choice", () => {
     // An unknown provider is still not trusted; a typo in storage must not select nothing.
     expect(parseStoredSettings(JSON.stringify({ provider: "opnrouter", model: "x" })).provider).toBe(
       defaultSettings().provider,
+    );
+  });
+
+  it("keeps a stored choice the panel no longer offers rather than rewriting it", () => {
+    // The panel asks one question; storage is not the form. A key already typed belongs to the
+    // API it was typed for, so the choice survives even though nothing offers it.
+    expect(
+      parseStoredSettings(JSON.stringify({ provider: "openai", model: "gpt-4o-mini", apiKey: "k" })),
+    ).toEqual({ provider: "openai", model: "gpt-4o-mini", apiKey: "k" });
+    expect(parseStoredSettings(JSON.stringify({ provider: "demo", model: "demo-1" })).provider).toBe(
+      "demo",
     );
   });
 });

@@ -2,8 +2,8 @@
  * The settings panel's markup, and the three sentences that make the key's boundary visible.
  *
  * The panel is the only place a secret is typed, so the tests assert the *safety* surface
- * rather than the layout: a password field, a demo option that needs nothing, a stated
- * destination for the key, and a problem sentence that names the fix.
+ * rather than the layout: a password field, one provider choice that needs nothing, a stated
+ * destination for a key, and a problem sentence that names the fix.
  *
  * It is now the **body** of the provider popover, so the frame is not this component's job:
  * the dialog, its position, Escape, click-outside and the focus round-trip live in
@@ -15,7 +15,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { PROVIDER_CHOICES, defaultSettings, type LlmSettings } from "../src/llm/settings";
+import { PROVIDER_OPTIONS, defaultSettings, type LlmSettings } from "../src/llm/settings";
 import { defaultPreviewSettings } from "../src/ui/preview-settings";
 import { SettingsPanel, type PreviewFields } from "../src/ui/settings-panel";
 
@@ -45,14 +45,26 @@ function renderWithPreview(preview: PreviewFields, settings: LlmSettings = defau
 }
 
 describe("SettingsPanel", () => {
-  it("offers every provider, with the demo one first and selected by default", () => {
+  it("offers one provider — Default — and it is the one selected", () => {
     const html = render(defaultSettings());
-    for (const choice of PROVIDER_CHOICES) {
-      expect(html).toContain(`data-testid="settings-provider-${choice.kind}"`);
+    expect(html).toContain('data-testid="settings-provider-default" data-selected="true"');
+    // The other three are hidden: one right answer is not a question. They stay implemented (a
+    // stored choice is honoured, see `parseStoredSettings`) but they are not offered.
+    for (const kind of ["demo", "openai", "anthropic"]) {
+      expect(html).not.toContain(`data-testid="settings-provider-${kind}"`);
+      expect(html).not.toContain(`data-selected="false" data-testid="settings-provider-${kind}"`);
     }
+    expect(PROVIDER_OPTIONS.map((choice) => choice.kind)).toEqual(["default"]);
+    expect(html).not.toContain("OpenAI");
+    expect(html).not.toContain("Anthropic");
+  });
+
+  it("still paints a stored choice it no longer offers, rather than hiding the state", () => {
+    // A browser that chose the demo provider before the panel offered one choice keeps it; a
+    // panel that painted no pressed button would be hiding the setting actually in force.
+    const html = render({ provider: "demo", model: "demo-1", apiKey: "" });
     expect(html).toContain('data-testid="settings-provider-demo" data-selected="true"');
-    expect(html.indexOf("Demo (no key)")).toBeLessThan(html.indexOf("OpenAI"));
-    expect(html).toContain('data-testid="settings-provider-openai" data-selected="false"');
+    expect(html).toContain('data-testid="settings-provider-default" data-selected="false"');
   });
 
   it("is a body, not a surface: the dialog above it owns the frame and the name", () => {
@@ -67,12 +79,24 @@ describe("SettingsPanel", () => {
     expect(html).not.toContain("border-b");
   });
 
-  it("needs nothing for the demo: the key field is disabled and says why", () => {
+  it("needs nothing for Default: the key field is disabled and says where the key comes from", () => {
     const html = render(defaultSettings());
     expect(html).toContain('type="password"');
     expect(html).toMatch(/data-testid="settings-key"[^>]*disabled=""/);
-    expect(html).toContain("not needed for the demo");
+    // The placeholder is HTML-escaped (`&#x27;` for the apostrophe), so assert around it.
+    expect(html).toContain("not needed \u2014 the deployment");
+    expect(html).toContain("key is added by /api/openrouter");
+    // The model is the user's: a free-model id is a default, not a constant.
+    expect(html).not.toMatch(/data-testid="settings-model"[^>]*disabled=""/);
+    // And the note says the boundary, not the demo's scripted conversation.
+    expect(html).toContain("Nothing secret is kept in this browser");
+    expect(html).not.toContain("scripted conversation");
+  });
+
+  it("disables the model field only for the demo, whose model id is not a choice", () => {
+    const html = render({ provider: "demo", model: "demo-1", apiKey: "" });
     expect(html).toMatch(/data-testid="settings-model"[^>]*disabled=""/);
+    expect(html).toContain("not needed for the demo");
   });
 
   it("states where a key goes, and what it never reaches", () => {
@@ -88,7 +112,7 @@ describe("SettingsPanel", () => {
     const html = render({ provider: "anthropic", model: "claude-sonnet-4-5", apiKey: "" });
     expect(html).toContain('data-testid="settings-problem"');
     expect(html).toContain("Anthropic needs an API key.");
-    expect(html).toContain("switch to Demo to build without an account");
+    expect(html).toContain("switch to Default, which needs no account");
   });
 
   it("shows the caller's problem only when the settings themselves are runnable", () => {
@@ -101,10 +125,10 @@ describe("SettingsPanel", () => {
     ).not.toContain("The Linux machine is not started yet.");
   });
 
-  it("offers one click back to the no-account path", () => {
+  it("offers one click back to the defaults", () => {
     const html = render({ provider: "openai", model: "gpt-4o-mini", apiKey: "sk-test-1234abcd" });
     expect(html).toContain('data-testid="settings-reset"');
-    expect(html).toContain("Reset to the demo provider");
+    expect(html).toContain("Reset to the default provider");
   });
 
   it("says nothing about a preview it was not given", () => {

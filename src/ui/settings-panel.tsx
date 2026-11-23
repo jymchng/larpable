@@ -20,9 +20,12 @@
  * `aria-labelledby`s its own visible title, so the name "Provider settings" reaches a screen
  * reader exactly once instead of once per wrapper.
  *
- * The demo choice is first and needs nothing, which is the product's real default: a person
- * with no account can boot Linux, paint a site, build it and see it in the preview. That is
- * not a fallback — it is the path the acceptance run uses, so it has to be first-class here.
+ * The provider row offers **one** choice (`PROVIDER_OPTIONS`): Default. It needs no account and
+ * no key, so the other three were a decision with one right answer — asking the question only
+ * invited the wrong one. The choice *in force* is always painted, even when it is no longer
+ * offered (a browser can still hold `demo`, `openai` or `anthropic` from before): a settings
+ * panel that hid the setting it is actually using would be lying about the state, and the reset
+ * control beside the fields is the way back to Default.
  */
 
 import type { ReactNode } from "react";
@@ -33,7 +36,7 @@ import { Input } from "@/ui/components/input";
 import { TOUCH_TARGET_BLOCK } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 import {
-  PROVIDER_CHOICES,
+  PROVIDER_OPTIONS,
   choiceFor,
   defaultSettings,
   redactKey,
@@ -79,6 +82,12 @@ export function SettingsPanel({
   const settingsIssue = settingsProblem(settings);
   const issue = settingsIssue ?? problem ?? null;
 
+  // The offered choices, plus the one in force when it is not among them: see the header. The
+  // active kind is first so the painted row never looks like "nothing is selected".
+  const offered = PROVIDER_OPTIONS.some((candidate) => candidate.kind === settings.provider)
+    ? PROVIDER_OPTIONS
+    : [choice, ...PROVIDER_OPTIONS];
+
   const selectProvider = (kind: ProviderKind) => {
     const next = choiceFor(kind);
     onChange({
@@ -97,7 +106,7 @@ export function SettingsPanel({
           Provider
         </legend>
         <div className="flex flex-wrap gap-1.5">
-          {PROVIDER_CHOICES.map((candidate) => {
+          {offered.map((candidate) => {
             const selected = candidate.kind === settings.provider;
             return (
               <button
@@ -171,7 +180,9 @@ export function SettingsPanel({
       <p data-testid="settings-storage-note" className="text-muted-foreground text-[11px]">
         {choice.needsKey
           ? `The key is kept in this browser only${settings.apiKey.trim().length > 0 ? ` (shown as ${redactKey(settings.apiKey)})` : ""}, sent to the provider's API from this page, and never to the guest or into your project files.`
-          : "The demo provider runs a scripted conversation over the real tools: no key, no account, no network."}
+          : choice.kind === "default"
+            ? "Nothing secret is kept in this browser: the request goes to this app's own /api/openrouter, which adds the deployment's key on the server, so there is no account and no key to manage."
+            : "The demo provider runs a scripted conversation over the real tools: no key, no account, no network."}
       </p>
 
       {preview !== undefined ? (
@@ -277,8 +288,8 @@ export function SettingsPanel({
           reversible, so it costs no words in a panel that is mostly fields. */}
       <IconButton
         testId="settings-reset"
-        label="Reset to the demo provider"
-        hint="Reset the provider, model and key to the demo defaults"
+        label="Reset to the default provider"
+        hint="Reset the provider, model and key to the defaults"
         onClick={() => onChange(defaultSettings())}
       >
         <RotateCcw aria-hidden="true" />

@@ -279,7 +279,7 @@ const SURFACES: ReadonlyArray<{ name: string; html: string }> = [
       buildControl({ busy: true, status: { kind: "running", step: "installing", detail: "npm install" } }),
     ),
   },
-  { name: "settings, demo", html: settings(defaultSettings()) },
+  { name: "settings, default", html: settings(defaultSettings()) },
   {
     name: "settings, keyed",
     html: settings({ provider: "openai", model: "gpt-4o-mini", apiKey: "sk-test-1234abcd" }),
@@ -463,12 +463,12 @@ describe("the browser chrome", () => {
 });
 
 describe("the settings panel", () => {
-  it("resets to the demo with a circling arrow and the sentence as its name", () => {
+  it("resets to the defaults with a circling arrow and the sentence as its name", () => {
     const html = settings({ provider: "openai", model: "gpt-4o-mini", apiKey: "sk-test-1234abcd" });
     const reset = buttonMarkup(html, "settings-reset");
 
     expect(reset).toContain("lucide-rotate-ccw");
-    expect(attribute(reset, "aria-label")).toBe("Reset to the demo provider");
+    expect(attribute(reset, "aria-label")).toBe("Reset to the default provider");
     expect(reset).toContain('data-tone="muted"');
   });
 });

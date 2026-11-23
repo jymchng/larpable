@@ -20,7 +20,7 @@ import {
   machineStatusOf,
 } from "../src/ui/availability";
 
-const demo = defaultSettings();
+const defaults = defaultSettings();
 const keyless: LlmSettings = { provider: "openai", model: "gpt-4o-mini", apiKey: "" };
 
 describe("describeMachine", () => {
@@ -47,22 +47,22 @@ describe("machineStatusOf", () => {
 
 describe("chatProblem", () => {
   it("says there is nothing to talk to before a machine exists", () => {
-    expect(chatProblem("missing", demo)).toBe(
+    expect(chatProblem("missing", defaults)).toBe(
       "Boot the Linux environment before asking the agent to build anything.",
     );
   });
 
   it("names the machine's state while it is not ready, for every state", () => {
     for (const status of ["idle", "initializing", "booting", "error", "stopped"] as const) {
-      const problem = chatProblem(status, demo);
+      const problem = chatProblem(status, defaults);
       expect(problem).toBe(
         `The Linux machine is ${describeMachine(status)}, so the agent has no filesystem to work in yet.`,
       );
     }
   });
 
-  it("is null when the machine is ready and the demo provider needs no key", () => {
-    expect(chatProblem("ready", demo)).toBeNull();
+  it("is null when the machine is ready and the default provider needs no key", () => {
+    expect(chatProblem("ready", defaults)).toBeNull();
   });
 
   it("defers to the settings problem only once the machine can act", () => {
