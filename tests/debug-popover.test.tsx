@@ -23,6 +23,7 @@ import type { StatusInput } from "../src/ui/status-bar";
 import { StatusFacts } from "../src/ui/status-bar-view";
 import { Dashboard, DEBUG_POPOVER_ID } from "../src/ui/dashboard";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 
 const supported = evaluateSupport({
   crossOriginIsolated: true,
@@ -57,6 +58,7 @@ const FACTS: StatusInput = {
   build: { kind: "none" },
   netlify: { kind: "unknown" },
   preview: { kind: "idle" },
+  terminal: NO_TERMINAL,
 };
 
 function render(options: { support?: typeof supported; withPanel?: boolean } = {}): string {

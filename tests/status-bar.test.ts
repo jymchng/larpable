@@ -11,8 +11,10 @@ import { describe, expect, it } from "vitest";
 import type { EnvironmentSnapshot } from "../src/env/status";
 import { INITIAL_ENVIRONMENT } from "../src/env/status";
 import type { PreviewPhase } from "../src/preview/controller";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 import {
   deriveStatusSegments,
+  describeTerminalStatus,
   netlifyStatusFrom,
   summarizeStatus,
   type StatusInput,
@@ -45,6 +47,7 @@ function input(overrides: Partial<StatusInput> = {}): StatusInput {
     build: { kind: "none" },
     netlify: { kind: "unknown" },
     preview: { kind: "idle" },
+    terminal: NO_TERMINAL,
     ...overrides,
   };
 }
@@ -56,7 +59,7 @@ function segment(overrides: Partial<StatusInput>, key: StatusKey): StatusSegment
 }
 
 describe("deriveStatusSegments", () => {
-  it("always renders exactly the six facts, in order", () => {
+  it("always renders exactly the seven facts, in order", () => {
     expect(deriveStatusSegments(input()).map((entry) => entry.key)).toEqual([
       "linux",
       "runtime",
@@ -64,12 +67,21 @@ describe("deriveStatusSegments", () => {
       "build",
       "netlify",
       "preview",
+      "terminal",
     ]);
   });
 
   it("is grey everywhere before anything has happened", () => {
     const segments = deriveStatusSegments(input({ environment: INITIAL_ENVIRONMENT, project: null }));
-    expect(segments.map((entry) => entry.tone)).toEqual(["grey", "grey", "grey", "grey", "grey", "grey"]);
+    expect(segments.map((entry) => entry.tone)).toEqual([
+      "grey",
+      "grey",
+      "grey",
+      "grey",
+      "grey",
+      "grey",
+      "grey",
+    ]);
   });
 });
 
@@ -182,10 +194,35 @@ describe("the preview segment", () => {
   });
 });
 
+describe("describeTerminalStatus", () => {
+  it("is green only when the active shell is attached, and says how many are open", () => {
+    expect(
+      describeTerminalStatus({ shells: 1, connection: "connected", error: null }),
+    ).toMatchObject({ label: "Terminal", value: "connected", tone: "green" });
+    expect(
+      describeTerminalStatus({ shells: 2, connection: "connected", error: null }).detail,
+    ).toContain("2 shells open");
+  });
+
+  it("never paints green for a shell that is not attached", () => {
+    for (const connection of ["connecting", "ended", "waiting"] as const) {
+      expect(describeTerminalStatus({ shells: 1, connection, error: null }).tone).not.toBe("green");
+    }
+    expect(
+      describeTerminalStatus({ shells: 1, connection: "error", error: "pty refused" }),
+    ).toMatchObject({ value: "failed", tone: "red" });
+  });
+
+  it("says `no shell` when the panel holds no tab at all", () => {
+    // A different fact from `waiting`: nothing exists to attach, so nothing is "connecting".
+    expect(describeTerminalStatus(NO_TERMINAL)).toMatchObject({ value: "no shell", tone: "grey" });
+  });
+});
+
 describe("summarizeStatus", () => {
   it("is one sentence naming every fact and its value", () => {
     expect(summarizeStatus(deriveStatusSegments(input()))).toBe(
-      "Linux: Ready · Runtime: node 22.9.0 · Project: my-site · Build: none · Netlify: not validated · Preview: none",
+      "Linux: Ready · Runtime: node 22.9.0 · Project: my-site · Build: none · Netlify: not validated · Preview: none · Terminal: no shell",
     );
   });
 });

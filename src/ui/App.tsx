@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { DEFAULT_WORKSPACE_PATH } from "@/env/default-project";
@@ -16,6 +16,7 @@ import { SettingsPanel } from "@/ui/settings-panel";
 import { StatusFacts } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
 import { TerminalPanel } from "@/ui/terminal-panel";
+import { NO_TERMINAL, type TerminalStatus } from "@/ui/terminal-connection";
 import { useAgentChat } from "@/ui/use-agent-chat";
 import { useAutoBoot } from "@/ui/use-autoboot";
 import { useBuild } from "@/ui/use-build";
@@ -121,15 +122,24 @@ export function App() {
     distroQuery.error ? distroQuery.error.message : null,
   );
 
+  // The terminal's own answer to "is my shell attached?", held here because the debug popover
+  // outlives the panel: the panel is a sibling in the layout and unmounts on the preview stage,
+  // and a fact that vanished with it would be worse than no fact. The panel reports through
+  // `onConnectionChange`; this is the one place that state is stored (user request: "remove the
+  // green dot from the terminal panel and move its information into the debug popover").
+  const [terminalStatus, setTerminalStatus] = useState<TerminalStatus>(NO_TERMINAL);
+
   // Every segment is derived from an object that owns the fact: the environment snapshot, the
   // build status the build hook publishes, the Netlify verdict the Netlify port reported for
-  // the last run (unknown until one has), and the preview controller's own phase.
+  // the last run (unknown until one has), the preview controller's own phase, and the terminal's
+  // connection state.
   const statusInput: StatusInput = {
     environment: environment.snapshot,
     project: { name: null, root: DEFAULT_WORKSPACE_PATH },
     build: build.status,
     netlify: netlify.status,
     preview: preview.phase,
+    terminal: terminalStatus,
   };
 
   return (

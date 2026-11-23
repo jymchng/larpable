@@ -173,14 +173,13 @@ describe("TerminalPanel chrome", () => {
     expect(markup).not.toContain(">New shell<");
   });
 
-  it("starts with no tab, and says so with a dot instead of a word", () => {
+  it("starts with no tab, and no longer paints a connection dot in its header", () => {
     expect(markup).toContain('data-testid="terminal-empty"');
     expect(markup).toContain("Boot Linux to get a shell in /workspace.");
-    // The status is one filled circle: the words live in the label and the tooltip.
-    expect(markup).toContain('data-testid="terminal-status"');
-    expect(markup).toContain('data-tone="grey"');
-    expect(markup).toContain('aria-label="No shell"');
-    expect(markup).toContain('title="No shell"');
+    // The dot that used to say "No shell" is gone (user request: "remove the green dot from the
+    // terminal panel and move its information into the debug popover"). The fact is a `Terminal`
+    // row there now, asserted by `tests/status-bar.test.ts` and `tests/status-bar-view.test.tsx`.
+    expect(markup).not.toContain('data-testid="terminal-status"');
     expect(markup).not.toContain(">No shell<");
   });
 

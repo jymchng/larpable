@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { StatusDot, toneFor } from "../src/ui/components/status-dot";
-import { describeConnection } from "../src/ui/terminal-panel";
+import { describeConnection } from "../src/ui/terminal-connection";
 import { requirementsTone } from "../src/ui/dashboard";
 
 function render(tone: Parameters<typeof StatusDot>[0]["tone"], label: string): string {

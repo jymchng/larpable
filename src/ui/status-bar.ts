@@ -21,6 +21,7 @@ import { statusLabel } from "@/env/status";
 import type { PreviewPhase } from "@/preview/controller";
 import type { BuildStatus } from "@/ui/build-state";
 import type { StatusTone } from "@/ui/components/status-dot";
+import { describeConnection, type TerminalStatus } from "@/ui/terminal-connection";
 
 /**
  * The build, as the UI knows it.
@@ -44,7 +45,14 @@ export interface ProjectStatus {
   root: string;
 }
 
-export type StatusKey = "linux" | "runtime" | "project" | "build" | "netlify" | "preview";
+export type StatusKey =
+  | "linux"
+  | "runtime"
+  | "project"
+  | "build"
+  | "netlify"
+  | "preview"
+  | "terminal";
 
 export interface StatusSegment {
   key: StatusKey;
@@ -63,6 +71,14 @@ export interface StatusInput {
   build: BuildStatus;
   netlify: NetlifyStatus;
   preview: PreviewPhase;
+  /**
+   * The terminal's active shell.
+   *
+   * It is a prop rather than something the popover reads from the panel, because the panel is a
+   * sibling in the layout and unmounts on the other stage; the fact has to outlive it to be
+   * useful. `App` holds the last value the panel reported (`onConnectionChange`).
+   */
+  terminal: TerminalStatus;
 }
 
 function linuxSegment(snapshot: EnvironmentSnapshot): StatusSegment {
@@ -230,7 +246,54 @@ export function describePreviewStatus(phase: PreviewPhase): StatusSegment {
   }
 }
 
-/** All six segments, in the order the bar shows them. */
+/**
+ * The terminal, in the panel's own vocabulary.
+ *
+ * The panel used to paint this as a dot in its header. The dot is gone (user request: "remove the
+ * green dot from the terminal panel and move its information into the debug popover"), and the
+ * words it carried are a segment like any other — so the fact is readable from either pane, and
+ * from a screenshot of the popover, which the dot never was.
+ *
+ * `connected` is the only green, and `error` the only red: `describeConnection` owns that rule.
+ */
+export function describeTerminalStatus(terminal: TerminalStatus): StatusSegment {
+  if (terminal.connection === null) {
+    return {
+      key: "terminal",
+      label: "Terminal",
+      value: "no shell",
+      tone: "grey",
+      detail:
+        "Terminal: no shell is open. The panel opens one when the machine is ready, or press +.",
+    };
+  }
+
+  const described = describeConnection(terminal.connection);
+  const shells = `${String(terminal.shells)} shell${terminal.shells === 1 ? "" : "s"}`;
+
+  if (terminal.connection === "error" && terminal.error !== null) {
+    return {
+      key: "terminal",
+      label: "Terminal",
+      value: described.label.toLowerCase(),
+      tone: described.tone,
+      detail: `Terminal: ${shells} open; the active shell failed — ${terminal.error}.`,
+    };
+  }
+
+  return {
+    key: "terminal",
+    label: "Terminal",
+    value: described.label.toLowerCase(),
+    tone: described.tone,
+    detail:
+      terminal.connection === "connected"
+        ? `Terminal: ${shells} open; the active tab is attached to the guest's pty.`
+        : `Terminal: ${shells} open; the active tab is ${described.label.toLowerCase()}.`,
+  };
+}
+
+/** All seven segments, in the order the popover shows them. */
 export function deriveStatusSegments(input: StatusInput): StatusSegment[] {
   return [
     linuxSegment(input.environment),
@@ -239,6 +302,7 @@ export function deriveStatusSegments(input: StatusInput): StatusSegment[] {
     describeBuildStatus(input.build),
     netlifySegment(input.netlify),
     describePreviewStatus(input.preview),
+    describeTerminalStatus(input.terminal),
   ];
 }
 

@@ -22,6 +22,7 @@ import { INITIAL_ENVIRONMENT } from "@/env/status";
 import type { EnsureNetlifyConfigResult } from "@/netlify/flow";
 import { createNetlifyPort, netlifyErrors, netlifyVerdict } from "@/ui/netlify-port";
 import { deriveStatusSegments, type NetlifyStatus } from "@/ui/status-bar";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 
 const PACKAGE = JSON.stringify({
   name: "site",
@@ -83,6 +84,7 @@ function netlifySegmentFor(netlify: NetlifyStatus) {
     build: { kind: "none" },
     netlify,
     preview: { kind: "idle" },
+    terminal: NO_TERMINAL,
   });
   const segment = segments.find((candidate) => candidate.key === "netlify");
   if (segment === undefined) throw new Error("the status bar has no Netlify segment");

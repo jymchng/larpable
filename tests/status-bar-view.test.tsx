@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { INITIAL_ENVIRONMENT } from "../src/env/status";
 import type { StatusInput } from "../src/ui/status-bar";
 import { StatusFacts } from "../src/ui/status-bar-view";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 
 function render(input: StatusInput): string {
   return renderToStaticMarkup(<StatusFacts input={input} />);
@@ -43,12 +44,13 @@ const ready: StatusInput = {
     served: "worker",
     note: null,
   },
+  terminal: NO_TERMINAL,
 };
 
 describe("StatusFacts", () => {
-  it("renders all six facts as named rows", () => {
+  it("renders all seven facts as named rows", () => {
     const html = render(ready);
-    for (const key of ["linux", "runtime", "project", "build", "netlify", "preview"]) {
+    for (const key of ["linux", "runtime", "project", "build", "netlify", "preview", "terminal"]) {
       expect(html).toContain(`data-testid="status-${key}"`);
     }
   });
@@ -58,9 +60,9 @@ describe("StatusFacts", () => {
     expect(html).toContain('data-testid="status-facts"');
     expect(html).toContain("<dl");
     expect(html).toContain("</dl>");
-    // Six terms and six values, one pair per fact.
-    expect(html.match(/<dt /g)).toHaveLength(6);
-    expect(html.match(/<dd /g)).toHaveLength(6);
+    // Seven terms and seven values, one pair per fact.
+    expect(html.match(/<dt /g)).toHaveLength(7);
+    expect(html.match(/<dd /g)).toHaveLength(7);
     // The label is the term, so the row reads "Linux | Ready" to a screen reader as one pair.
     expect(html).toContain(">Linux</dt>");
     expect(html).toContain(">Ready</dd>");
@@ -81,14 +83,15 @@ describe("StatusFacts", () => {
       build: { kind: "none" },
       netlify: { kind: "unknown" },
       preview: { kind: "idle" },
+      terminal: NO_TERMINAL,
     });
-    expect(html.match(/data-testid="status-[a-z]+" data-key="[a-z]+" data-tone="grey"/g)).toHaveLength(6);
+    expect(html.match(/data-testid="status-[a-z]+" data-key="[a-z]+" data-tone="grey"/g)).toHaveLength(7);
   });
 
-  it("gives the whole list one accessible name made of its six values", () => {
+  it("gives the whole list one accessible name made of its seven values", () => {
     const html = render(ready);
     expect(html).toContain(
-      'aria-label="Linux: Ready · Runtime: node 22.9.0 · Project: my-site · Build: failed · Netlify: valid · Preview: build-mf3k2-1"',
+      'aria-label="Linux: Ready · Runtime: node 22.9.0 · Project: my-site · Build: failed · Netlify: valid · Preview: build-mf3k2-1 · Terminal: no shell"',
     );
   });
 

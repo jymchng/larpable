@@ -33,6 +33,7 @@ import { StageSwitcher } from "../src/ui/stage-switcher";
 import { StatusFacts } from "../src/ui/status-bar-view";
 import type { HandsetFacts } from "../src/ui/mobile";
 import { TOUCH_TARGET_BLOCK, TOUCH_TARGET_ICON, TOUCH_TARGET_MIN_PX } from "../src/ui/touch";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 
 const root = resolve(import.meta.dirname, "..");
 const globals = readFileSync(resolve(root, "src/ui/globals.css"), "utf8");
@@ -57,6 +58,7 @@ const STATUS_INPUT = {
   build: { kind: "failed", summary: "TS2307: cannot find module" },
   netlify: { kind: "ok" },
   preview: { kind: "idle" },
+  terminal: NO_TERMINAL,
 } as const;
 
 function dashboard(overrides: { stage?: "agent" | "preview"; preview?: boolean } = {}): string {
@@ -234,9 +236,9 @@ describe("what a phone sees inside the panes", () => {
     );
 
     // This was a horizontal bar that hid its words behind `hidden sm:inline`; as a list inside
-    // the popover the labels are the point, so every one of the six is painted at every width.
+    // the popover the labels are the point, so every one of the seven is painted at every width.
     expect(html).not.toContain("hidden sm:inline");
-    expect(html.match(/<dt /g)).toHaveLength(6);
+    expect(html.match(/<dt /g)).toHaveLength(7);
     expect(html).toContain(statusLabel("ready"));
     // A long value truncates inside its own column instead of widening the surface.
     expect(html).toContain("truncate");

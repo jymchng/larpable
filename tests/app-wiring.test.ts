@@ -30,6 +30,7 @@ import { createNetlifyPort } from "@/ui/netlify-port";
 import { createPreviewPort } from "@/ui/preview-port";
 import { defaultBuildManager, defaultBuildRuntime } from "@/ui/use-build";
 import { deriveStatusSegments, type NetlifyStatus } from "@/ui/status-bar";
+import { NO_TERMINAL } from "../src/ui/terminal-connection";
 
 function commandLog() {
   return {
@@ -232,6 +233,7 @@ describe("netlify \u2192 status bar", () => {
       build: build.status(),
       netlify: verdicts[0] ?? { kind: "unknown" },
       preview: { kind: "idle" },
+      terminal: NO_TERMINAL,
     });
 
     expect(segments.find((segment) => segment.key === "build")).toMatchObject({
@@ -251,6 +253,7 @@ describe("netlify \u2192 status bar", () => {
       build: { kind: "none" },
       netlify: { kind: "unknown" },
       preview: { kind: "idle" },
+      terminal: NO_TERMINAL,
     });
     expect(before.find((segment) => segment.key === "netlify")).toMatchObject({
       value: "not validated",
@@ -272,6 +275,7 @@ describe("netlify \u2192 status bar", () => {
       build: { kind: "none" },
       netlify: verdicts[0] ?? { kind: "unknown" },
       preview: { kind: "idle" },
+      terminal: NO_TERMINAL,
     });
     expect(after.find((segment) => segment.key === "netlify")?.tone).toBe("red");
   });

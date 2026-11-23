@@ -47,7 +47,6 @@ import {
 } from "lucide-react";
 
 import type { ShellOptions, TerminalSession } from "@/env/execution";
-import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { IconButton } from "@/ui/components/icon-button";
 import {
   NO_MODIFIERS,
@@ -67,6 +66,7 @@ import {
   type ClipboardResult,
 } from "@/ui/terminal-clipboard";
 import { TranscriptBuffer } from "@/ui/terminal-transcript";
+import type { Connection, TerminalStatus } from "@/ui/terminal-connection";
 import { TOUCH_TARGET_BLOCK, TOUCH_TARGET_ICON } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 
@@ -79,9 +79,16 @@ export interface TerminalPanelProps {
   openShell: ((options?: ShellOptions) => Promise<TerminalSession>) | null;
   /** Debug text when `openShell` rejects, e.g. "environment not ready". */
   unavailableReason?: string | null;
+  /**
+   * Reports the active shell's state to whoever shows the facts.
+   *
+   * The panel used to paint its own green dot; that dot is gone (user request: "remove the green
+   * dot from the terminal panel and move its information into the debug popover"), so this is how
+   * the fact reaches the popover. Optional, because a caller that renders the panel alone (the
+   * tests, an acceptance page) has no popover to feed.
+   */
+  onConnectionChange?: (status: TerminalStatus) => void;
 }
-
-type Connection = "waiting" | "connecting" | "connected" | "ended" | "error";
 
 const TRANSCRIPT_LIMIT = 12_000;
 /** Transcript flushes are throttled: a build's progress bar can emit hundreds a second. */
@@ -150,7 +157,13 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: TerminalPanelProps) {
+export function TerminalPanel({
+  ready,
+  cwd,
+  openShell,
+  unavailableReason,
+  onConnectionChange,
+}: TerminalPanelProps) {
   const [tabs, setTabs] = useState<ShellTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<
@@ -309,11 +322,19 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
 
   const active = activeTabOf(tabs, activeId);
   const activeStatus = active === null ? null : (statuses[active.id] ?? null);
-  const badge: { label: string; tone: StatusTone } =
-    active === null
-      ? { label: "No shell", tone: "grey" }
-      : describeConnection(activeStatus?.connection ?? "connecting");
   const attached = activeStatus?.connection === "connected";
+  const activeConnection = active === null ? null : (activeStatus?.connection ?? "connecting");
+  const activeError = activeStatus?.error ?? null;
+
+  // The fact the header's dot used to paint, handed to the debug popover instead (user request:
+  // "remove the green dot from the terminal panel and move its information into the debug
+  // popover"). An effect rather than a line in `reportStatus`, because closing the selected tab
+  // moves the active shell without any new status being reported, and the answer would then be
+  // the closed tab's.
+  useEffect(() => {
+    onConnectionChange?.({ shells: tabs.length, connection: activeConnection, error: activeError });
+  }, [onConnectionChange, tabs.length, activeConnection, activeError]);
+
   const modifierHints = [modifiers.ctrl ? "CTRL" : null, modifiers.alt ? "ALT" : null].filter(
     (value): value is string => value !== null,
   );
@@ -398,9 +419,13 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-800 px-1.5 py-0.5">
         <SquareTerminal aria-hidden="true" className="size-3.5 text-slate-400" />
         <span className="font-mono text-[11px] text-slate-200">{cwd}</span>
-        <StatusDot testId="terminal-status" tone={badge.tone} label={badge.label} className="ml-auto" />
+        {/* The connection dot used to sit here, pushed right by `ml-auto` (user request: "remove
+            the green dot from the terminal panel and move its information into the debug
+            popover"). Its fact is a `Terminal` row in the popover now, beside the other six —
+            readable from either pane, and not painted in this strip's own palette. `ml-auto`
+            keeps the actions on the right edge where the dot left them. */}
 
-        <div className="flex items-center gap-0.5">
+        <div className="ml-auto flex items-center gap-0.5">
           {/* Pictograms, and the terminal's own palette rather than the app's: this strip sits on
               a near-black screen, where `text-muted-foreground` would be unreadable. `IconButton`
               still supplies the accessible name, the tooltip and the 32 px target. */}
@@ -816,28 +841,5 @@ function ShellTab({
   );
 }
 
-/**
- * The terminal's connection state as one dot, with the words that go in its label.
- *
- * Exported because this mapping is the contract the user reads: a state that is not
- * `connected` must never paint green, and `error` must never paint anything but red. The
- * component test asserts every case, so a new `Connection` member cannot compile without
- * a decision here (the switch is exhaustive and the return type is checked).
- */
-export function describeConnection(connection: Connection): {
-  label: string;
-  tone: StatusTone;
-} {
-  switch (connection) {
-    case "connected":
-      return { label: "Connected", tone: "green" };
-    case "connecting":
-      return { label: "Connecting", tone: "amber" };
-    case "ended":
-      return { label: "Exited", tone: "grey" };
-    case "error":
-      return { label: "Failed", tone: "red" };
-    case "waiting":
-      return { label: "Not connected", tone: "grey" };
-  }
-}
+/** Kept for callers that used the old name; the levels live in `terminal-connection.ts`. */
+export type { Connection };
