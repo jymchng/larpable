@@ -166,9 +166,9 @@ export function Dashboard({
       // `h-dvh` is the stylesheet's answer; a measured visual viewport (which on iOS shrinks
       // when the keyboard opens, and `dvh` often does not) replaces it once there is one.
       style={{ height: visibleHeight === null ? "100dvh" : `${String(visibleHeight)}px` }}
-      className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip"
+      className="bg-background text-foreground flex min-h-0 flex-col overflow-x-clip pb-[max(0.35rem,var(--safe-bottom))]"
     >
-      <header className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 pt-[max(0.5rem,var(--safe-top))] pb-2 sm:px-6 sm:py-3">
+      <header className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-2 pt-[max(0.35rem,var(--safe-top))] pb-1.5 sm:px-3 sm:py-1.5">
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"
@@ -190,9 +190,6 @@ export function Dashboard({
               onRetry={boot.onRetry}
             />
           ) : null}
-          <Badge variant="outline" className="font-mono text-[10px]">
-            v{version}
-          </Badge>
           {/*
             The machine report is a debugging aid, not a feature of the product: a person who
             wants to write a website should never have to scroll past requirement rows and a
@@ -217,13 +214,6 @@ export function Dashboard({
               <DebugGlyph />
             </IconButton>
           </div>
-          {/* The count stays visible even when the popover is closed: a red dot is the one thing
-              here that changes what the user can do, so it must not be hidden behind a click. */}
-          <StatusDot
-            testId="requirements-status"
-            tone={requirementsTone(passed)}
-            label={`Requirements: ${String(passed)}/3 met`}
-          />
         </div>
         {/* The tagline is the first thing a 360 px header can afford to lose: the panes below
             say what the product does far better than a sentence about it. */}
@@ -246,8 +236,24 @@ export function Dashboard({
           onClose={() => setDebugOpen(false)}
           anchorRef={debugAnchor}
         >
-          <div className="space-y-3">
-            <DebugSection label="Status">{statusFacts}</DebugSection>
+          <div className="space-y-1.5">
+            <DebugSection label="Status">
+              {/*
+               * The sentence that used to sit in the footer, in full: `Linux: Ready | Distro:
+               * debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB`. It stays one
+               * line because `describeEnvironment` already decided what is worth saying, and it
+               * sits *above* the six facts rather than replacing them — the facts name the
+               * project and the build, which the sentence does not.
+               */}
+              <p
+                data-testid="environment-sentence"
+                title={describeEnvironment(environment)}
+                className="text-foreground min-w-0 font-mono text-[11px] leading-snug break-words"
+              >
+                {describeEnvironment(environment)}
+              </p>
+              {statusFacts}
+            </DebugSection>
             <DebugSection label="Requirements">
               <RequirementsLine support={support} passed={passed} />
               {/* The problems, and only when there are some: with everything met the line
@@ -273,6 +279,24 @@ export function Dashboard({
             {environmentPanel ? (
               <DebugSection label="Machine">{environmentPanel}</DebugSection>
             ) : null}
+            {/*
+             * The two things the header and the footer used to carry in plain sight. Neither is
+             * an action, and both are answers to questions asked while debugging — "can this
+             * browser boot Linux at all?" and "which build am I looking at?" — so they belong at
+             * the bottom of the report rather than spending the window's scarcest rows.
+             */}
+            <div
+              data-testid="debug-footer"
+              className="text-muted-foreground flex items-center justify-between gap-2 border-t pt-1.5 font-mono text-[11px]"
+            >
+              <span
+                data-testid="support-verdict"
+                className={support.ok ? "text-success" : "text-destructive"}
+              >
+                {support.ok ? "Kernel can boot" : "Kernel cannot boot here"}
+              </span>
+              <span data-testid="app-version">v{version}</span>
+            </div>
           </div>
         </Popover>
       </header>
@@ -301,7 +325,7 @@ export function Dashboard({
             because the stage switcher already says "Agent", but the *setting* would otherwise
             become unreachable on exactly the screens that need it most.
           */}
-          <div className="flex items-center justify-between gap-2 border-b px-2 py-1 sm:px-6 sm:py-2.5">
+          <div className="flex items-center justify-between gap-2 border-b px-1.5 py-0.5 sm:px-4 sm:py-1">
             <h2
               id="agent-heading"
               className="text-muted-foreground hidden text-[11px] font-semibold tracking-[0.1em] uppercase lg:block"
@@ -345,9 +369,9 @@ export function Dashboard({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chat}
             {terminal ? (
-              <div className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">{terminal}</div>
+              <div className="flex min-h-0 flex-1 flex-col p-1 sm:p-1.5">{terminal}</div>
             ) : (
-              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center">
+              <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1.5 overflow-y-auto px-3 py-4 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
                 <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -388,7 +412,7 @@ export function Dashboard({
         >
           <h2
             id="preview-heading"
-            className="text-muted-foreground hidden border-b px-4 py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-6 lg:block"
+            className="text-muted-foreground hidden border-b px-3 py-1 text-[11px] font-semibold tracking-[0.1em] uppercase sm:px-4 lg:block"
           >
             Preview
           </h2>
@@ -403,7 +427,7 @@ export function Dashboard({
               clipped and unreachable rather than scrolled — measured as a 574 px document in a
               390 px window.
             */
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 overflow-y-auto px-3 py-4 text-center">
               <TriangleAlert aria-hidden="true" className="text-muted-foreground/60 size-6" />
               <p className="text-sm font-medium">No production build yet.</p>
               <p className="text-muted-foreground max-w-[42ch] text-[13px]">
@@ -415,15 +439,17 @@ export function Dashboard({
         </section>
       </main>
 
-      <footer
-        aria-live="polite"
-        className="bg-muted/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t px-3 pt-2 pb-[max(0.5rem,var(--safe-bottom))] font-mono text-[11.5px] sm:px-6"
-      >
-        <span className="text-muted-foreground">{describeEnvironment(environment)}</span>
-        <Badge variant={support.ok ? "success" : "destructive"}>
-          {support.ok ? "Kernel can boot" : "Kernel cannot boot here"}
-        </Badge>
-      </footer>
+      {/*
+       * The footer band is gone (user request: "put all these into the debug popover"), but its
+       * sentence is not: boot progress is the one status a screen reader has to hear without
+       * opening anything, so it stays in the DOM as a polite live region. `sr-only` is what
+       * keeps it out of the layout while leaving it announced, and `data-testid` is what lets
+       * the acceptance scripts read the same text a person's assistive tech gets — one stable
+       * selector instead of a CSS path into chrome that keeps moving.
+       */}
+      <span data-testid="environment-summary" aria-live="polite" className="sr-only">
+        {describeEnvironment(environment)}
+      </span>
     </div>
   );
 }
@@ -530,7 +556,17 @@ function RequirementsLine({ support, passed }: { support: SupportReport; passed:
       title={detail}
       className="flex min-w-0 items-center gap-1.5 text-[11.5px]"
     >
-      <StatusDot testId="requirements-inline" tone={requirementsTone(passed)} label={detail} />
+      {/*
+       * The dot that used to sit beside the `d` in the header (user request: "put the green dot
+       * status in the debug popover"). It is the same component, the same tone rule and the same
+       * accessible name — the count is the one status whose *colour* matters at a glance, and the
+       * popover is where a person looks when they want to know why it is not green.
+       */}
+      <StatusDot
+        testId="requirements-status"
+        tone={requirementsTone(passed)}
+        label={`Requirements: ${String(passed)}/3 met`}
+      />
       <span className="font-mono">{passed}/3 met</span>
       {support.simulated && (
         <span className="text-muted-foreground italic">(simulated probe)</span>

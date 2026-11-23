@@ -33,6 +33,14 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { chromium, type Browser, type Page } from "playwright-core";
 
+import {
+  FOOTER_STATUS,
+  SELF_TEST_BUTTON,
+  SUPPORT_PROBLEMS,
+  ensureBooted,
+  openDiagnostics,
+} from "./lib/boot.ts";
+
 const root = resolve(import.meta.dirname, "..");
 const reportPath = join(root, "docs", "browser-boot-report.md");
 const evidenceDir = join(root, "docs", "evidence");
@@ -57,7 +65,9 @@ interface Session {
   browser: string;
   chromium: string;
   url: string;
-  devServer: "already running" | "started by this script";
+  /** `LARPABLE_ACCEPTANCE_URL` set means this run measured a deployed site, not a dev server. */
+  target: "local dev server" | "remote deployment";
+  devServer: string;
   startedAt: string;
 }
 
@@ -68,6 +78,10 @@ interface BootMeasurement {
   memory: string | null;
   bootBadge: string | null;
   statusBar: string | null;
+  /** Which path `ensureBooted` took: the machine had already started itself, or it was pressed. */
+  bootPath: string;
+  /** Milliseconds `ensureBooted` spent waiting for the footer to say Ready. */
+  helperWaitedMs: number;
   wallClockMs: number;
 }
 
@@ -182,28 +196,38 @@ async function bootsToReady(page: Page): Promise<BootMeasurement> {
     `environment panel at ${baseUrl}`,
   );
 
-  const supportProblems = await text(page, "[data-testid=support-problems]");
+  const supportProblems = await text(page, SUPPORT_PROBLEMS);
   expect(
     "supported browser: support probe passes",
     supportProblems === null,
     supportProblems ?? "no support problems reported",
   );
 
-  const bootButton = page.locator("[data-testid=boot-button]");
-  expect(
-    "supported browser: boot control offered",
-    (await bootButton.count()) === 1,
-    `${await bootButton.count()} boot button(s)`,
-  );
-
+  /*
+   * The machine starts itself on load and the manual Boot control lives inside the debug
+   * popover, which is closed by default and whose button is disabled while a boot runs. So the
+   * run waits on the footer (the only status visible without a click) through `ensureBooted`,
+   * which presses Boot only when nothing is running and reports which path it took \u2014 see
+   * `scripts/lib/boot.ts` for why an unconditional click is not an option any more.
+   */
   const startedAt = Date.now();
-  await bootButton.click();
-
-  await page
-    .locator("[data-testid=env-status]", { hasText: "Ready" })
-    .first()
-    .waitFor({ timeout: BOOT_TIMEOUT_MS });
+  const boot = await ensureBooted(page, {
+    timeoutMs: BOOT_TIMEOUT_MS,
+    log: (line) => {
+      console.log(`[acceptance] ${line}`);
+    },
+  });
   const wallClockMs = Date.now() - startedAt;
+
+  // The badges below live in the popover's Machine section, so open it (a no-op when the
+  // helper already did) and read them where the user would.
+  await openDiagnostics(page);
+
+  expect(
+    "supported browser: boot control offered in the debug popover",
+    (await page.locator("[data-testid=boot-button]").count()) === 1,
+    `${await page.locator("[data-testid=boot-button]").count()} boot button(s)`,
+  );
 
   const status = (await text(page, "[data-testid=env-status]")) ?? "";
   expect("environment reports Ready", status === "Ready", `status badge reads ${JSON.stringify(status)}`);
@@ -214,7 +238,9 @@ async function bootsToReady(page: Page): Promise<BootMeasurement> {
     cpus: await text(page, "[data-testid=env-cpus]"),
     memory: await text(page, "[data-testid=env-memory]"),
     bootBadge: await text(page, "[data-testid=boot-duration]"),
-    statusBar: await text(page, "footer > span"),
+    statusBar: await text(page, FOOTER_STATUS),
+    bootPath: boot.path,
+    helperWaitedMs: boot.waitedMs,
     wallClockMs,
   };
 
@@ -231,7 +257,9 @@ async function bootsToReady(page: Page): Promise<BootMeasurement> {
 }
 
 async function runsSelfTest(page: Page): Promise<SelfTestMeasurement> {
-  await page.locator("[data-testid=self-test-button]").click();
+  // The self-test control is one of the three the debug popover owns.
+  await openDiagnostics(page);
+  await page.locator(SELF_TEST_BUTTON).click();
   await page.locator("[data-testid=self-test-report]").first().waitFor({ timeout: SELF_TEST_TIMEOUT_MS });
 
   const summary = (await text(page, "[data-testid=self-test-summary]")) ?? "";
@@ -264,10 +292,18 @@ async function runsSelfTest(page: Page): Promise<SelfTestMeasurement> {
 async function unsupportedPath(page: Page): Promise<UnsupportedMeasurement> {
   await page.goto(`${baseUrl}/?simulateSupport=no-jspi`, { waitUntil: "load" });
 
-  const problems = page.locator("[data-testid=support-problems]");
-  await problems.first().waitFor({ timeout: 30_000 });
+  /*
+   * Where the problems render changed with the debug popover. The environment card is `compact`
+   * inside it now, so the card's own `support-problems` alert does not render at all; the
+   * popover's *Requirements* section lists the same strings instead. Both live in the surface,
+   * which stays in the DOM while closed, so the wait is on the list being *attached* and the
+   * popover is then opened to read it as a person would.
+   */
+  const problems = page.locator("[data-testid=requirement-problems]");
+  await problems.first().waitFor({ state: "attached", timeout: 30_000 });
+  await openDiagnostics(page);
 
-  const heading = (await text(page, "[data-testid=support-problems] p")) ?? "";
+  const heading = (await text(page, "[data-testid=requirement-problems] li")) ?? "";
   const problemsText = (await problems.first().innerText()).trim();
   const bootButtons = await page.locator("[data-testid=boot-button]").count();
 
@@ -292,6 +328,11 @@ async function unsupportedPath(page: Page): Promise<UnsupportedMeasurement> {
 function renderReport(measurements: Measurements, failure: Error | null): string {
   const { session, boot, selfTest, unsupported } = measurements;
   const passed = checks.filter((check) => check.ok).length;
+  // A production run must not overwrite the dev-server evidence files, or the two reports
+  // would show the same picture while claiming different things.
+  const remote = session.target === "remote deployment";
+  const bootShot = remote ? "production-boot.png" : "browser-boot-ready.png";
+  const unsupportedShot = remote ? "production-unsupported.png" : "browser-boot-unsupported.png";
 
   const lines: string[] = [
     "# Browser boot report",
@@ -317,6 +358,7 @@ function renderReport(measurements: Measurements, failure: Error | null): string
     `| Browser | ${session.browser} |`,
     `| Chromium binary | \`${session.chromium}\` |`,
     `| Page | ${session.url} |`,
+    `| Target | ${session.target} |`,
     `| Dev server | ${session.devServer} |`,
     "",
     "## Checks",
@@ -340,7 +382,9 @@ function renderReport(measurements: Measurements, failure: Error | null): string
       `| CPUs | ${boot.cpus ?? "not shown"} |`,
       `| Memory | ${boot.memory ?? "not shown"} |`,
       `| Boot duration (app-measured) | ${boot.bootBadge ?? "not shown"} |`,
-      `| Wall clock, click to Ready | ${boot.wallClockMs} ms |`,
+      `| Boot path (auto-boot vs pressed) | ${boot.bootPath} |`,
+      `| Waited by the boot helper | ${boot.helperWaitedMs} ms |`,
+      `| Wall clock from the first observation to Ready | ${boot.wallClockMs} ms |`,
       `| Status bar | ${boot.statusBar ?? "not rendered"} |`,
       "",
     );
@@ -364,7 +408,7 @@ function renderReport(measurements: Measurements, failure: Error | null): string
       selfTest.uname || "(no output)",
       "```",
       "",
-      "![Booted environment with a passing self-test](evidence/browser-boot-ready.png)",
+      `![Booted environment with a passing self-test](evidence/${bootShot})`,
       "",
     );
   }
@@ -382,7 +426,7 @@ function renderReport(measurements: Measurements, failure: Error | null): string
       `Boot controls rendered: **${unsupported.bootButtons}** — the page never invites a boot`,
       "that cannot work, and never spins forever.",
       "",
-      "![Unsupported browser explanation](evidence/browser-boot-unsupported.png)",
+      `![Unsupported browser explanation](evidence/${unsupportedShot})`,
       "",
     );
   }
@@ -415,12 +459,19 @@ function renderReport(measurements: Measurements, failure: Error | null): string
 async function main(): Promise<void> {
   mkdirSync(evidenceDir, { recursive: true });
 
+  const remote = (process.env.LARPABLE_ACCEPTANCE_URL?.trim() ?? "").length > 0;
+  const evidenceNames = {
+    boot: remote ? "production-boot.png" : "browser-boot-ready.png",
+    unsupported: remote ? "production-unsupported.png" : "browser-boot-unsupported.png",
+  };
+
   const measurements: Measurements = {
     session: {
       browser: "unknown",
       chromium: findChromium(),
       url: baseUrl,
-      devServer: "already running",
+      target: remote ? "remote deployment" : "local dev server",
+      devServer: remote ? "not used (the URL is a deployment)" : "already running",
       startedAt: new Date().toISOString(),
     },
     boot: null,
@@ -440,10 +491,10 @@ async function main(): Promise<void> {
     const page = await browser.newPage();
     measurements.boot = await bootsToReady(page);
     measurements.selfTest = await runsSelfTest(page);
-    await page.screenshot({ path: join(evidenceDir, "browser-boot-ready.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, evidenceNames.boot), fullPage: true });
 
     measurements.unsupported = await unsupportedPath(page);
-    await page.screenshot({ path: join(evidenceDir, "browser-boot-unsupported.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, evidenceNames.unsupported), fullPage: true });
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
   } finally {

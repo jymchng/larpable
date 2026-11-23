@@ -128,13 +128,15 @@ async function observeSpinner(page: Page): Promise<SpinnerObservation> {
     const spinner = document.querySelector<HTMLElement>("[data-testid=boot-spinner]");
     const icon = document.querySelector<HTMLElement>("[data-testid=boot-spinner-icon]");
     const style = icon === null ? null : getComputedStyle(icon);
-    const footer = document.querySelector("footer");
+    // The visible footer is gone (its sentence moved into the debug popover); the shell keeps
+    // the same words in a visually hidden live region, which is what this reads.
+    const summary = document.querySelector("[data-testid=environment-summary]");
     return {
       present: spinner !== null,
       label: spinner?.getAttribute("aria-label") ?? null,
       role: spinner?.getAttribute("role") ?? null,
       animation: style?.animationName ?? "none",
-      footer: footer?.textContent?.trim() ?? "",
+      footer: summary?.textContent?.trim() ?? "",
       overflowPx: Math.max(
         0,
         (document.scrollingElement?.scrollWidth ?? 0) - (document.scrollingElement?.clientWidth ?? 0),

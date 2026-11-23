@@ -20,6 +20,18 @@
 [build.environment]
   BUN_VERSION = "1.3.13"
   NODE_VERSION = "22"
+  # Ship both images the pinned unkernel release publishes, not just the one this app
+  # boots by default (`DEFAULT_DISTRO_NAME` is debian). The release lists alpine
+  # (4 046 848 bytes) beside debian (72 593 408), they share one abi/base, and each is
+  # verified against the release's own SHA-256 by `scripts/fetch-distros.ts`. Measured
+  # before this line existed: `GET /distros/alpine.erofs` on the live site answered
+  # `404 text/html` — the image the site is supposed to have was not in the deploy, and
+  # nothing but a deploy could tell you. 4 MB on top of 72 MB is worth a site whose
+  # `/distros/` matches its own manifest.
+  #
+  # Local `bun run build` keeps the default (debian only) so a checkout stays small; set
+  # the same variable locally to reproduce the deployed set exactly.
+  LARPABLE_DISTROS = "debian,alpine"
 
 # The OpenRouter proxy, in production.
 #

@@ -217,7 +217,9 @@ async function main(): Promise<void> {
     const bootStartedAt = Date.now();
     let ready = false;
     while (Date.now() - bootStartedAt < BOOT_TIMEOUT_MS) {
-      const footer = await page.evaluate(() => document.querySelector("footer")?.textContent ?? "");
+      const footer = await page.evaluate(
+        () => document.querySelector("[data-testid=environment-summary]")?.textContent ?? "",
+      );
       if (/Linux: Ready/.test(footer)) {
         ready = true;
         break;

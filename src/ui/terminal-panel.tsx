@@ -532,7 +532,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
         {tabs.length === 0 && (
           <div
             data-testid="terminal-empty"
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center"
           >
             <SquareTerminal aria-hidden="true" className="size-5 text-slate-600" />
             <p className="font-mono text-[11.5px] text-slate-400">

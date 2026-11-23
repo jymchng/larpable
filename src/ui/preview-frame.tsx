@@ -343,7 +343,7 @@ export function PreviewPanel({
             min-height, so the pane grew to 574 px inside a 390 px window and — `body` is
             `overflow: hidden` — the explanation at the bottom was clipped, not scrolled.
           */
-          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto px-6 py-8 text-center"
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 overflow-y-auto px-3 py-4 text-center"
         >
           {state.kind === "error" ? (
             <>

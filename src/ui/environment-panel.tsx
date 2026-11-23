@@ -110,7 +110,7 @@ export function EnvironmentPanel({
           <div
             data-testid="support-problems"
             role="alert"
-            className="border-destructive/40 bg-destructive/10 space-y-2 rounded-lg border p-3"
+            className="border-destructive/40 bg-destructive/10 space-y-1.5 rounded-lg border p-2.5"
           >
             <p className="text-destructive flex items-center gap-2 text-sm font-medium">
               <TriangleAlert aria-hidden="true" className="size-4" />
@@ -233,7 +233,7 @@ export function EnvironmentPanel({
     // No card, no header, no description: the popover's own "Machine" caption says what this
     // is, and the controls are the reason it is here.
     return (
-      <div data-testid="environment-panel" data-compact="true" className="space-y-3">
+      <div data-testid="environment-panel" data-compact="true" className="space-y-2">
         {content}
       </div>
     );
@@ -251,14 +251,14 @@ export function EnvironmentPanel({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-3">{content}</CardContent>
+      <CardContent className="space-y-2">{content}</CardContent>
     </Card>
   );
 }
 
 function SelfTestReport({ result }: { result: SelfTestResult }) {
   return (
-    <div className="space-y-2 rounded-lg border p-3" data-testid="self-test-report">
+    <div className="space-y-1.5 rounded-lg border p-2.5" data-testid="self-test-report">
       <p
         data-testid="self-test-summary"
         className={result.ok ? "text-success text-sm font-medium" : "text-destructive text-sm font-medium"}
