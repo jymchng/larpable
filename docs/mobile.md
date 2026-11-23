@@ -63,13 +63,15 @@ exactly one place — `src/ui/touch.ts`:
 
 | Constant | Class | Used for |
 | --- | --- | --- |
-| `TOUCH_TARGET_ICON` | `max-lg:size-11` | square controls: icon buttons, terminal keycaps, the new-shell `+` |
-| `TOUCH_TARGET_BLOCK` | `max-lg:min-h-11` | controls with words in them: shell tabs, disclosure headers |
+| `TOUCH_TARGET_ICON` | `max-lg:size-9 tap-target` | square controls: icon buttons, terminal keycaps, the new-shell `+` |
+| `TOUCH_TARGET_BLOCK` | `max-lg:min-h-9 tap-target` | controls with words in them: disclosure headers, the stage switcher's tabs |
 
-The one documented exception is a control that sits *inside a line of text* — the `×` that
-closes a shell tab, which would break the tab's 24 px row if it grew — marked `data-inline`
-and held to WCAG 2.5.8's 24 px instead. The browser audit enforces both floors by measuring
-`getBoundingClientRect()`, not by reading the class names.
+The documented exceptions are controls that sit *inside a line of text* — the `×` that closes a
+shell tab, and the shell tab itself — marked `data-inline` and held to WCAG 2.5.8's 24 px instead.
+The tab was 36 px tall until it was asked to be smaller (user request: *"the Shell <N> tab in the
+terminal pane has too high a y padding around the Shell <B> text"*); 24 px of ink for a 15 px line
+still clears 2.5.8, and the × beside it is the same size. The browser audit enforces both floors by
+measuring `getBoundingClientRect()`, not by reading the class names.
 
 ## The keyboard, and the visible area
 

@@ -44,8 +44,10 @@ Three things stay true, and each of them is a test that fails if it flips:
 
 ## The body, as concisely as it could be said
 
-- **Status** — the six facts, one per line, `label = value`, with the dot's colour as the third
-  channel and the full sentence in the row's `title`.
+- **Status** — the seven facts, one per line, `label = value`, with the dot's colour as the third
+  channel and the full sentence in the row's `title`. The terminal's row says how many shells are
+  open and whether the active one is attached; it is the last of the seven because it is about a
+  pane, not about the machine's readiness.
 - **Requirements** — one line: `3/3 met`, plus the problems (with the support probe's own
   browser-version advice) *only when there are any*. It used to be three tick rows with a
   `supported`/`unsupported` fragment each; the per-check answers are still there, in the line's
@@ -127,8 +129,8 @@ Unit-level evidence:
 ./node_modules/.bin/vitest run tests/debug-popover.test.tsx tests/status-bar-view.test.tsx
 ```
 
-`tests/debug-popover.test.tsx` (7 tests) asserts the surface is closed and named, the six facts are
+`tests/debug-popover.test.tsx` (7 tests) asserts the surface is closed and named, the facts are
 inside it and nowhere else, the Boot / self-test / Shut down controls are inside it, and the
 requirements line is one line whose detail still names all three checks.
-`tests/status-bar-view.test.tsx` (7 tests) asserts the list shape: six `<dt>`/`<dd>` pairs, the
+`tests/status-bar-view.test.tsx` (7 tests) asserts the list shape: seven `<dt>`/`<dd>` pairs, the
 tones from the source, one accessible name, and truncation instead of widening.

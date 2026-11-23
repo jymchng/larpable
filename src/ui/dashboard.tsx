@@ -44,10 +44,10 @@ export interface DashboardProps {
    */
   preview?: ReactNode;
   /**
-   * The six machine facts (§13): Linux, runtime, project, build, Netlify, preview — already
-   * derived by `StatusFacts`. They are the body of the debug popover, not a band under the
+   * The seven machine facts (§13): Linux, runtime, project, build, Netlify, preview, terminal —
+   * already derived by `StatusFacts`. They are the body of the debug popover, not a band under the
    * header (user request: "Put all the above in the debug popover … make it more concise"):
-   * a six-cell stripe spent a row of height on facts a person reads when something is wrong.
+   * a row of six cells spent a line of height on facts a person reads when something is wrong.
    * Nothing else in the layout repeats them.
    */
   statusFacts?: ReactNode;
@@ -360,7 +360,7 @@ export function Dashboard({
               <div className="flex max-h-full min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 py-2 text-center">
                 <Terminal aria-hidden="true" className="text-muted-foreground/60 size-6" />
                 <p className="text-sm font-medium">The agent has nothing to work with yet.</p>
-                <p className="text-muted-foreground max-w-[42ch] text-[13px]">
+                <p className="text-muted-foreground max-w-[42ch] text-[12px]">
                   Describe a website here once the Linux environment reports ready.
                 </p>
               </div>

@@ -67,7 +67,7 @@ import {
 } from "@/ui/terminal-clipboard";
 import { TranscriptBuffer } from "@/ui/terminal-transcript";
 import type { Connection, TerminalStatus } from "@/ui/terminal-connection";
-import { TOUCH_TARGET_BLOCK, TOUCH_TARGET_ICON } from "@/ui/touch";
+import { TOUCH_TARGET_ICON } from "@/ui/touch";
 import { cn } from "@/lib/utils";
 
 export interface TerminalPanelProps {
@@ -376,9 +376,15 @@ export function TerminalPanel({
                 aria-label={`${tab.label} (${status})`}
                 title={`${tab.label} (${status})`}
                 onClick={() => selectTab(tab.id)}
-                // A tab is a word, not a pictogram, so it takes the block floor: 44 px tall below
-                // `lg` (a 17 px baseline is a thumb miss), its own text height above it.
-                className={cn("font-mono text-[10.5px]", TOUCH_TARGET_BLOCK)}
+                // A tab is one line of text inside the strip, so it takes the *inline* floor —
+                // 24 px, WCAG 2.5.8 — instead of the 36 px block one. The block floor gave a
+                // two-tab strip 40 px of height for 15 px of words (user request: "the Shell <N>
+                // tab in the terminal pane has too high a y padding around the Shell <B> text").
+                // `data-inline` is what tells the mobile audit which floor applies; it measures
+                // `getBoundingClientRect()` rather than reading class names
+                // (`scripts/mobile-acceptance.ts`), so the two cannot drift apart.
+                data-inline="true"
+                className="inline-flex items-center px-0.5 py-0.5 font-mono text-[10.5px] leading-tight max-lg:min-h-6"
               >
                 {tab.label}
               </button>

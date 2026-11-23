@@ -119,7 +119,10 @@ export function ChatPanel({
         className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-1"
       >
         {state.entries.length === 0 ? (
-          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-1 text-[13px]">
+          // Smaller than a message on purpose (user request: "the placeholder text in the agent tab
+          // can be smaller"): 12 px is the size the tool rows use, so the hint reads as chrome
+          // beside the conversation rather than as the first thing the agent said.
+          <li data-testid="chat-empty" className="text-muted-foreground px-1 py-1 text-[12px]">
             {emptyHint}
           </li>
         ) : (

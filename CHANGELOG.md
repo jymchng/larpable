@@ -139,6 +139,30 @@ All notable changes to Larpable are documented here. The format follows
   `data-served` on the pane, which is what `scripts/preview-browser-acceptance.ts` reads for its
   "the preview worker holds the build" check. Asserted by `tests/preview-pane.test.tsx` and
   `tests/preview-chrome.test.tsx`.
+- **An empty preview pane says so, and points at the hammer.** The pane used to be chrome and
+  nothing else before the first build, which was a dead end for a first-time user (user request:
+  *"when there is no preview show that there is no preview and a hint to click on the Hammer
+  button"*). `PreviewPanel` now renders a placeholder for the idle state — "No preview yet." under
+  a hammer glyph — and `PreviewPane` passes the hint that names the control, because that is the
+  file that renders it: absent a build control the copy says only that a build has to be published,
+  so the placeholder never names a button that is not on screen. Asserted by
+  `tests/preview-frame.test.tsx` and `tests/preview-pane.test.tsx`.
+- **The terminal's connection dot moved into the debug popover.** The panel's header painted one
+  green `StatusDot` for "the shell is attached" (user request: *"remove the green dot from the
+  terminal panel and move its information into the debug popover"*) — a fact only visible while the
+  terminal was on screen, in the near-black palette of that strip. It is a seventh status segment
+  (`Terminal`: `no shell` / `connecting` / `connected` / `exited` / `failed`, with how many shells
+  are open and the guest's own error) fed from a callback the panel makes when its active tab
+  changes, so the fact outlives the pane. The rule is unchanged and still asserted: green only when
+  the shell is actually attached (`tests/status-bar.test.ts`, `tests/status-dot.test.tsx`).
+- **Two placeholder texts got smaller.** The agent pane's empty-transcript hint is 12 px rather than
+  13 px, so it reads as chrome beside the conversation instead of as the first message (user
+  request: *"the placeholder text in the agent tab can be smaller"*); the same copy under the
+  offline agent pane follows it. **And the `Shell N` tab lost its block padding**: it took
+  `TOUCH_TARGET_BLOCK` — 36 px of ink for a 15 px line — so a two-tab strip stood 40 px high (user
+  request: *"the Shell <N> tab in the terminal pane has too high a y padding around the Shell <B>
+  text"*). It is now the same 24 px inline control as the `×` beside it (`data-inline`, WCAG
+  2.5.8), which is the floor the browser audit applies to it.
 
 ### Fixed
 

@@ -18,8 +18,14 @@ function ready(tree: Record<string, string> = {}, handlers = {}): FakeEnvironmen
   return environment;
 }
 
-/** Read everything currently buffered, without waiting for the stream to close. */
-async function drain(session: TerminalSession, ms = 20): Promise<string> {
+/**
+ * Read everything currently buffered, without waiting for the stream to close.
+ *
+ * The window is 100 ms rather than the 20 ms it started at: the fake pty writes from its own
+ * microtask queue, and under a full parallel suite the echo sometimes arrived after the old window
+ * closed (a flake, not a failure — the assertion is about the words, not the timing).
+ */
+async function drain(session: TerminalSession, ms = 100): Promise<string> {
   const reader = session.output.getReader();
   const decoder = new TextDecoder();
   let text = "";

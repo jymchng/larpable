@@ -1,5 +1,5 @@
 /**
- * The six status facts, as a compact label/value list.
+ * The seven status facts, as a compact label/value list.
  *
  * The derivation is `src/ui/status-bar.ts`; this file only renders it. The split exists
  * because the *rule* is what needs testing ("green only when its own source says so"), while
