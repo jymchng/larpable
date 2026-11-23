@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { Dashboard } from "../src/ui/dashboard";
+import { Dashboard, DEBUG_POPOVER_ID } from "../src/ui/dashboard";
 import { SettingsPanel } from "../src/ui/settings-panel";
 import { defaultSettings } from "../src/llm/settings";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
@@ -223,15 +223,20 @@ describe("Dashboard", () => {
     expect(html).not.toContain("No production build yet.");
   });
 
-  it("offers an accessible toggle for the browser report", () => {
+  it("offers an accessible toggle for the debug popover", () => {
     const html = renderDashboard();
 
     expect(html).toContain('data-testid="diagnostics-toggle"');
-    // Closed until asked for: the report is debugging, not product, and it no longer
-    // occupies a band above the footer.
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-controls="diagnostics-body"');
-    expect(html).toContain('id="diagnostics-body"');
+    // Closed until asked for: the report is debugging, not product, and it is a popover now
+    // rather than a sheet in the layout.
+    expect(html).toMatch(/data-testid="diagnostics-toggle"[^>]*aria-expanded="false"/);
+    expect(html).toContain(`aria-controls="${DEBUG_POPOVER_ID}"`);
+    expect(html).toContain(`id="${DEBUG_POPOVER_ID}"`);
+    // A real dialog, named by its own visible title: the semantics and the dismissal come from
+    // `Popover` rather than from a second, hand-rolled implementation.
+    expect(html).toMatch(new RegExp(`id="${DEBUG_POPOVER_ID}"[^>]*role="dialog"`));
+    expect(html).toContain(`aria-labelledby="${DEBUG_POPOVER_ID}-heading"`);
+    expect(html).toContain('aria-label="Close debug"');
   });
 
   it("shows the requirement count as a green dot, not a sentence in the toolbar", () => {
@@ -307,15 +312,19 @@ describe("Dashboard §13 layout", () => {
         support={supported}
         environment={INITIAL_ENVIRONMENT}
         distro={summarizeDistro([debianAsset], null)}
-        statusBar={<div data-testid="injected-status-bar" />}
+        statusFacts={<div data-testid="injected-status-facts" />}
         settings={<div data-testid="injected-settings" />}
         chat={<div data-testid="injected-chat" />}
       />,
     );
 
-    // The bar is about the whole window, so it sits under the header and above the panes.
-    expect(html.indexOf('data-testid="injected-status-bar"')).toBeLessThan(
-      html.indexOf('data-testid="agent-pane"'),
+    // The facts are inside the debug popover, which is header chrome: above the panes, but not
+    // a band of its own across them.
+    expect(html.indexOf('data-testid="injected-status-facts"')).toBeGreaterThan(
+      html.indexOf(`id="${DEBUG_POPOVER_ID}"`),
+    );
+    expect(html.indexOf('data-testid="injected-status-facts"')).toBeLessThan(
+      html.indexOf('data-testid="main-panes"'),
     );
     // Settings are part of the agent pane: they are the provider the conversation uses.
     expect(html.indexOf('data-testid="injected-settings"')).toBeGreaterThan(

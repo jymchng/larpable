@@ -37,6 +37,17 @@ export interface EnvironmentPanelProps {
    * plain support problems and nothing extra.
    */
   handset?: HandsetFacts;
+  /**
+   * Drop the card's framing and keep its controls.
+   *
+   * The panel is the body of the debug popover now (goal #33: "the environment card kept only
+   * for the Boot / self-test / Shut down controls it owns"), so the title "Linux environment",
+   * a description of Debian and the card's own border would be a third paragraph about the
+   * machine in a surface that already says what it is. Everything a person *acts* on — the
+   * status badges, the three icon buttons, the boot stage, the error and the self-test report —
+   * stays exactly as it was.
+   */
+  compact?: boolean;
   onBoot: () => void;
   onSelfTest: () => void;
   onShutdown: () => void;
@@ -61,6 +72,7 @@ export function EnvironmentPanel({
   bootDurationMs,
   error,
   handset,
+  compact = false,
   onBoot,
   onSelfTest,
   onShutdown,
@@ -70,19 +82,8 @@ export function EnvironmentPanel({
   // when the caller said which device it is: a desktop has nothing to gain from either note.
   const notes = handset === undefined ? [] : handsetNotes(support, handset);
 
-  return (
-    <Card data-testid="environment-panel">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Cpu aria-hidden="true" className="size-4" />
-          Linux environment
-        </CardTitle>
-        <CardDescription>
-          A real Debian machine, booted from WebAssembly in this tab. Nothing runs on a server.
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
+  const content = (
+    <>
         {notes.length > 0 && (
           <ul data-testid="handset-notes" className="space-y-1.5 text-[11.5px]">
             {notes.map((note) => (
@@ -103,6 +104,9 @@ export function EnvironmentPanel({
         )}
 
         {!support.ok ? (
+          // In compact mode the popover's Requirements section already lists these problems
+          // (with the same wording, from the same report), so the card does not say them twice.
+          compact ? null : (
           <div
             data-testid="support-problems"
             role="alert"
@@ -127,6 +131,7 @@ export function EnvironmentPanel({
               </p>
             )}
           </div>
+          )
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -221,7 +226,32 @@ export function EnvironmentPanel({
             {selfTest && <SelfTestReport result={selfTest} />}
           </>
         )}
-      </CardContent>
+    </>
+  );
+
+  if (compact) {
+    // No card, no header, no description: the popover's own "Machine" caption says what this
+    // is, and the controls are the reason it is here.
+    return (
+      <div data-testid="environment-panel" data-compact="true" className="space-y-3">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Card data-testid="environment-panel">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Cpu aria-hidden="true" className="size-4" />
+          Linux environment
+        </CardTitle>
+        <CardDescription>
+          A real Debian machine, booted from WebAssembly in this tab. Nothing runs on a server.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-3">{content}</CardContent>
     </Card>
   );
 }

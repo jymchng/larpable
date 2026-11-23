@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, Cog, GripVertical, Terminal, TriangleAlert, X } from "lucide-react";
+import { Cog, GripVertical, Terminal, TriangleAlert } from "lucide-react";
 
 import type { DistroSummary } from "@/env/distro";
 import type { EnvironmentSnapshot } from "@/env/status";
@@ -10,7 +10,6 @@ import { BootIndicator } from "@/ui/boot-indicator";
 import { IconButton } from "@/ui/components/icon-button";
 import { Popover } from "@/ui/components/popover";
 import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
 import { MIN_SPLIT, clampSplit, splitAfterKey, splitFromPointer } from "@/ui/split";
 import { DEFAULT_STAGE, type PaneStage } from "@/ui/stage";
 import { StageSwitcher } from "@/ui/stage-switcher";
@@ -22,7 +21,11 @@ export interface DashboardProps {
   support: SupportReport;
   environment: EnvironmentSnapshot;
   distro: DistroSummary;
-  /** The live boot card. Injected so the dashboard stays a pure function of its props. */
+  /**
+   * The live boot card. Injected so the dashboard stays a pure function of its props. It lives
+   * inside the debug popover, compact: the Boot / self-test / Shut down controls it owns stay
+   * reachable there, and the card's introductory copy (a paragraph about Debian) does not.
+   */
   environmentPanel?: ReactNode;
   /**
    * The agent conversation. Injected for the same reason as the boot card: the dashboard
@@ -41,10 +44,13 @@ export interface DashboardProps {
    */
   preview?: ReactNode;
   /**
-   * The live status bar (§13): six facts, already derived. It sits under the header because
-   * "is the machine ready / has the build passed" is about the whole window, not one pane.
+   * The six machine facts (§13): Linux, runtime, project, build, Netlify, preview — already
+   * derived by `StatusFacts`. They are the body of the debug popover, not a band under the
+   * header (user request: "Put all the above in the debug popover … make it more concise"):
+   * a six-cell stripe spent a row of height on facts a person reads when something is wrong.
+   * Nothing else in the layout repeats them.
    */
-  statusBar?: ReactNode;
+  statusFacts?: ReactNode;
   /**
    * Provider/model/key settings. They are the *body* of the popover the cog opens — the
    * surface, its position, its dismissal and its focus behaviour belong to `Popover` here,
@@ -101,7 +107,7 @@ export function Dashboard({
   chat,
   terminal,
   preview,
-  statusBar,
+  statusFacts,
   settings,
   boot,
   initialSplit = 50,
@@ -124,6 +130,10 @@ export function Dashboard({
   // The wrapper around the cog and its popover: it is both the "not outside" test for a press
   // and the place focus returns to when the popover closes.
   const settingsAnchor = useRef<HTMLDivElement | null>(null);
+  // The `d` and its popover: the trigger is the anchor for dismissal and for focus returning,
+  // while the *surface* hangs off the header (which is `relative`) so it can align to the
+  // window's edge instead of to a button that sits 120 px from it.
+  const debugAnchor = useRef<HTMLDivElement | null>(null);
   // Publishes `--app-height` (the visual viewport, keyboard included) for the shell to read.
   const visibleHeight = useAppHeight();
 
@@ -184,26 +194,30 @@ export function Dashboard({
             v{version}
           </Badge>
           {/*
-            The browser report is a debugging aid, not a feature of the product: a person who
-            wants to write a website should never have to scroll past three requirement rows and
-            a boot card to find the prompt box. It lives behind a `d` in a circle beside the
-            wordmark — the one glyph that means "diagnostics" without spending a word — and its
-            content appears as a sheet under the header rather than in the layout, so opening it
-            cannot reflow the panes underneath.
+            The machine report is a debugging aid, not a feature of the product: a person who
+            wants to write a website should never have to scroll past requirement rows and a
+            boot card to find the prompt box. It lives behind a `d` in a circle beside the
+            wordmark — the one glyph that means "diagnostics" without spending a word — and
+            since the user asked for it to *be* a popover it is a real one: Escape, a press
+            outside, focus in on open and focus back to this button are `Popover`'s job, and a
+            hand-rolled sheet could only reimplement them.
           */}
-          <IconButton
-            testId="diagnostics-toggle"
-            label={debugOpen ? "Close the browser report" : "Debug: this browser"}
-            hint="Requirements, the Linux image and the boot card"
-            tone="nav"
-            aria-expanded={debugOpen}
-            aria-controls="diagnostics-body"
-            onClick={() => setDebugOpen((open) => !open)}
-            className="ml-1"
-          >
-            <DebugGlyph />
-          </IconButton>
-          {/* The count stays visible even when the sheet is closed: a red dot is the one thing
+          <div ref={debugAnchor} className="ml-1 flex items-center">
+            <IconButton
+              testId="diagnostics-toggle"
+              // One name in both states: `aria-expanded` says whether it is open, and a name
+              // that changes under a screen reader cannot be asked for twice.
+              label="Debug: this browser"
+              hint="Status, requirements, the Linux image and the boot controls"
+              tone="nav"
+              aria-expanded={debugOpen}
+              aria-controls={DEBUG_POPOVER_ID}
+              onClick={() => setDebugOpen((open) => !open)}
+            >
+              <DebugGlyph />
+            </IconButton>
+          </div>
+          {/* The count stays visible even when the popover is closed: a red dot is the one thing
               here that changes what the user can do, so it must not be hidden behind a click. */}
           <StatusDot
             testId="requirements-status"
@@ -218,101 +232,50 @@ export function Dashboard({
         </p>
 
         {/*
-          The sheet itself. Always in the DOM and hidden with a class when closed, so
-          `aria-controls` points at something that exists and the requirement rows can be
-          inspected (by a person or an acceptance run) without a click; `hidden` is what takes it
-          out of the layout and out of the focus order, so a closed report cannot be tabbed into.
+          The popover is a child of the header, not of the trigger. The header is `relative` and
+          spans the window, so `right-0` puts the surface's right edge at the window's edge and
+          its 22rem width still fits 390 px; anchored to the `d` itself it would hang off the
+          left. `anchorRef` still points at the `d` alone, so a press on the trigger is not a
+          dismissal and focus returns to the control that opened it. The surface is always in
+          the DOM (hidden when closed), so `aria-controls` always names something that exists.
         */}
-        <div
-          id="diagnostics-body"
-          role="region"
-          aria-labelledby="diagnostics-heading"
-          data-open={debugOpen ? "true" : "false"}
-          className={cn(
-            "bg-card absolute inset-x-2 top-full z-50 max-h-[min(70dvh,32rem)] overflow-y-auto rounded-lg border shadow-xl",
-            debugOpen ? undefined : "hidden",
-          )}
+        <Popover
+          id={DEBUG_POPOVER_ID}
+          title="Debug"
+          open={debugOpen}
+          onClose={() => setDebugOpen(false)}
+          anchorRef={debugAnchor}
         >
-          <div className="flex items-center justify-between gap-2 border-b px-4 py-1.5">
-            <h2
-              id="diagnostics-heading"
-              className="text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase"
-            >
-              This browser
-            </h2>
-            <IconButton
-              testId="diagnostics-close"
-              label="Close the browser report"
-              tone="muted"
-              onClick={() => setDebugOpen(false)}
-            >
-              <X aria-hidden="true" />
-            </IconButton>
+          <div className="space-y-3">
+            <DebugSection label="Status">{statusFacts}</DebugSection>
+            <DebugSection label="Requirements">
+              <RequirementsLine support={support} passed={passed} />
+              {/* The problems, and only when there are some: with everything met the line
+                  above is the whole answer, and with something missing this is where the
+                  support probe's own explanation (browser versions included) is spelled out. */}
+              {support.problems.length > 0 && (
+                <ul data-testid="requirement-problems" className="space-y-1 pt-1">
+                  {support.problems.map((problem) => (
+                    <li key={problem} className="text-muted-foreground flex gap-1.5 text-[11.5px]">
+                      <TriangleAlert
+                        aria-hidden="true"
+                        className="text-destructive mt-0.5 size-3 shrink-0"
+                      />
+                      <span>{problem}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DebugSection>
+            <DebugSection label="Linux image">
+              <ImageLine distro={distro} />
+            </DebugSection>
+            {environmentPanel ? (
+              <DebugSection label="Machine">{environmentPanel}</DebugSection>
+            ) : null}
           </div>
-
-          <div className="grid gap-3 p-4 lg:grid-cols-2">
-            {environmentPanel}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Runtime requirements</CardTitle>
-                <CardDescription>What unkernel needs before a kernel can boot.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <CheckRow
-                  label="WebAssembly JSPI"
-                  ok={support.probe.jspi}
-                  detail={support.probe.jspi ? "available" : "missing"}
-                />
-                <CheckRow
-                  label="Cross-origin isolation"
-                  ok={support.probe.crossOriginIsolated}
-                  detail={support.probe.crossOriginIsolated ? "isolated" : "not isolated"}
-                />
-                <CheckRow
-                  label="SharedArrayBuffer"
-                  ok={support.probe.sharedArrayBuffer}
-                  detail={support.probe.sharedArrayBuffer ? "available" : "missing"}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Linux image</CardTitle>
-                <CardDescription>{distro.detail}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
-                      distro.state === "ready"
-                        ? "success"
-                        : distro.state === "error"
-                          ? "destructive"
-                          : "warning"
-                    }
-                  >
-                    {distro.head}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {support.problems.length > 0 && (
-            <ul className="text-muted-foreground space-y-1.5 px-4 pb-4 text-xs">
-              {support.problems.map((problem) => (
-                <li key={problem} className="flex gap-2">
-                  <X aria-hidden="true" className="text-destructive mt-0.5 size-3.5 shrink-0" />
-                  <span>{problem}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        </Popover>
       </header>
-
-      {statusBar}
 
       <StageSwitcher stage={stage} onChange={setStage} previewReady={preview !== undefined} />
 
@@ -505,6 +468,14 @@ function DebugGlyph(): ReactNode {
 }
 
 /**
+ * The id the `d` trigger's `aria-controls` names and the popover's surface carries.
+ *
+ * Exported because an acceptance run and a static-markup test both have to point at the same
+ * string: a hand-copied id in a script is a check that passes after the surface was renamed.
+ */
+export const DEBUG_POPOVER_ID = "diagnostics-popover";
+
+/**
  * How many of the three requirements are met, as a dot colour.
  *
  * Exported so the rule is testable on its own: 3 → green, 1-2 → amber (partly there, which
@@ -518,19 +489,85 @@ export function requirementsTone(passed: number): StatusTone {
   return "red";
 }
 
-function CheckRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+/** The one-line requirements answer, plus the detail a single line cannot paint. */
+export function requirementsSummary(support: SupportReport): string {
+  const checks: readonly { label: string; ok: boolean; good: string; bad: string }[] = [
+    { label: "WebAssembly JSPI", ok: support.probe.jspi, good: "available", bad: "missing" },
+    {
+      label: "Cross-origin isolation",
+      ok: support.probe.crossOriginIsolated,
+      good: "isolated",
+      bad: "not isolated",
+    },
+    {
+      label: "SharedArrayBuffer",
+      ok: support.probe.sharedArrayBuffer,
+      good: "available",
+      bad: "missing",
+    },
+  ];
+  const passed = checks.filter((check) => check.ok).length;
+  const detail = checks
+    .map((check) => `${check.label}: ${check.ok ? check.good : check.bad}`)
+    .join(" · ");
+  return `Requirements: ${String(passed)}/3 met — ${detail}`;
+}
+
+/**
+ * Requirements as one line.
+ *
+ * Three rows with a tick, a label and a status each was the largest block in the report for the
+ * common case where all three pass. The line still says the count, and `requirementsSummary`
+ * carries every check's name and result into the row's `title` and the dot's accessible label —
+ * so the facts are one hover away rather than one row taller. When something *is* missing the
+ * boot card below spells each problem out in full, which is where a person acts on it.
+ */
+function RequirementsLine({ support, passed }: { support: SupportReport; passed: number }) {
+  const detail = requirementsSummary(support);
   return (
-    <div className="flex items-center gap-2 text-[13px]">
-      {ok ? (
-        <Check aria-hidden="true" className="text-success size-3.5" />
-      ) : (
-        <X aria-hidden="true" className="text-destructive size-3.5" />
+    <div
+      data-testid="requirements-summary"
+      title={detail}
+      className="flex min-w-0 items-center gap-1.5 text-[11.5px]"
+    >
+      <StatusDot testId="requirements-inline" tone={requirementsTone(passed)} label={detail} />
+      <span className="font-mono">{passed}/3 met</span>
+      {support.simulated && (
+        <span className="text-muted-foreground italic">(simulated probe)</span>
       )}
-      <span>{label}</span>
-      <span className={cn("ml-auto font-mono text-[11px]", ok ? "text-success" : "text-destructive")}>
-        {detail}
-      </span>
-      <span className="sr-only">{ok ? "(supported)" : "(unsupported)"}</span>
+    </div>
+  );
+}
+
+/** The Linux image on one line: what it is called, and what the downloader knows about it. */
+function ImageLine({ distro }: { distro: DistroSummary }) {
+  return (
+    <div
+      data-testid="image-line"
+      title={distro.detail}
+      className="flex min-w-0 items-center gap-1.5 text-[11.5px]"
+    >
+      <Badge
+        className="shrink-0 font-mono text-[10px]"
+        variant={
+          distro.state === "ready" ? "success" : distro.state === "error" ? "destructive" : "warning"
+        }
+      >
+        {distro.head}
+      </Badge>
+      <span className="text-muted-foreground min-w-0 flex-1 truncate">{distro.detail}</span>
+    </div>
+  );
+}
+
+/** A named block inside the debug popover: one caption, then the thing it names. */
+function DebugSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <h3 className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
+        {label}
+      </h3>
+      {children}
     </div>
   );
 }

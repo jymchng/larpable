@@ -398,10 +398,10 @@ try {
   await openApp(page, ORIENTATIONS[0]);
 
   const bootStartedAt = Date.now();
-  // The boot control lives inside the "This browser" report, which starts collapsed on a phone:
-  // three requirement rows and a boot card are not what a person came for. The run opens it the
-  // way a person would, then closes it again below, because the report is a sheet over the panes
-  // and a sheet that stayed open would make the switcher underneath unclickable.
+  // The boot control lives inside the debug popover, which starts closed on a phone: a person
+  // who wants to write a website did not come for the requirement rows. The run opens it the way
+  // a person would, then closes it again below, because the popover floats over the panes and one
+  // that stayed open would make the switcher underneath unclickable.
   const diagnostics = page.locator("[data-testid=diagnostics-toggle]");
   if ((await diagnostics.count()) > 0 && (await diagnostics.getAttribute("aria-expanded")) !== "true") {
     await diagnostics.click();
@@ -422,7 +422,7 @@ try {
     await page.waitForTimeout(250);
   }
   const afterSheet = (await page.evaluate(() => {
-    const sheet = document.querySelector<HTMLElement>("#diagnostics-body");
+    const sheet = document.querySelector<HTMLElement>("#diagnostics-popover");
     const agent = document.querySelector<HTMLElement>("[data-pane=agent]");
     if (sheet === null || agent === null) return null;
     return {
@@ -432,7 +432,7 @@ try {
     };
   })) as { sheetHidden: boolean; agentHeight: number; viewportHeight: number } | null;
   expect(
-    "portrait: closing the browser report gives the panes their height back",
+    "portrait: closing the debug popover gives the panes their height back",
     afterSheet !== null &&
       afterSheet.sheetHidden &&
       afterSheet.agentHeight > afterSheet.viewportHeight / 3,

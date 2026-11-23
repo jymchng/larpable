@@ -92,6 +92,22 @@ All notable changes to Larpable are documented here. The format follows
   which measures them in Chromium at 390 × 844 (measured: 9/9 checks, surface 352 px wide
   inside a 390 px viewport, dialog right edge equal to the cog's, `scrollWidth - clientWidth` =
   0) and writes `docs/evidence/provider-popover-390.png` — see `docs/provider-popover.md`.
+- **The debug information is one popover, and the status bar moved into it.** The six facts that
+  ran as a band under the header (Linux, runtime, project, build, Netlify, preview) and the
+  browser report that ran as a sheet under it are now a single labelled dialog behind the `d`
+  beside the wordmark — `Popover`, so Escape, a press outside, focus in on open and focus back
+  to the trigger come from the component that already did them for the provider settings. The
+  body is shorter as well: the three requirement rows are one line (`3/3 met`, plus the problems
+  and their browser-version advice only when something is missing, with every check still named
+  in the line's tooltip and the dot's accessible name), the Linux image is one line, and the
+  environment card is `compact` — it keeps the Boot / self-test / Shut down controls it owns and
+  drops its title and description. Nothing is painted twice: there is exactly one
+  `status-facts` list on the page. Measured in Chromium at 390 × 844 (`bun run acceptance:debug`):
+  15/15 checks, six facts read inside the surface (`Linux=Ready | Runtime=node (guest shim) |
+  Project=/workspace | Build=none | Netlify=not validated | Preview=none`), popover 352 px wide
+  at `x=38..390`, `scrollWidth - clientWidth` 0 for the surface and the page, Escape closes it
+  and returns focus to the `d`, a press outside closes it, and the same surface opens at 1440 px
+  — see `docs/debug-popover.md` and `docs/evidence/debug-popover-390.png`.
 - **Controls are pictograms, not sentences.** Every button in the chat box, the environment
   card, the build strip, the preview toolbar, the browser chrome, the settings panel and the
   terminal is now a lucide icon whose colour states what kind of action it is — green to run,

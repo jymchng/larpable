@@ -26,6 +26,7 @@
     "acceptance:mobile": "bun scripts/mobile-acceptance.ts",
     "acceptance:popover": "bun scripts/popover-acceptance.ts",
     "acceptance:autoboot": "bun scripts/autoboot-acceptance.ts",
+    "acceptance:debug": "bun scripts/debug-popover-acceptance.ts",
     "evidence:icons": "bun scripts/icon-buttons-evidence.ts"
   },
   "dependencies": {

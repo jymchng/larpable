@@ -12,7 +12,7 @@ import { Dashboard } from "@/ui/dashboard";
 import { EnvironmentPanel } from "@/ui/environment-panel";
 import { PreviewPane } from "@/ui/preview-pane";
 import { SettingsPanel } from "@/ui/settings-panel";
-import { StatusBar } from "@/ui/status-bar-view";
+import { StatusFacts } from "@/ui/status-bar-view";
 import type { StatusInput } from "@/ui/status-bar";
 import { TerminalPanel } from "@/ui/terminal-panel";
 import { useAgentChat } from "@/ui/use-agent-chat";
@@ -125,7 +125,7 @@ export function App() {
         error: environment.error,
         onRetry: environment.boot,
       }}
-      statusBar={<StatusBar input={statusInput} />}
+      statusFacts={<StatusFacts input={statusInput} />}
       settings={
         <SettingsPanel
           settings={settings.settings}
@@ -152,6 +152,9 @@ export function App() {
           bootDurationMs={environment.bootDurationMs}
           error={environment.error}
           handset={handset}
+          // It is the body of the debug popover, so it drops its own card framing and keeps
+          // the controls.
+          compact
           onBoot={environment.boot}
           onSelfTest={environment.runSelfTest}
           onShutdown={environment.shutdown}

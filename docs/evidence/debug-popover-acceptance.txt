@@ -1,0 +1,20 @@
+dev server: started by this script on 127.0.0.1
+PASS the popover is closed on arrival, and hidden rather than unpainted — data-state=closed, display:none=true, facts in DOM=6
+PASS the trigger is named, collapsed, and points at the surface — aria-label="Debug: this browser", aria-expanded="false", aria-controls="diagnostics-popover"
+PASS the machine reached Ready, so the facts have real values — 9100 ms from navigation
+PASS a press on the `d` opens the popover — data-state=open, display:none=false
+PASS the surface is a labelled dialog, not an unlabelled box — role="dialog", aria-labelledby="diagnostics-popover-heading", heading="Debug"
+PASS focus moves into the surface on open — document.activeElement is the surface: true
+PASS all six facts are visible inside the popover — Linux=Ready | Runtime=node (guest shim) | Project=/workspace | Build=none | Netlify=not validated | Preview=none
+PASS the facts live only in the popover: no status band is left in the layout — status-facts lists on the page: 1
+PASS the Linux fact says what the user saw — Linux=Ready
+PASS the Boot, self-test and Shut down controls are inside it — boot=true, self-test=true, shutdown=true
+PASS the popover fits the 390 px viewport with no sideways overflow — scrollWidth - clientWidth = 0 px, rect 38..390 (352 px wide)
+PASS the page behind it does not overflow either — scrollWidth - clientWidth = 0 px
+PASS Escape closes it and focus returns to the `d` — open=false, focused="diagnostics-toggle"
+PASS a press outside closes it — open=false after a press at (200, 700)
+PASS at 1440 px the same surface opens with the same six facts and no overflow — facts=6, page overflow=0 px, rect 1088..1440
+popover: 352 px wide, 38..390 at 390 px; page overflow 0 px
+facts: Linux=Ready | Runtime=node (guest shim) | Project=/workspace | Build=none | Netlify=not validated | Preview=none
+
+[debug] 15/15 checks passed against http://127.0.0.1:5173

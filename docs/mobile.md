@@ -36,8 +36,11 @@ or a bug ticket can point at the half it means.
 
 ### Landscape: a 196 px pane
 
-At 844 × 390 the header, the switcher and the status bar take 158 of the 390 px, so the panes
-are 196 px tall — and the preview's chrome (tab strip 29, browser bar 53, device toolbar 55,
+At 844 × 390 the header, the switcher and the status bar took 158 of the 390 px, so the panes
+were 196 px tall. (That figure was measured when the status bar was still a row under the header;
+it is inside the debug popover now — `docs/debug-popover.md` — so the panes have that row back.
+The numbers below are still the ones that motivated the scroll rules, because the preview chrome
+they describe did not shrink.) — and the preview's chrome (tab strip 29, browser bar 53, device toolbar 55,
 publish row 61, build strip 57) came to 255 px before any content. Because `body` is
 `overflow: hidden`, that did not scroll: the document grew to 574 px and the frame and its
 empty state were clipped below the fold, unreachable.

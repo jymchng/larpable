@@ -265,13 +265,21 @@ async function main(): Promise<void> {
     await page.bringToFront();
 
     // ------------------------------------------------------------ the §13 layout
+    // The six facts live inside the debug popover now (goal #33), so open it the way a person
+    // would before measuring them. A press anywhere outside closes it again, which is why the
+    // rest of this run is unaffected.
+    const debugToggle = page.locator("[data-testid=diagnostics-toggle]");
+    if ((await debugToggle.getAttribute("aria-expanded")) !== "true") {
+      await debugToggle.click();
+      await page.waitForTimeout(200);
+    }
     expect(
-      "the status bar is on the page with its six segments",
-      (await page.locator("[data-testid=status-bar]").count()) === 1 &&
+      "the debug popover holds the six status facts",
+      (await page.locator("[data-testid=status-facts]").count()) === 1 &&
         (await page
-          .locator("[data-testid=status-bar] [data-testid^=status-]")
+          .locator("[data-testid=status-facts] [data-testid^=status-]")
           .count()) >= 6,
-      `${String(await page.locator("[data-testid=status-bar] [data-testid^=status-]").count())} segments`,
+      `${String(await page.locator("[data-testid=status-facts] [data-testid^=status-]").count())} rows`,
     );
     expect(
       "the split pane has a separator with bounds",
@@ -556,12 +564,17 @@ async function main(): Promise<void> {
       `${String(basisBefore)} % -> ${String(basisAfter)} %`,
     );
 
+    // Re-open: the settings popover and the split drag above both pressed outside this one.
+    if ((await debugToggle.getAttribute("aria-expanded")) !== "true") {
+      await debugToggle.click();
+      await page.waitForTimeout(200);
+    }
     const statusSegments = await page
-      .locator("[data-testid=status-bar] [data-testid^=status-]")
+      .locator("[data-testid=status-facts] [data-testid^=status-]")
       .evaluateAll((nodes) =>
         nodes.map((node) => `${node.getAttribute("data-testid") ?? ""}=${(node.textContent ?? "").trim()}`),
       );
-    note("status bar", statusSegments.join(" | "));
+    note("status facts", statusSegments.join(" | "));
     expect(
       "the status bar's Build segment reports the build that actually ran",
       statusSegments.some((segment) => segment.startsWith("status-build=") && /build/i.test(segment)),

@@ -30,7 +30,7 @@ import { Dashboard } from "../src/ui/dashboard";
 import { EnvironmentPanel } from "../src/ui/environment-panel";
 import { initialChat } from "../src/ui/chat";
 import { StageSwitcher } from "../src/ui/stage-switcher";
-import { StatusBar } from "../src/ui/status-bar-view";
+import { StatusFacts } from "../src/ui/status-bar-view";
 import type { HandsetFacts } from "../src/ui/mobile";
 import { TOUCH_TARGET_BLOCK, TOUCH_TARGET_ICON, TOUCH_TARGET_MIN_PX } from "../src/ui/touch";
 
@@ -66,7 +66,7 @@ function dashboard(overrides: { stage?: "agent" | "preview"; preview?: boolean }
       support={supported}
       environment={INITIAL_ENVIRONMENT}
       distro={distro}
-      statusBar={<StatusBar input={STATUS_INPUT} />}
+      statusFacts={<StatusFacts input={STATUS_INPUT} />}
       settings={<div data-testid="settings-slot" />}
       chat={
         <ChatPanel
@@ -219,9 +219,9 @@ describe("what a phone sees inside the panes", () => {
     expect(html).toContain("min-h-[44px]");
   });
 
-  it("collapses the status bar's words instead of scrolling the bar sideways", () => {
+  it("shows every status label on its own row, so nothing has to collapse to fit 390 px", () => {
     const html = renderToStaticMarkup(
-      <StatusBar
+      <StatusFacts
         input={{
           ...STATUS_INPUT,
           environment: { ...INITIAL_ENVIRONMENT, status: "ready" },
@@ -229,12 +229,14 @@ describe("what a phone sees inside the panes", () => {
       />,
     );
 
-    // The word is the third channel and the first to go; the value and the tooltip stay.
-    expect(html).toContain("hidden sm:inline");
+    // This was a horizontal bar that hid its words behind `hidden sm:inline`; as a list inside
+    // the popover the labels are the point, so every one of the six is painted at every width.
+    expect(html).not.toContain("hidden sm:inline");
+    expect(html.match(/<dt /g)).toHaveLength(6);
     expect(html).toContain(statusLabel("ready"));
-    expect(html).toContain("max-w-[18ch] truncate");
-    // The bar still wraps rather than overflowing.
-    expect(html).toContain("flex-wrap");
+    // A long value truncates inside its own column instead of widening the surface.
+    expect(html).toContain("truncate");
+    expect(html).toContain("min-w-0");
   });
 });
 
