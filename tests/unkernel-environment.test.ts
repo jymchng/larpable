@@ -8,8 +8,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { POSIX_SAFE_PROMPT } from "@/env/shell";
+
 import {
   BusyError,
+  EnvironmentError,
   ExecutionCancelledError,
   ExecutionTimeoutError,
   FileNotFoundError,
@@ -108,6 +111,10 @@ class FakeKernel implements KernelLike {
   }> = [];
   readonly processes: FakeProcess[] = [];
   readonly ptys: FakePty[] = [];
+  /** Every pty spawn the adapter asked for, successful or not. */
+  readonly ptyAttempts: Array<{ file: string; args: readonly string[] }> = [];
+  /** Return an error to make that program unspawnable, e.g. a bash that will not exec. */
+  ptySpawnFailure: ((file: string) => Error | null) | null = null;
   readonly kills: string[] = [];
   stopped = false;
   memoryMiB = 1024;
@@ -138,6 +145,11 @@ class FakeKernel implements KernelLike {
   ): Promise<KernelProcessLike | KernelPtyLike> {
     const argv = args ?? [];
     if (opts.pty) {
+      // Every pty attempt is recorded, including one that fails: a fallback chain can
+      // only be asserted if the failed attempt left a trace.
+      this.ptyAttempts.push({ file, args: argv });
+      const failure = this.ptySpawnFailure?.(file);
+      if (failure) throw failure;
       const pty = new FakePty({ file, args: argv, opts: opts as KernelPtyOptions });
       this.ptys.push(pty);
       return pty;
@@ -166,10 +178,15 @@ class FakeKernel implements KernelLike {
 }
 
 /** A kernel that answers the boot probes and nothing else. */
-function bootableKernel(): FakeKernel {
+function bootableKernel(options: { bash?: string | null } = {}): FakeKernel {
+  // The boot probe answers two things at once; `bash` here is what `command -v bash`
+  // said, exactly as the real probe reports it. Debian has bash, so that is the default.
+  const bash = options.bash === null ? "none" : (options.bash ?? "/usr/bin/bash");
   return new FakeKernel((file, args) => {
     const command = args.join(" ");
-    if (command.includes("larpable-ok")) return { stdout: "larpable-ok", end: { type: "exit", code: 0 } };
+    if (command.includes("larpable-ok")) {
+      return { stdout: `larpable-ok ${bash}`, end: { type: "exit", code: 0 } };
+    }
     if (command.includes("command -v")) {
       return { stdout: "/usr/lib/kw/bin/node\n", end: { type: "exit", code: 0 } };
     }
@@ -466,13 +483,16 @@ describe("the user's terminal", () => {
     const session = await env.openShell({ cols: 100, rows: 30 });
 
     const pty = kernel.ptys.at(-1);
-    expect(pty?.plan.file).toBe("/bin/sh");
-    expect(pty?.plan.args).toEqual(["-l"]);
+    // bash, because the image's prompt is bash-style — see `src/env/shell.ts`.
+    expect(pty?.plan.file).toBe("/bin/bash");
+    expect(pty?.plan.args).toEqual(["-li"]);
     expect(pty?.plan.opts.pty).toBe(true);
     expect(pty?.plan.opts.cwd).toBe("/workspace");
     expect(pty?.plan.opts.term).toBe("xterm-256color");
     expect(pty?.plan.opts.cols).toBe(100);
     expect(pty?.plan.opts.rows).toBe(30);
+    // No invented PS1 when bash runs: the image's own prompt is the good one.
+    expect(pty?.plan.opts.env?.PS1).toBeUndefined();
 
     // The session is the kernel's pty, unchanged: typing and resizing reach the guest.
     await session.write("ls\r");
@@ -500,6 +520,65 @@ describe("the user's terminal", () => {
 
     await expect(env.openShell()).rejects.toBeInstanceOf(NotReadyError);
     expect(kernel.ptys).toHaveLength(0);
+  });
+
+  it("opens dash with a prompt it can actually print when the guest has no bash", async () => {
+    // The measured bug: a bash-style PS1 in a dash shell renders as
+    // `\[\033[36m\]\w \[\033[35m\]⇒\[\033[0m\]`, so the terminal shows escape litter
+    // and no prompt. Here there is no bash, so the prompt must be expansion-free.
+    const kernel = bootableKernel({ bash: null });
+    const env = environment(kernel);
+    await env.initialize();
+
+    await (await env.openShell()).close();
+
+    const pty = kernel.ptys.at(-1);
+    expect(pty?.plan.file).toBe("/bin/sh");
+    // Not `-l`: a login dash re-reads /etc/profile, which is where the bash-only PS1
+    // comes from. `-i` alone keeps the interactive shell but not that prompt.
+    expect(pty?.plan.args).toEqual(["-i"]);
+    expect(pty?.plan.opts.env).toEqual({ PS1: POSIX_SAFE_PROMPT });
+  });
+
+  it("falls back to dash when bash exists but cannot be spawned", async () => {
+    const kernel = bootableKernel();
+    kernel.ptySpawnFailure = (file) =>
+      file === "/bin/bash" ? new Error("exec format error") : null;
+    const env = environment(kernel);
+    await env.initialize();
+
+    await (await env.openShell()).close();
+
+    // Both attempts are visible: bash was tried first, then dash took over.
+    expect(kernel.ptyAttempts.map((attempt) => attempt.file)).toEqual(["/bin/bash", "/bin/sh"]);
+    expect(kernel.ptys.at(-1)?.plan.opts.env).toEqual({ PS1: POSIX_SAFE_PROMPT });
+  });
+
+  it("names every shell it tried when none of them can open", async () => {
+    const kernel = bootableKernel();
+    kernel.ptySpawnFailure = () => new Error("no such file or directory");
+    const env = environment(kernel);
+    await env.initialize();
+
+    const failure = await env.openShell().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(EnvironmentError);
+    expect((failure as Error).message).toContain("/bin/bash -li");
+    expect((failure as Error).message).toContain("/bin/sh -i");
+    expect((failure as Error).message).toContain("no such file or directory");
+  });
+
+  it("runs a caller-named shell instead of the measured default", async () => {
+    const kernel = bootableKernel();
+    const env = environment(kernel);
+    await env.initialize();
+
+    await (await env.openShell({ file: "/bin/zsh", args: ["-i"], env: { FOO: "1" } })).close();
+
+    const pty = kernel.ptys.at(-1);
+    expect(pty?.plan.file).toBe("/bin/zsh");
+    expect(pty?.plan.args).toEqual(["-i"]);
+    expect(pty?.plan.opts.env).toEqual({ FOO: "1" });
   });
 });
 

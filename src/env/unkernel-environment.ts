@@ -45,6 +45,12 @@ import type {
   TerminalSession,
 } from "./execution";
 import { joinGuestPath, resolveWorkspacePath, toMountedPath } from "./paths";
+import {
+  SHELL_PROBE_COMMAND,
+  SHELL_PROBE_MARKER,
+  parseBashProbe,
+  planShellAttempts,
+} from "./shell";
 import type { EnvironmentSnapshot, EnvironmentStatus } from "./status";
 import { browserKernelFactory, createMemoryWorkspace } from "./unkernel-kernel";
 import type {
@@ -99,8 +105,7 @@ const DEFAULT_TERMINAL_COLS = 80;
 const DEFAULT_TERMINAL_ROWS = 24;
 /** What the browser terminal actually renders, so colour and line editing work. */
 const DEFAULT_TERMINAL_TERM = "xterm-256color";
-const SHELL_PROBE = "printf 'larpable-ok'";
-const SHELL_PROBE_MARKER = "larpable-ok";
+const SHELL_PROBE = SHELL_PROBE_COMMAND;
 
 function timerUnref(timer: unknown): void {
   (timer as { unref?: () => void }).unref?.();
@@ -187,6 +192,8 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
   #cpus: number | null = null;
   #memoryMiB: number | null = null;
   #transition: "initialize" | "shutdown" | null = null;
+  /** Set by the boot probe: whether the guest can open bash instead of dash. */
+  #hasBash = false;
 
   constructor(options: UnkernelEnvironmentOptions) {
     this.#options = options;
@@ -306,6 +313,10 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
    * feature works on: `ls` there shows the project the agent is editing, and a file
    * `cat`-ed there is the file the preview will build.
    *
+   * Which program runs is a measured decision, not a constant: the image's prompt is
+   * bash-style, so bash is preferred and a dash fallback gets a prompt that needs no
+   * expansion. `./shell.ts` explains why, and what the wrong shell looked like.
+   *
    * `TERM=xterm-256color` matches what the browser terminal renders, so colour,
    * cursor addressing and line editing work instead of producing escape-litter.
    */
@@ -318,25 +329,40 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
     const cwd = options.cwd
       ? resolveWorkspacePath(this.workspacePath, options.cwd)
       : this.workspacePath;
-    const file = options.file ?? "/bin/sh";
-    const args = options.args ?? ["-l"];
 
-    try {
-      return await kernel.spawn(file, args, {
-        pty: true,
-        cwd,
-        cols: options.cols ?? DEFAULT_TERMINAL_COLS,
-        rows: options.rows ?? DEFAULT_TERMINAL_ROWS,
-        term: options.term ?? DEFAULT_TERMINAL_TERM,
-        ...(options.env ? { env: options.env } : {}),
-      });
-    } catch (error) {
-      throw new EnvironmentError(
-        "spawn",
-        `Could not open a terminal in ${cwd}: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
+    const attempts = planShellAttempts({
+      hasBash: this.#hasBash,
+      ...(options.file !== undefined ? { file: options.file } : {}),
+      ...(options.args !== undefined ? { args: options.args } : {}),
+      ...(options.env !== undefined ? { env: options.env } : {}),
+    });
+
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        return await kernel.spawn(attempt.file, attempt.args, {
+          pty: true,
+          cwd,
+          cols: options.cols ?? DEFAULT_TERMINAL_COLS,
+          rows: options.rows ?? DEFAULT_TERMINAL_ROWS,
+          term: options.term ?? DEFAULT_TERMINAL_TERM,
+          ...(attempt.env ? { env: attempt.env } : {}),
+        });
+      } catch (error) {
+        // A program that exists but cannot be spawned is worth one fallback, not a
+        // dead terminal: keep the failure and try the next shell.
+        lastError = error;
+      }
     }
+
+    const tried = attempts.map((attempt) => `${attempt.file} ${attempt.args.join(" ")}`).join(", ");
+    throw new EnvironmentError(
+      "spawn",
+      `Could not open a terminal in ${cwd} (tried ${tried}): ${
+        lastError instanceof Error ? lastError.message : String(lastError)
+      }`,
+      { cause: lastError },
+    );
   }
 
   async readFile(path: string): Promise<Uint8Array> {
@@ -401,6 +427,7 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
       this.#kernel = null;
       this.#transition = null;
       this.#error = null;
+      this.#hasBash = false;
       this.#setStatus("stopped");
     }
   }
@@ -539,6 +566,10 @@ export class UnkernelEnvironment implements ExecutionEnvironment {
         `The guest shell did not run: exit ${result.exitCode}, output ${JSON.stringify(result.stdout + result.stderr)}.`,
       );
     }
+
+    // Same process, no extra cost: the probe also says whether bash exists, which is
+    // the difference between the image's own prompt and a fallback one.
+    this.#hasBash = parseBashProbe(result.stdout);
   }
 
   /**

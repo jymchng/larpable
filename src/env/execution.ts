@@ -118,7 +118,11 @@ export interface ShellOptions {
   env?: Record<string, string>;
   /** `TERM` for the guest program. Default `xterm-256color`. */
   term?: string;
-  /** Program to run. Default `/bin/sh` with `-l`, so the user's profile is loaded. */
+  /**
+   * Program to run. Default: the best shell the guest actually has — bash as a login,
+   * interactive shell, falling back to `/bin/sh -i` with a prompt that needs no
+   * expansion (`src/env/shell.ts` explains why the distinction is not cosmetic).
+   */
   file?: string;
   args?: readonly string[];
 }
