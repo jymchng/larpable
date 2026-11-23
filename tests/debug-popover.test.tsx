@@ -201,6 +201,20 @@ describe("the debug popover", () => {
     expect(html).not.toContain('data-testid="status-bar"');
   });
 
+  it("holds exactly one copy of the version and the dot: neither is left in the header", () => {
+    const html = render();
+
+    // Moving the version and the green dot into the popover is two claims, and the popover-side
+    // one is the easy half: `panel` above would still contain both if a second copy sat beside
+    // the wordmark. Count them page-wide, the way the status facts above are counted.
+    for (const testId of ["app-version", "requirements-status"]) {
+      expect(html.match(new RegExp(`data-testid="${testId}"`, "g"))).toHaveLength(1);
+      expect(html.indexOf(`data-testid="${testId}"`)).toBeGreaterThan(
+        html.indexOf(`id="${DEBUG_POPOVER_ID}"`),
+      );
+    }
+  });
+
   it("keeps the Boot, self-test and Shut down controls reachable inside it", () => {
     const panel = surface(render());
 

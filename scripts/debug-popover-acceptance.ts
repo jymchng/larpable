@@ -148,8 +148,19 @@ interface OpenState {
   support: { text: string | null; ok: string | null };
   /** `v0.1.0` — the build id that used to sit in the header. */
   version: string | null;
+  /**
+   * How many `app-version` elements the *whole page* holds, not just the surface.
+   *
+   * The user asked for the version to move here, which is two claims ("it is here" and "it is
+   * no longer up there"). Reading it through `surface.querySelector` proves only the first: a
+   * header copy re-added beside the wordmark would leave `version` unchanged and this run green.
+   * One page-wide count makes the second claim measurable.
+   */
+  versionCopies: number;
   /** Whether the requirements `StatusDot` (the green dot beside the `d`) is inside the surface. */
   requirementsDotInside: boolean;
+  /** How many `requirements-status` dots the whole page holds, for the same reason as `versionCopies`. */
+  dotCopies: number;
   /** Whether *any* `<footer>` element is on the page: the band this goal removed. */
   footerElements: number;
   /** The always-in-DOM `sr-only` polite live region, and whether it is really `aria-live="polite"`. */
@@ -201,11 +212,15 @@ async function observeOpen(page: Page): Promise<OpenState> {
         ok: surface?.querySelector("[data-testid=support-verdict]")?.getAttribute("data-ok") ?? null,
       },
       version: surface?.querySelector("[data-testid=app-version]")?.textContent?.trim() ?? null,
+      // Page-wide, not surface-scoped: a re-added header copy keeps `version` identical, so the
+      // count is what proves the old chrome is gone rather than duplicated.
+      versionCopies: document.querySelectorAll("[data-testid=app-version]").length,
       // The dot beside the `d` used to be in the header; it must now be *inside* the surface, so
       // "found anywhere on the page" is not enough — the containment is the assertion.
       requirementsDotInside:
         surface !== null &&
         surface.querySelector("[data-testid=requirements-status]") !== null,
+      dotCopies: document.querySelectorAll("[data-testid=requirements-status]").length,
       footerElements: document.querySelectorAll("footer").length,
       // The one copy that stays always-visible to assistive tech: same sentence, polite, hidden
       // from the layout rather than removed from the DOM.
@@ -362,9 +377,12 @@ async function main(): Promise<void> {
       `support=${JSON.stringify(open.support.text)}, data-ok=${JSON.stringify(open.support.ok)}`,
     );
     check(
-      "the version and the requirements dot are in the same surface",
-      /^v\d+\.\d+\.\d+$/.test(open.version ?? "") && open.requirementsDotInside,
-      `version=${JSON.stringify(open.version)}, requirements dot inside=${String(open.requirementsDotInside)}`,
+      "the version and the requirements dot are in the same surface, and nowhere else",
+      /^v\d+\.\d+\.\d+$/.test(open.version ?? "") &&
+        open.requirementsDotInside &&
+        open.versionCopies === 1 &&
+        open.dotCopies === 1,
+      `version=${JSON.stringify(open.version)}, requirements dot inside=${String(open.requirementsDotInside)}, app-version elements on the page=${String(open.versionCopies)}, requirements-status dots on the page=${String(open.dotCopies)}`,
     );
     check(
       "no visible footer band is left anywhere in the layout",
