@@ -64,7 +64,8 @@ describe("toPreviewState", () => {
 describe("describePreviewPhase", () => {
   it("says nothing for a published preview: the frame is the message", () => {
     // Removed on request: "Serving 3 files from the preview worker." — a file count nobody acts
-    // on, in a row that already carries the build id and the served-by badge.
+    // on, and the served-by badge that followed it is gone too (only the `guest` fallback keeps
+    // one).
     expect(describePreviewPhase(ready)).toBe("");
     expect(
       describePreviewPhase({ ...ready, served: "guest", files: 1, note: "no worker" }),
@@ -142,13 +143,29 @@ describe("PreviewPane", () => {
     expect(html).toContain('data-testid="preview-served-by"');
     expect(html).toContain("guest");
   });
+
+  it("says nothing about the worker, because the worker is the normal answer", () => {
+    // Removed on request: a green `worker` badge and the row that held it appeared the moment a
+    // build was published, stating the expected outcome in the colour reserved for news. The
+    // controller's answer is still readable — as an attribute, not as a badge or a sentence.
+    const html = render(ready);
+
+    expect(html).not.toContain('data-testid="preview-served-by"');
+    expect(html).not.toContain('data-testid="preview-toolbar"');
+    expect(html).not.toContain(">worker<");
+    expect(html).toContain('data-served="worker"');
+  });
 });
 
 describe("PreviewToolbar", () => {
+  // The row only exists for the answer that is not the expected one — the guest serving — so
+  // these assertions render that phase. The worker's case is asserted to render nothing.
+  const guest: PreviewPhase = { ...ready, served: "guest", note: "This browser has no worker." };
+
   it("has no publish button of its own any more", () => {
     // Removed on request: the circling arrow in the browser bar publishes, and a second green
     // button in this row was the same job in a different place.
-    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
+    const html = renderToStaticMarkup(<PreviewToolbar phase={guest} />);
 
     expect(html).not.toContain('data-testid="preview-build"');
     expect(html).not.toContain("Rebuild preview");
@@ -159,10 +176,16 @@ describe("PreviewToolbar", () => {
     // The three presets used to live here, in the same row as "Preview build". They are a
     // browser's device toolbar now (`preview-chrome.tsx`), so the pane has one place that
     // sizes the frame and states the size, not two.
-    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
+    const html = renderToStaticMarkup(<PreviewToolbar phase={guest} />);
 
     expect(html).not.toContain('data-testid="preview-viewports"');
     expect(html).toContain('data-testid="preview-served-by"');
+  });
+
+  it("renders no row at all when the worker holds the build", () => {
+    // The badge went, and the div went with it (user request): a bordered strip with nothing in
+    // it would still cost the pane a row of height.
+    expect(renderToStaticMarkup(<PreviewToolbar phase={ready} />)).toBe("");
   });
 });
 

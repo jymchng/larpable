@@ -93,7 +93,9 @@ interface Measurements {
   write: { marker: string | null; files: string | null } | null;
   runtimeWarm: { answered: boolean; line: string | null; wallClockMs: number } | null;
   publish: {
+    /** The pane's visible badge text (`guest` / `app`); null when the worker holds the bytes. */
     status: string | null;
+    /** The controller's answer, from the pane's `data-served`: `worker` or `guest`. */
     servedBy: string | null;
     /** The controller's own words for a guest-served publish; null when the worker served. */
     note: string | null;
@@ -475,14 +477,19 @@ async function main(): Promise<void> {
       .first()
       .getAttribute("data-build-id");
     const src = await page.locator("[data-testid=preview-iframe]").first().getAttribute("src");
-    // The transient status sentence is a toast now; the durable note about *why* the guest is
-    // answering lives on the toolbar row that survives (user request: all notifications are
-    // toasts, so no sentence is printed in that row any more).
+    // The green `worker` badge — and the row that held it — was removed on request: a build the
+    // worker holds is the normal outcome, so the pane says nothing rather than saying "as
+    // expected" in colour. The controller's answer is the pane's `data-served`, which is what
+    // "did the worker take the build?" is really asking. The visible badge that survives is the
+    // guest's amber one, and the durable note about *why* the guest answered lives on that row.
+    const servedBy =
+      (await page.locator("[data-testid=preview-pane]").first().getAttribute("data-served")) ?? "";
+    const toolbar = page.locator("[data-testid=preview-toolbar]");
     const note =
-      (await page.locator("[data-testid=preview-toolbar]").first().getAttribute("data-note")) ?? "";
+      (await toolbar.count()) === 0 ? "" : ((await toolbar.first().getAttribute("data-note")) ?? "");
     measurements.publish = {
       status: await text(page, "[data-testid=preview-served-by]"),
-      servedBy: await text(page, "[data-testid=preview-served-by]"),
+      servedBy: servedBy.length > 0 ? servedBy : null,
       note: note.length > 0 ? note : null,
       url: src,
       buildId,
@@ -686,8 +693,8 @@ function renderReport(measurements: Measurements): string {
       "| --- | --- |",
       `| Build id in the iframe's URL | \`${publish.buildId ?? "none"}\` |`,
       `| iframe \`src\` | \`${publish.url ?? "none"}\` |`,
-      `| Pane status | ${publish.status ?? "none"} |`,
-      `| Served by | ${publish.servedBy ?? "worker (no badge)"} |`,
+      `| Pane status | ${publish.status ?? "no badge (the worker's case has none)"} |`,
+      `| Served by (pane \`data-served\`) | ${publish.servedBy ?? "none"} |`,
       `| Why the guest answered, if it did | ${publish.note ?? "(not applicable)"} |`,
       `| Click to published iframe | ${publish.wallClockMs} ms |`,
       "",

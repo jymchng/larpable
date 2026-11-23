@@ -539,8 +539,10 @@ try {
   checkLayout(await audit(page), "landscape live, agent stage");
 
   // A published build is not required for this goal; record whether the preview got one.
-  const servedBy = await page.locator("[data-testid=preview-served-by]").count();
-  note(`preview: ${servedBy > 0 ? "a build is published (served-by badge present)" : "no build published in this run"}`);
+  // The served-by badge is the guest's (or the app's) now — the worker's normal case has none —
+  // so the pane's `data-served` is what says whether a build was published at all.
+  const servedBy = (await page.locator("[data-testid=preview-pane]").first().getAttribute("data-served")) ?? "";
+  note(`preview: ${servedBy.length > 0 ? `a build is published (served by the ${servedBy})` : "no build published in this run"}`);
 
   await page.close();
 } catch (error) {

@@ -12,10 +12,11 @@
  * - It **is** something that just happened: a stage started, a build ended, a publish failed, a
  *   machine stopped booting, a `netlify.toml` came back invalid. It is news, it is transient, and
  *   it is worth interrupting for between two and eight seconds.
- * - It **is not** a fact you consult. The served-by badge, the status bar's segments, the debug
- *   popover, a failed preview's own error surface and a failed build's reason in the strip all
- *   stay where they are: they are state, they are read on demand, and a state that vanished after
- *   five seconds would be a worse UI than the one this replaced. Toasts *announce*; panes *hold*.
+ * - It **is not** a fact you consult. The guest's served-by badge, the status bar's segments, the
+ *   debug popover, a failed preview's own error surface and a failed build's reason in the strip
+ *   all stay where they are: they are state, they are read on demand, and a state that vanished
+ *   after five seconds would be a worse UI than the one this replaced. Toasts *announce*; panes
+ *   *hold*.
  *
  * Two consequences worth stating out loud:
  *

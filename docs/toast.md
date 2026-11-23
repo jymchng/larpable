@@ -16,10 +16,10 @@ the same window at the same moment.
 ## The rule, in one line each
 
 - **A notification is news.** It is announced once, when it becomes true, and it leaves.
-- **A fact is not news.** The served-by badge, the status segments in the debug popover, the
-  preview's own error surface where the frame would be, and a failed build's reason stay exactly
-  where they are. They are read on demand, and a fact that vanished after five seconds would be
-  worse than no fact at all.
+- **A fact is not news.** The guest's served-by badge (a worker-held build has none), the status
+  segments in the debug popover, the preview's own error surface where the frame would be, and a
+  failed build's reason stay exactly where they are. They are read on demand, and a fact that
+  vanished after five seconds would be worse than no fact at all.
 - **Nothing is announced twice.** If a toast carries a sentence, no pane lays it out as well. When
   two surfaces seemed to need the same words, the pane kept the *state* (a disabled control, a
   badge, a tooltip) and the toast kept the *sentence*.
@@ -88,7 +88,8 @@ test named beside it:
 | `Installing dependencies in the guest…`, `Building the site in the guest…` | build strip | the blue `build` toast says it | `tests/preview-pane.test.tsx` |
 | `Build <id> succeeded in 4.2 s.` | build strip | the green `build` toast says it; the frame appearing is the receipt | `tests/preview-pane.test.tsx` |
 | `Starting the guest's server…`, `Reading 3 files out of the guest…` | preview toolbar | the blue `preview` toast says it — and unlike the toolbar, from either pane | `tests/preview-pane.test.tsx` |
-| `` `bun run start` answered 200 … ``, the app's failure message | preview toolbar | the `app` toast says it; the toolbar keeps the served-by badge | `tests/preview-pane.test.tsx` |
+| `` `bun run start` answered 200 … ``, the app's failure message | preview toolbar | the `app` toast says it; the toolbar keeps the `app` badge | `tests/preview-pane.test.tsx` |
+| a green `worker` badge in the preview toolbar | preview toolbar | nothing: a worker-held build is the normal outcome, and the debug popover's `Preview` segment still says who holds it. The guest's amber badge stays, because a fallback is news even at eight seconds. | `tests/preview-pane.test.tsx`, `tests/preview-chrome.test.tsx` |
 | a machine sentence in the terminal's empty state | terminal | the `machine` toast says it | `tests/notification-dedup.test.tsx` |
 
 Two things were deliberately **kept**, because they are not notifications:

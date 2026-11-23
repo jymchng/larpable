@@ -204,7 +204,7 @@ export interface PreviewPanelProps {
    * next one.
    */
   onReload?: (buildId: string | null) => void;
-  /** The pane's own controls, e.g. install/build, "Run the app", the served-by badge. */
+  /** The pane's own controls, e.g. install/build, "Run the app", the guest's served-by badge. */
   toolbar?: ReactNode;
   /** A strip rendered under the chrome and above the frame, e.g. the build progress line. */
   strip?: ReactNode;

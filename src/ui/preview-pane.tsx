@@ -25,12 +25,12 @@
  *   (`pushState`, a link, a hash), and it never writes back into the frame — see the note in
  *   `preview-frame.tsx` about the reload loop that would cause.
  *
- * The toolbar is not decoration. A preview does not appear by itself: the user asks for one,
- * and the moment they do, the start of a guest `node` can take a minute. So the control shows
- * what is happening (`Starting the guest's server…`, `Reading 14 files out of the guest…`)
- * rather than a spinner, and the *how* — a service worker holding the bytes, or the guest
- * answering on demand — is stated instead of hidden, because the second is slower and the
- * difference explains a slow deep link.
+ * The pane's row is not decoration. A preview does not appear by itself: the user asks for one,
+ * and the moment they do, the start of a guest `node` can take a minute. The *how* — a service
+ * worker holding the bytes, or the guest answering on demand — is stated only where it is the
+ * unusual answer: the worker is the normal outcome, so it gets no badge (removed on request),
+ * while a guest-served preview is slower per asset and says so. The status segments in the debug
+ * popover carry the same fact for anyone who goes looking.
  *
  * There are two ways to fill this pane, and they are different questions:
  *
@@ -276,6 +276,11 @@ export function PreviewPane({
     <div
       ref={containerRef}
       data-testid="preview-pane"
+      // Who the controller says is holding the bytes: `worker` or `guest`, or empty before there
+      // is a build. An attribute and not a badge, because the worker's case is the normal one
+      // (the green badge that used to say so was removed on request) while the acceptance run
+      // still needs the answer to "did the worker take the build?".
+      data-served={phase.kind === "ready" ? phase.served : ""}
       className={cn("flex min-h-0 flex-1 flex-col", className)}
     >
       <PreviewPanel
@@ -465,25 +470,27 @@ export interface PreviewToolbarProps {
 }
 
 /**
- * The pane's own words: the status sentence and the served-by badge.
+ * The pane's own fact: the one thing about *how* the bytes arrive that is worth a word.
  *
  * Four controls used to live in this row and each has moved to a better home: the publish button
  * (the browser bar's circling arrow publishes), "Run the app" (the same pane's chrome), the file
  * count (removed — nobody acts on it), and the popout link, which is now beside the fullscreen
  * control in the device row (user request: "must be beside the full screen button in the Preview
- * tab"). What is left is the app talking about what it did, which is the one thing no other row
- * says.
+ * tab").
+ *
+ * The row's other sentence was a green `worker` badge, removed on request: a published build held
+ * by the preview worker is the *normal* outcome, so the badge said "as expected" in the colour
+ * reserved for news — and the debug popover's `Preview` segment already states who holds the
+ * build. What stays is the case a person debugging needs — the guest answering on demand instead
+ * of the worker — and the app server, which is a different server, not a different worker. When
+ * neither is true the row is not rendered at all: an empty bordered strip is height that says
+ * nothing.
  *
  * Tabs, arrows, the address bar and the device toolbar belong to `preview-chrome.tsx`, because
  * those are a browser's words for a browser's controls.
  */
 export function PreviewToolbar({ phase, app }: PreviewToolbarProps) {
-  // The row exists to say *how* the bytes are arriving, and nothing else: `served` is "there is a
-  // frame on screen, and something is answering for it". Every sentence this row used to print was
-  // a notification, and notifications are toasts now (user request), including the ones that were
-  // only ever visible from this pane.
-  const served = phase.kind === "ready" || app?.state.kind === "running";
-  if (!served) return null;
+  if (servedByFact(phase, app) === null) return null;
 
   return (
     <div
@@ -499,7 +506,19 @@ export function PreviewToolbar({ phase, app }: PreviewToolbarProps) {
   );
 }
 
-/** How the bytes reach the iframe, stated rather than implied. */
+/**
+ * Which answer about the served bytes is worth showing, or null when there is nothing to add.
+ *
+ * `worker` is deliberately null: it is what a published build is supposed to be, so a badge for it
+ * is the pane repeating the frame. `guest` is the fallback a debugging user needs to know about.
+ */
+function servedByFact(phase: PreviewPhase, app?: AppPreviewControl): "app" | "guest" | null {
+  if (app?.state.kind === "running") return "app";
+  if (phase.kind !== "ready") return null;
+  return phase.served === "worker" ? null : "guest";
+}
+
+/** How the bytes reach the iframe, stated only where the answer is not the expected one. */
 function ServedBy({
   phase,
   app,
@@ -507,7 +526,10 @@ function ServedBy({
   phase: PreviewPhase;
   app?: AppPreviewControl;
 }): ReactNode {
-  if (app?.state.kind === "running") {
+  const fact = servedByFact(phase, app);
+
+  // The app preview is a different server, not a different worker, so it keeps its own badge.
+  if (fact === "app") {
     return (
       <Badge variant="success" data-testid="preview-served-by" className="gap-1 font-mono text-[10px]">
         <SquareTerminal aria-hidden="true" className="size-3" />
@@ -516,15 +538,7 @@ function ServedBy({
     );
   }
 
-  if (phase.kind !== "ready") return null;
-
-  if (phase.served === "worker") {
-    return (
-      <Badge variant="success" data-testid="preview-served-by" className="font-mono text-[10px]">
-        worker
-      </Badge>
-    );
-  }
+  if (fact !== "guest") return null;
 
   return (
     <Badge variant="warning" data-testid="preview-served-by" className="gap-1 font-mono text-[10px]">

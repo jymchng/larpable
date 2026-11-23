@@ -66,6 +66,18 @@ const ready: PreviewPhase = {
   note: null,
 };
 
+/**
+ * The one served-by state the pane still prints a badge for: the guest answering on demand.
+ *
+ * A worker-served build is the normal outcome and has no badge any more (user request), so the
+ * tests that assert the toolbar's contents use this phase instead.
+ */
+const guestServed: PreviewPhase = {
+  ...ready,
+  served: "guest",
+  note: "This browser has no service worker.",
+};
+
 function renderPane(phase: PreviewPhase, initialViewport?: "desktop" | "tablet" | "mobile"): string {
   return renderToStaticMarkup(
     <PreviewPane
@@ -302,11 +314,14 @@ describe("PreviewPane as a browser", () => {
     expect(html).toMatch(/height:844px/);
   });
 
-  it("keeps the pane's own controls and the served-by badge under the chrome", () => {
-    const html = renderPane(ready);
+  it("keeps the pane's own controls and the guest badge under the chrome", () => {
+    // The worker's badge and its row are gone (user request); the guest's amber badge is the
+    // fact this row still states, so it is what this test renders.
+    const html = renderPane(guestServed);
 
     expect(html).toContain('data-testid="preview-toolbar"');
     expect(html).toContain('data-testid="preview-served-by"');
+    expect(html).toContain("guest");
     // A ready preview says nothing on the status line any more ("Serving 3 files…" was removed),
     // so the row is absent rather than empty.
     expect(html).not.toContain('data-testid="preview-status"');
@@ -317,8 +332,18 @@ describe("PreviewPane as a browser", () => {
     );
   });
 
-  it("puts the popout beside the fullscreen control, in the device row", () => {
+  it("drops the whole row when the worker holds the build", () => {
     const html = renderPane(ready);
+
+    expect(html).not.toContain('data-testid="preview-toolbar"');
+    expect(html).not.toContain('data-testid="preview-served-by"');
+    expect(html).not.toContain(">worker<");
+    // The fact is still readable for the acceptance run, without a badge or a sentence.
+    expect(html).toContain('data-served="worker"');
+  });
+
+  it("puts the popout beside the fullscreen control, in the device row", () => {
+    const html = renderPane(guestServed);
     // The link's own opening tag, which is where `Button asChild` put the test id.
     const link = /<a\b[^>]*data-testid="preview-new-tab"[^>]*>/.exec(html)?.[0] ?? "";
     const newTab = html.indexOf(link);
@@ -367,7 +392,7 @@ describe("the frame under the chrome", () => {
 
 describe("the toolbar without the device control", () => {
   it("no longer renders a viewport control, because the device toolbar owns it", () => {
-    const html = renderToStaticMarkup(<PreviewToolbar phase={ready} />);
+    const html = renderToStaticMarkup(<PreviewToolbar phase={guestServed} />);
 
     expect(html).not.toContain('data-testid="preview-viewport-mobile"');
     // The publish button left this row too: publishing is the browser bar's reload arrow.
