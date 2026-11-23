@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { summarizeDistro, type DistroAssetStatus } from "../src/env/distro";
-import { INITIAL_ENVIRONMENT } from "../src/env/status";
+import { describeEnvironment, INITIAL_ENVIRONMENT } from "../src/env/status";
 import { evaluateSupport } from "../src/env/support";
 import type { StatusInput } from "../src/ui/status-bar";
 import { StatusFacts } from "../src/ui/status-bar-view";
@@ -60,6 +60,11 @@ const FACTS: StatusInput = {
   preview: { kind: "idle" },
   terminal: NO_TERMINAL,
 };
+
+/** A literal string as a regular expression, for counting how often a sentence was rendered. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function render(options: { support?: typeof supported; withPanel?: boolean } = {}): string {
   return renderToStaticMarkup(
