@@ -1,10 +1,17 @@
 /**
- * Provider, model and key — three fields and the boundary they sit on.
+ * Everything a session lets the user choose, in one popover: the provider that thinks, and the
+ * address and directory the previews work against.
  *
- * The panel exists because the app is unusable without a provider choice and unusable *safely*
- * without a stated one: the key lives in this browser, is sent to one API origin, and must
- * never reach the guest. So the copy under the fields says all three, and the key field is a
- * password input whose value is only ever echoed back as `redactKey()`.
+ * The provider half exists because the app is unusable without a provider choice and unusable
+ * *safely* without a stated one: the key lives in this browser, is sent to one API origin, and
+ * must never reach the guest. So the copy under the fields says all three, and the key field is
+ * a password input whose value is only ever echoed back as `redactKey()`.
+ *
+ * The preview half is two fields and one fact: both guest servers are reached at `localhost`
+ * — the kernel's own loopback, so the host is painted and never typed — on a port the user
+ * chooses, serving a build directory the user names. `5173` and `dist` are the defaults, not
+ * the only answers; `src/ui/preview-settings.ts` holds the rules that keep a half-typed number
+ * from becoming a running server's address.
  *
  * It is now the **body** of a popover, not a band of its own: `Dashboard` wraps it in
  * `Popover` (a labelled dialog anchored to the cog, dismissed by Escape or a press outside,
@@ -34,16 +41,40 @@ import {
   type LlmSettings,
   type ProviderKind,
 } from "@/llm/settings";
+import {
+  DEFAULT_BUILD_DIRECTORY,
+  DEFAULT_PREVIEW_SETTINGS_PORT,
+  PREVIEW_HOST,
+  baseUrlFor,
+} from "@/ui/preview-settings";
+import type { PreviewSettingsControl } from "@/ui/use-preview-settings";
 
 export interface SettingsPanelProps {
   settings: LlmSettings;
   onChange: (settings: LlmSettings) => void;
+  /**
+   * The preview's own two settings. Absent when the caller has no guest to point at (the panel
+   * is a body, and a body that shows a port for a machine that is not there would be noise).
+   */
+  preview?: PreviewFields;
   /** Why a run cannot start right now (a machine that is not ready, for example). */
   problem?: string | null;
   className?: string;
 }
 
-export function SettingsPanel({ settings, onChange, problem, className }: SettingsPanelProps): ReactNode {
+/** Just enough of the preview control to paint the fields, for tests and static renders. */
+export type PreviewFields = Pick<
+  PreviewSettingsControl,
+  "settings" | "draft" | "setPort" | "setBuildDirectory" | "problem"
+>;
+
+export function SettingsPanel({
+  settings,
+  onChange,
+  preview,
+  problem,
+  className,
+}: SettingsPanelProps): ReactNode {
   const choice = choiceFor(settings.provider);
   const settingsIssue = settingsProblem(settings);
   const issue = settingsIssue ?? problem ?? null;
@@ -142,6 +173,75 @@ export function SettingsPanel({ settings, onChange, problem, className }: Settin
           ? `The key is kept in this browser only${settings.apiKey.trim().length > 0 ? ` (shown as ${redactKey(settings.apiKey)})` : ""}, sent to the provider's API from this page, and never to the guest or into your project files.`
           : "The demo provider runs a scripted conversation over the real tools: no key, no account, no network."}
       </p>
+
+      {preview !== undefined ? (
+        <fieldset className="space-y-1 border-t pt-1.5">
+          <legend className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
+            Preview
+          </legend>
+          <div className="flex flex-wrap items-end gap-1.5">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
+                Base URL
+              </span>
+              <div className="flex items-center gap-1">
+                {/* Painted, not typed. A guest server is reachable on the kernel's own loopback
+                    and nowhere else, so a host field would be a field whose every other value
+                    fails with a socket error — which teaches the user the product is broken. */}
+                <Input
+                  data-testid="settings-host"
+                  aria-label="Host"
+                  aria-readonly="true"
+                  readOnly
+                  value={`http://${PREVIEW_HOST}`}
+                  onChange={() => undefined}
+                  className="text-muted-foreground w-[8.5rem] font-mono text-[12px]"
+                />
+                <span aria-hidden="true" className="text-muted-foreground font-mono text-[12px]">
+                  :
+                </span>
+                <Input
+                  data-testid="settings-port"
+                  aria-label="Port"
+                  inputMode="numeric"
+                  value={preview.draft.port}
+                  onChange={(event) => preview.setPort(event.target.value)}
+                  placeholder={String(DEFAULT_PREVIEW_SETTINGS_PORT)}
+                  spellCheck={false}
+                  className="w-16 font-mono text-[12px]"
+                />
+              </div>
+            </div>
+
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.1em] uppercase">
+                Build directory
+              </span>
+              <Input
+                data-testid="settings-build-directory"
+                value={preview.draft.buildDirectory}
+                onChange={(event) => preview.setBuildDirectory(event.target.value)}
+                placeholder={DEFAULT_BUILD_DIRECTORY}
+                spellCheck={false}
+                className="font-mono text-[12px]"
+              />
+            </label>
+          </div>
+
+          {/* The two fields are one sentence: what the currently-useful settings actually mean.
+              It quotes the *last valid* pair, not the draft, because that is what a server
+              would be started with right now. */}
+          <p data-testid="settings-preview-note" className="text-muted-foreground text-[11px]">
+            {`Both previews start their server inside the guest, on ${baseUrlFor(preview.settings)}, and a static build is read from ${preview.settings.buildDirectory}.`}
+          </p>
+
+          {preview.problem !== null ? (
+            <p data-testid="settings-preview-problem" className="text-destructive text-[11.5px]">
+              {preview.problem}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : null}
 
       {issue !== null ? (
         <p data-testid="settings-problem" className="text-destructive text-[11.5px]">

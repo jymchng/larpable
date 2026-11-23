@@ -17,6 +17,8 @@
  *    from the guest, not from the dev server?
  * 3. does a deep link (`/__preview__/<id>/app/editor`) resolve to the SPA entry and run its
  *    script, rather than 404?
+ * 4. does the pane's address bar follow a site that navigates *itself* — `history.pushState`,
+ *    no document load, no event out of the frame?
  *
  * The build is written into `/workspace/dist` through the guest's own terminal, so the bytes
  * come from inside the VM and nothing here can substitute a mock for the guest. Every value
@@ -28,6 +30,7 @@
  * Output:
  *   docs/preview-browser-report.md          rewritten with this run's measurements
  *   docs/evidence/preview-pane.png          the pane showing the rendered site
+ *   docs/evidence/preview-address.png       the address bar after the site's own pushState
  *   docs/evidence/preview-deep-link.png     the same frame on an SPA deep link
  *
  * Exit code 0 only when every assertion passed. A red run still writes the report and says
@@ -110,6 +113,17 @@ interface Measurements {
     cssApplied: boolean;
     scriptRan: boolean;
   } | null;
+  /**
+   * The address bar following the site's own navigation: read from the frame (the click and
+   * the frame's pathname) and from the pane's omnibox input (its rendered value).
+   */
+  nav: {
+    link: string | null;
+    framePath: string | null;
+    addressBefore: string | null;
+    addressAfter: string | null;
+    wallClockMs: number;
+  } | null;
   deepLink: { url: string; route: string | null; answer: string | null; title: string | null } | null;
   failure: string | null;
 }
@@ -185,6 +199,17 @@ async function text(page: Page, selector: string): Promise<string | null> {
   if ((await locator.count()) === 0) return null;
   const value = (await locator.textContent())?.trim();
   return value && value.length > 0 ? value : null;
+}
+
+/**
+ * The rendered value of an input. The preview's address bar *is* an input, so `textContent`
+ * says nothing about it: the stale address this goal is about was invisible to a text read.
+ */
+async function inputValue(page: Page, selector: string): Promise<string | null> {
+  const locator = page.locator(selector).first();
+  if ((await locator.count()) === 0) return null;
+  const value = await locator.inputValue();
+  return value.length > 0 ? value : null;
 }
 
 /** The transcript the terminal component mirrors into the DOM, so a run can assert on it. */
@@ -384,6 +409,7 @@ async function main(): Promise<void> {
     runtimeWarm: null,
     publish: null,
     render: null,
+    nav: null,
     deepLink: null,
     failure: null,
   };
@@ -554,6 +580,50 @@ async function main(): Promise<void> {
       `#answer reads ${JSON.stringify(view.answer)}`,
     );
     await page.screenshot({ path: join(evidenceDir, "preview-pane.png"), fullPage: true });
+
+    // -------------------------------------------------- the address bar follows
+    // The reported bug, as a browser sees it. The build's own module links to `/blogs` and
+    // answers the click with `history.pushState`: no document loads and no event leaves the
+    // frame, so the pane can only keep up by reading the frame's location. The click lands in
+    // the frame's document and the comparison is against the omnibox's rendered value, so
+    // neither side of this check is the script's own opinion.
+    const navStartedAt = Date.now();
+    const addressBefore = await inputValue(page, "[data-testid=preview-address]");
+    const clicked = await (frame as Frame).evaluate(() => {
+      const anchor = document.getElementById("blogs");
+      if (anchor === null) return null;
+      const href = anchor.getAttribute("href");
+      anchor.click();
+      return { href, pathname: window.location.pathname };
+    });
+
+    const expectedAddress = `/__preview__/${String(buildId)}/blogs`;
+    const navDeadline = Date.now() + 15_000;
+    let addressAfter = await inputValue(page, "[data-testid=preview-address]");
+    while (Date.now() < navDeadline && addressAfter !== expectedAddress) {
+      await page.waitForTimeout(250);
+      addressAfter = await inputValue(page, "[data-testid=preview-address]");
+    }
+    measurements.nav = {
+      link: clicked?.href ?? null,
+      framePath: clicked?.pathname ?? null,
+      addressBefore,
+      addressAfter,
+      wallClockMs: Date.now() - navStartedAt,
+    };
+    log("address-bar", measurements.nav);
+
+    expect(
+      "the build's own link routed the frame to /blogs",
+      clicked?.pathname === "/blogs",
+      `the frame's location reads ${JSON.stringify(clicked?.pathname ?? null)}`,
+    );
+    expect(
+      "the address bar followed the site's own pushState",
+      addressAfter === expectedAddress,
+      `the omnibox reads ${JSON.stringify(addressAfter)}; before the click it read ${JSON.stringify(addressBefore)}`,
+    );
+    await page.screenshot({ path: join(evidenceDir, "preview-address.png"), fullPage: true });
 
     // ------------------------------------------------------------ deep link
     const deepLinkUrl = `${baseUrl}/__preview__/${String(buildId)}/app/editor`;
@@ -735,6 +805,28 @@ function renderReport(measurements: Measurements): string {
       `stylesheet applied: **${String(render.cssApplied)}**, module executed: **${String(render.scriptRan)}**`,
       "",
       "![The preview pane showing the guest build](evidence/preview-pane.png)",
+      "",
+    );
+  }
+
+  if (nav) {
+    lines.push(
+      "## The address bar follows the site's own navigation",
+      "",
+      "The build's module links to `/blogs` and answers the click with `history.pushState` \u2014 no",
+      "document load, no event out of the frame. The pane reads the frame's location and rebases",
+      "what it finds into the build's own URL space, which is the URL the same page is shown at",
+      "everywhere else in this pane:",
+      "",
+      "| Field | Value |",
+      "| --- | --- |",
+      `| The link the build emitted | \`${nav.link ?? "none"}\` |`,
+      `| The frame's \`location.pathname\` after the click | \`${nav.framePath ?? "none"}\` |`,
+      `| Omnibox before the click | \`${nav.addressBefore ?? "none"}\` |`,
+      `| Omnibox after the click | \`${nav.addressAfter ?? "none"}\` |`,
+      `| Click to settled address | ${nav.wallClockMs} ms |`,
+      "",
+      "![The address bar after the site navigated itself](evidence/preview-address.png)",
       "",
     );
   }

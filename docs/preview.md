@@ -14,7 +14,7 @@ previewed site cannot do.
 ┌──────────────────┐      ┌────────────────────┐      ┌──────────────────────┐
 │ preview-server   │ HTTP │ proxy.ts           │      │ sandbox="allow-      │
 │ (Node, serves    │◄────►│ routing.ts decides │─────►│ scripts allow-forms" │
-│  dist/ on 8123)  │  TCP │ every header       │      │ allow-same-origin    │
+│  dist/ on port)  │  TCP │ every header       │      │ allow-same-origin    │
 └──────────────────┘      │            │       │      └──────────────────────┘
                           │            ▼       │
                           │   preview-sw.js    │
@@ -23,10 +23,13 @@ previewed site cannot do.
 ```
 
 - **`src/preview/guest-server.ts`** writes a Node script into the guest
-  (`.larpable/preview-server.mjs`), starts it on port 8123 and waits for its
-  `LARPABLE-PREVIEW-LISTENING` line. The image has no `python3`, `busybox`, `php` or `ruby`
+  (`.larpable/preview-server.mjs`), starts it on the port the user chose in Settings
+  (`5173` by default; `DEFAULT_PREVIEW_PORT` is `8123` when no setting is given) and waits for
+  its `LARPABLE-PREVIEW-LISTENING` line. The image has no `python3`, `busybox`, `php` or `ruby`
   (measured — see the comment at the top of that file), so Node is the only runtime
-  available, and `RuntimeBootstrap` has already warmed it.
+  available, and `RuntimeBootstrap` has already warmed it. The same setting fields the build
+  directory the server is rooted at, so a project that emits `build/` does not have to lie
+  about `dist/`.
 - **`src/preview/routing.ts`** decides everything that depends only on a path: what a
   preview URL means, which file answers it, the `Content-Type`, the cache policy, whether
   an SPA deep link is rewritten, and whether the build is stale. It has no browser and no

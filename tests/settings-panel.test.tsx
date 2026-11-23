@@ -16,11 +16,31 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { PROVIDER_CHOICES, defaultSettings, type LlmSettings } from "../src/llm/settings";
-import { SettingsPanel } from "../src/ui/settings-panel";
+import { defaultPreviewSettings } from "../src/ui/preview-settings";
+import { SettingsPanel, type PreviewFields } from "../src/ui/settings-panel";
 
 function render(settings: LlmSettings, problem: string | null = null): string {
   return renderToStaticMarkup(
     <SettingsPanel settings={settings} onChange={() => undefined} problem={problem} />,
+  );
+}
+
+/** The preview half, painted with whatever draft the test wants to see. */
+function previewFields(overrides: Partial<PreviewFields> = {}): PreviewFields {
+  const settings = defaultPreviewSettings();
+  return {
+    settings,
+    draft: { port: String(settings.port), buildDirectory: settings.buildDirectory },
+    setPort: () => undefined,
+    setBuildDirectory: () => undefined,
+    problem: null,
+    ...overrides,
+  };
+}
+
+function renderWithPreview(preview: PreviewFields, settings: LlmSettings = defaultSettings()): string {
+  return renderToStaticMarkup(
+    <SettingsPanel settings={settings} onChange={() => undefined} preview={preview} />,
   );
 }
 
@@ -85,5 +105,67 @@ describe("SettingsPanel", () => {
     const html = render({ provider: "openai", model: "gpt-4o-mini", apiKey: "sk-test-1234abcd" });
     expect(html).toContain('data-testid="settings-reset"');
     expect(html).toContain("Reset to the demo provider");
+  });
+
+  it("says nothing about a preview it was not given", () => {
+    // The panel is a body, and a body that painted a port for a machine that is not there would
+    // be a field the user could change with no effect.
+    const html = render(defaultSettings());
+    expect(html).not.toContain('data-testid="settings-port"');
+    expect(html).not.toContain('data-testid="settings-build-directory"');
+  });
+});
+
+describe("SettingsPanel: the preview half", () => {
+  it("shows the base URL with a host that cannot be typed, and the default port beside it", () => {
+    const html = renderWithPreview(previewFields());
+
+    // The host is painted, not offered: the guest answers on its own loopback and nowhere else.
+    expect(html).toMatch(/data-testid="settings-host"[^>]*readonly/);
+    expect(html).toContain("http://localhost");
+    expect(html).not.toMatch(/data-testid="settings-host"[^>]*onChange/);
+    // The port is the user's, and it defaults to Vite's.
+    expect(html).toMatch(/data-testid="settings-port"[^>]*value="5173"/);
+    expect(html).toMatch(/data-testid="settings-port"[^>]*inputmode="numeric"/i);
+    expect(html).not.toMatch(/data-testid="settings-port"[^>]*readonly/);
+  });
+
+  it("lets the user name the build directory, and defaults to `dist`", () => {
+    const html = renderWithPreview(previewFields());
+    expect(html).toMatch(/data-testid="settings-build-directory"[^>]*value="dist"/);
+    expect(html).not.toMatch(/data-testid="settings-build-directory"[^>]*readonly/);
+  });
+
+  it("says what the pair means in the guest, in the settings actually in use", () => {
+    const html = renderWithPreview(
+      previewFields({
+        settings: { port: 8080, buildDirectory: "build" },
+        draft: { port: "80", buildDirectory: "build" },
+      }),
+    );
+    // The sentence quotes the last *valid* pair, not the half-typed draft: that is what a
+    // server would be started with right now.
+    expect(html).toContain('data-testid="settings-preview-note"');
+    expect(html).toContain("http://localhost:8080");
+    expect(html).toContain("read from build");
+    expect(html).not.toContain("http://localhost:80<");
+  });
+
+  it("shows a half-typed port and the reason it is not used yet", () => {
+    const html = renderWithPreview(
+      previewFields({
+        draft: { port: "5173x", buildDirectory: "dist" },
+        problem: "The port must be a number between 1 and 65535.",
+      }),
+    );
+    expect(html).toMatch(/data-testid="settings-port"[^>]*value="5173x"/);
+    expect(html).toContain('data-testid="settings-preview-problem"');
+    expect(html).toContain("The port must be a number between 1 and 65535.");
+  });
+
+  it("says nothing when the draft is usable", () => {
+    expect(renderWithPreview(previewFields())).not.toContain(
+      'data-testid="settings-preview-problem"',
+    );
   });
 });

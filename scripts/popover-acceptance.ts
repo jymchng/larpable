@@ -78,7 +78,18 @@ interface Observation {
   trigger: { left: number; right: number; top: number; bottom: number };
   viewport: { width: number; height: number };
   overflowPx: number;
-  scoped: { provider: boolean; model: boolean; key: boolean; close: boolean };
+  scoped: {
+    provider: boolean;
+    model: boolean;
+    key: boolean;
+    close: boolean;
+    /** The preview half: a host that cannot be typed, a port that can, a named folder. */
+    host: string | null;
+    hostReadOnly: boolean;
+    port: string | null;
+    directory: string | null;
+    note: string | null;
+  };
 }
 
 async function observe(page: Page): Promise<Observation> {
@@ -91,6 +102,12 @@ async function observe(page: Page): Promise<Observation> {
     const t = trigger.getBoundingClientRect();
     const focused = document.activeElement;
     const scrolling = document.scrollingElement;
+    const host = dialog.querySelector("[data-testid=settings-host]") as HTMLInputElement | null;
+    const port = dialog.querySelector("[data-testid=settings-port]") as HTMLInputElement | null;
+    const directory = dialog.querySelector(
+      "[data-testid=settings-build-directory]",
+    ) as HTMLInputElement | null;
+    const note = dialog.querySelector("[data-testid=settings-preview-note]");
     return {
       expanded: trigger.getAttribute("aria-expanded"),
       state: dialog.getAttribute("data-state"),
@@ -117,6 +134,11 @@ async function observe(page: Page): Promise<Observation> {
         model: dialog.querySelector("[data-testid=settings-model]") !== null,
         key: dialog.querySelector("[data-testid=settings-key]") !== null,
         close: dialog.querySelector("[data-testid=settings-region-close]") !== null,
+        host: host === null ? null : host.value,
+        hostReadOnly: host !== null && host.readOnly,
+        port: port === null ? null : port.value,
+        directory: directory === null ? null : directory.value,
+        note: note === null ? null : (note.textContent ?? "").trim(),
       },
     };
   });
@@ -164,6 +186,31 @@ try {
     open.scoped.provider && open.scoped.model && open.scoped.key && open.scoped.close,
     `provider=${String(open.scoped.provider)}, model=${String(open.scoped.model)}, key=${String(open.scoped.key)}, close=${String(open.scoped.close)}`,
   );
+
+  // 3b. The preview half: the host is painted (read-only), the port and the build directory
+  // are the user's, and typing a port moves the sentence that says where the server will be.
+  check(
+    "shows a read-only localhost with an editable port and build directory",
+    open.scoped.host === "http://localhost" &&
+      open.scoped.hostReadOnly &&
+      open.scoped.port === "5173" &&
+      open.scoped.directory === "dist" &&
+      (open.scoped.note ?? "").includes("http://localhost:5173"),
+    `host=${String(open.scoped.host)} (readOnly=${String(open.scoped.hostReadOnly)}), ` +
+      `port=${String(open.scoped.port)}, directory=${String(open.scoped.directory)}, ` +
+      `note=${JSON.stringify(open.scoped.note)}`,
+  );
+
+  await page.fill("[data-testid=settings-port]", "8080");
+  await page.waitForTimeout(150);
+  const afterTyping = await observe(page);
+  check(
+    "a typed port changes the address the panel says the guest serves on",
+    (afterTyping.scoped.note ?? "").includes("http://localhost:8080"),
+    `note=${JSON.stringify(afterTyping.scoped.note)}`,
+  );
+  await page.fill("[data-testid=settings-port]", "5173");
+  await page.waitForTimeout(150);
 
   // 4. It fits a 390 px phone, and it hangs off the cog rather than floating loose.
   const insideViewport =

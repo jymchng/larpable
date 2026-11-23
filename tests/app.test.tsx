@@ -356,8 +356,8 @@ describe("Dashboard §13 layout", () => {
     // does not change with the state — `aria-expanded` carries it — so the control can be
     // asked for by the same words twice.
     expect(html).toContain('data-testid="settings-toggle"');
-    expect(html).toContain('aria-label="Provider settings"');
-    expect(html).toContain('title="Provider, model and API key"');
+    expect(html).toContain('aria-label="Settings"');
+    expect(html).toContain('title="Provider, model and key; preview port and build directory"');
     expect(html).toMatch(/data-testid="settings-toggle"[^>]*aria-expanded="false"/);
     expect(html).toMatch(/data-testid="settings-toggle"[^>]*aria-controls="settings-region"/);
     // The cog carries the settings, and the settings start hidden but present.
@@ -371,7 +371,7 @@ describe("Dashboard §13 layout", () => {
     expect(html).toMatch(/id="settings-region"[^>]*role="dialog"/);
     expect(html).toMatch(/id="settings-region"[^>]*aria-labelledby="settings-region-heading"/);
     expect(html).toContain('id="settings-region-heading"');
-    expect(html).toContain('aria-label="Close provider settings"');
+    expect(html).toContain('aria-label="Close settings"');
     // The heading keeps naming the pane for a screen reader even where it is not painted.
     expect(html).toContain('id="agent-heading"');
   });

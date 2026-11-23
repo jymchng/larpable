@@ -1,10 +1,19 @@
-# The provider popover
+# The settings popover
 
 Provider, model and API key used to sit in a band above the conversation, toggled by the cog in
 the Agent pane's heading row. It is now a popover anchored to that cog: same three fields, same
 provider choices, but a surface that appears over the conversation instead of pushing the prompt
 box down — which mattered most on a phone, where the band was the most expensive vertical space
 in the app.
+
+The surface now holds the two settings that are not about the provider as well: the address the
+guest's servers listen on (`http://localhost:` + an editable port, default **5173**) and the
+**build directory** a static build is read from (default **dist**). The host is painted and
+read-only — the preview reaches the guest through the kernel's own loopback, so `localhost` is the
+only host that can answer — and both fields are explained by the sentence under them, which
+quotes the settings actually in force rather than the half-typed draft. `src/ui/preview-settings.ts`
+holds the rules (a port must be 1–65535, a directory must stay inside the workspace) and
+`src/ui/use-preview-settings.ts` persists the pair in `localStorage` beside the provider choice.
 
 ## What it does, and where each part lives
 
@@ -17,7 +26,9 @@ in the app.
 | A press outside closes it, a press inside or on the cog does not | `src/ui/popover.ts` → `pointerDownDismisses` | `tests/popover.test.ts` + Chromium run below |
 | Focus moves into the surface on open | `src/ui/components/popover.tsx` | Chromium run below (`document.activeElement`) |
 | Fits a 390 px screen and hangs off the cog | `w-[min(22rem,calc(100vw-1rem))] max-h-[min(70dvh,26rem)]`, `top-full right-0` | Chromium run below (rectangles) |
-| The fields are unchanged (provider buttons, model, key, reset) | `src/ui/settings-panel.tsx` | `tests/settings-panel.test.tsx` |
+| The provider fields are unchanged (provider buttons, model, key, reset) | `src/ui/settings-panel.tsx` | `tests/settings-panel.test.tsx` |
+| A read-only `http://localhost` beside an editable port, and a build directory field | `src/ui/settings-panel.tsx` + `src/ui/preview-settings.ts` | `tests/settings-panel.test.tsx`, `tests/preview-settings.test.ts`, Chromium run below |
+| One port for both previews; the app's start script is *told* it (`PORT`) | `src/ui/App.tsx`, `src/preview/app-server.ts` | `tests/preview-app-server.test.ts`, `tests/preview-app-preview.test.ts` |
 
 The unit suite has no DOM (every UI test renders with `renderToStaticMarkup`), so the *rules* are
 pure functions in `src/ui/popover.ts` and the *event wiring* is a guard test over the component's
@@ -34,18 +45,21 @@ answers. Last run, against the loopback dev server (`http://127.0.0.1:5173`):
 PASS closed by default — aria-expanded=false, data-state=closed, display=none
 PASS opens on the trigger, with focus inside — aria-expanded=true, data-state=open, display=block, activeElement=#settings-region
 PASS carries the provider, model, key fields and a named close button — provider=true, model=true, key=true, close=true
-PASS fits the 390 px viewport — rect 30..382 x 220..561 in 390×844, document overflow 0 px
-PASS anchored to the cog — dialog right 382 vs trigger right 382, dialog top 220 vs trigger bottom 216
+PASS shows a read-only localhost with an editable port and build directory — host=http://localhost (readOnly=true), port=5173, directory=dist, note="Both previews start their server inside the guest, on http://localhost:5173, and a static build is read from dist."
+PASS a typed port changes the address the panel says the guest serves on — note="Both previews start their server inside the guest, on http://localhost:8080, and a static build is read from dist."
+PASS fits the 390 px viewport — rect 32..384 x 45.6..461.6 in 390×844, document overflow 0 px
+PASS anchored to the cog — dialog right 384 vs trigger right 384, dialog top 45.6 vs trigger bottom 41.6
 PASS closes on Escape and returns focus to the trigger — aria-expanded=false, data-state=closed, activeElement=settings-toggle
 PASS closes on a press outside — reopened data-state=open → after press data-state=closed, display=none
 PASS closes on the close button and returns focus to the trigger — data-state=closed, display=none, activeElement=settings-toggle
 PASS the cog toggles rather than closes-then-reopens — after two presses: aria-expanded=false, data-state=closed
-[popover] 9/9 checks passed at 390×844 against http://127.0.0.1:5173
+[popover] 11/11 checks passed at 390×844 against http://127.0.0.1:5173
 ```
 
-The surface is **352 px wide** inside a 390 px viewport (382 − 30), its right edge is exactly the
+The surface is **352 px wide** inside a 390 px viewport (384 − 32), its right edge is exactly the
 cog's right edge, and the document's `scrollWidth - clientWidth` is **0**: the popover does not
-create a horizontal scrollbar at phone width.
+create a horizontal scrollbar at phone width — the preview row's two fields wrap inside it rather
+than widening it.
 
 **One deliberate deviation.** Focus returns to the cog on Escape and on the close button, but not
 when the popover is dismissed by a press elsewhere on the page. The press has already moved focus

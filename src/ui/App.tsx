@@ -23,6 +23,7 @@ import { useBuild } from "@/ui/use-build";
 import { useEnvironmentBoot } from "@/ui/use-environment";
 import { useAppPreview } from "@/ui/use-app-preview";
 import { useLlmSettings } from "@/ui/use-llm-settings";
+import { usePreviewSettings } from "@/ui/use-preview-settings";
 import { useNotifications } from "@/ui/use-notifications";
 import { useNetlify } from "@/ui/use-netlify";
 import { usePreview } from "@/ui/use-preview";
@@ -63,17 +64,25 @@ export function App() {
     boot: environment.boot,
   });
   // The preview shares the booted machine with the terminal: same kernel, one HTTP door.
-  // It is created lazily and does nothing at all until the user asks for a build.
+  // It is created lazily and does nothing at all until the user asks for a build. The port and
+  // the build directory are the user's (Settings → Preview): one port for both previews, and
+  // the directory a static build is read from.
+  const previewSettings = usePreviewSettings();
   const preview = usePreview({
     environment: environment.environment,
     http: environment.guestHttp,
+    port: previewSettings.settings.port,
+    root: previewSettings.settings.buildDirectory,
   });
   // The other preview: the project's own server (`next start`), for projects that have no
   // `dist/` because they render per request. It is idle until the user clicks "Run the app",
-  // and it is torn down with the machine, so it never holds a port after shutdown.
+  // and it is torn down with the machine, so it never holds a port after shutdown. The same
+  // port setting applies: the project's start script is *told* the port (see `startAppServer`),
+  // so the number the pane knocks on and the number the app listens on cannot drift apart.
   const appPreview = useAppPreview({
     environment: environment.environment,
     http: environment.guestHttp,
+    port: previewSettings.settings.port,
   });
 
   const settings = useLlmSettings();
@@ -161,6 +170,7 @@ export function App() {
         <SettingsPanel
           settings={settings.settings}
           onChange={settings.update}
+          preview={previewSettings}
           problem={null}
         />
       }

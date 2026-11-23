@@ -126,6 +126,10 @@ export async function startAppServer(options: AppServerOptions): Promise<AppServ
   const execution = options.environment
     .execute(options.command, {
       cwd: root,
+      // The port is *told* to the app, not merely probed: `next start`, `vite preview`, Express
+      // and most other servers read `PORT`, so the number the user chose in Settings is the
+      // number the server listens on and the number this function knocks on.
+      env: { PORT: String(port) },
       signal: controller.signal,
       // A server does not exit; the budget belongs to the caller's own timeout below.
       timeoutMs: Math.max(timeoutMs, 60_000),

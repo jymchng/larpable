@@ -309,8 +309,8 @@ export function Dashboard({
           <div ref={settingsAnchor} className="relative ml-auto flex items-center">
             <IconButton
               testId="settings-toggle"
-              label="Provider settings"
-              hint="Provider, model and API key"
+              label="Settings"
+              hint="Provider, model and key; preview port and build directory"
               tone="nav"
               aria-expanded={settingsOpen}
               aria-controls="settings-region"
@@ -320,7 +320,7 @@ export function Dashboard({
             </IconButton>
             <Popover
               id="settings-region"
-              title="Provider settings"
+              title="Settings"
               open={settingsOpen}
               onClose={() => setSettingsOpen(false)}
               anchorRef={settingsAnchor}
@@ -571,7 +571,11 @@ function RequirementsLine({ support, passed }: { support: SupportReport; passed:
  * The sentence is *also* the shell's `sr-only` live region (`environment-summary`), and that is
  * not a duplicate to be tidied away: the row is what an eye reads once the popover is open, the
  * live region is what a screen reader hears while it is closed, and a boot failure has to be
- * announced without anyone pressing anything.
+ * announced without anyone pressing anything. Two copies, in the two places that answer two
+ * questions \u2014 and no third: the row carries no `title`, because the `dd` below wraps rather
+ * than truncating, so a native tooltip could only repeat what is already on screen (and would
+ * put a third copy of the sentence in the markup, which is the count
+ * `tests/debug-popover.test.tsx` uses to prove nothing else is rendering it).
  *
  * The verdict's wording is the footer's own ("Kernel can boot" / "this browser cannot boot the
  * kernel"), kept verbatim so the same sentence a person learned in the old layout still answers
@@ -580,7 +584,7 @@ function RequirementsLine({ support, passed }: { support: SupportReport; passed:
 function EnvironmentVerdict({ sentence, support }: { sentence: string; support: SupportReport }) {
   return (
     <dl data-testid="environment-verdict" className="font-mono text-[11px] leading-tight">
-      <div data-testid="environment-sentence" title={sentence} className="flex min-w-0 gap-1.5">
+      <div data-testid="environment-sentence" className="flex min-w-0 gap-1.5">
         <dt className="text-muted-foreground w-[4.75rem] shrink-0">Environment</dt>
         {/* `break-words`, not `truncate`: the sentence is the whole status, so a narrow popover
             wraps it rather than hiding the memory figure behind an ellipsis. */}
