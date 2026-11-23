@@ -80,3 +80,36 @@ worker/SMP path need.
   equivalent.
 - Reproducing: `netlify link --id a5203e52-f979-4761-8e2f-2d8453dda811`, then
   `bun run build && netlify deploy --dir=dist --prod`.
+
+## Deploy after the Netlify configuration module (commit `395e6e3`)
+
+Deployed with `netlify deploy --dir=dist --prod` (site `larpable`, deploy
+`6b039de7ae30801562143f88`). The build ran `prebuild` → `fetch:distros`, so the image
+shipped in this deployment is the **Debian** one, not the Alpine image the earlier section
+of this report measured.
+
+Measured against https://larpable.netlify.app/ after the deploy:
+
+| Request | Result |
+| --- | --- |
+| `GET /` | `200`, `text/html`, `cross-origin-opener-policy: same-origin`, `cross-origin-embedder-policy: require-corp`, `x-content-type-options: nosniff` |
+| `GET /distros/distros.json` | `200`, 290 bytes, `application/json`, one entry: `debian` |
+| `GET /distros/debian.erofs` | `200`, **72 593 408 bytes**, `application/octet-stream` |
+| `GET /distros/nope.erofs` | `404`, 1116 bytes (a real 404, not the SPA entry point) |
+
+Booted in production with Playwright Chromium against the live URL:
+
+- Panel: **3/3** requirements, Linux image `debian-13.7-a6bb4b5e547bc28a ready — 69.2 MiB
+  served from /distros/debian.erofs`.
+- **Boot Linux** → **Ready**, `debian`, 2 CPUs, 1024 MiB, **booted in 7.0 s**.
+- **Run self-test** → *"The guest answered and the workspace round-trips. 791 ms"*:
+  - `uname -a` → `Linux unkernel 7.3.4+ #909a1964cecb SMP Fri Nov 20 16:38:40 UTC 2026 aarch64 GNU/Linux`
+  - `/workspace/.larpable/host-to-guest.txt arrived intact`
+  - `/workspace/.larpable/guest-to-host.txt arrived intact`
+- Status bar: `Linux: Ready | Distro: debian | Runtime: node (guest shim) | CPUs: 2 | Memory: 1024 MiB`
+
+![Production boot after the Netlify configuration deploy](evidence/production-netlify-config.png)
+
+This deploy also settles the image-name half of goal #17: the production asset is now
+`debian.erofs` at its measured 72 593 408 bytes, so the older `alpine.erofs`
+(4 046 848 bytes) acceptance figure is history, not a current expectation.
