@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 
 import type { ShellOptions, TerminalSession } from "@/env/execution";
-import { Badge } from "@/ui/components/badge";
+import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { Button } from "@/ui/components/button";
 import {
   NO_MODIFIERS,
@@ -58,6 +58,14 @@ import {
   type ModifierState,
 } from "@/ui/terminal-keys";
 import { activeTabOf, addTab, closeTab, type ShellTab } from "@/ui/terminal-tabs";
+import {
+  clipboardKeyAction,
+  copySelection as copyFromTerminal,
+  cutSelection as cutFromTerminal,
+  pasteClipboard,
+  type ClipboardPort,
+  type ClipboardResult,
+} from "@/ui/terminal-clipboard";
 import { TranscriptBuffer } from "@/ui/terminal-transcript";
 import { cn } from "@/lib/utils";
 
@@ -116,8 +124,18 @@ const TERMINAL_THEME = {
 
 type Notice = { kind: "ok" | "error"; text: string };
 
+/**
+ * The transcript mirror's classes, in one place because a unit test pins two of them.
+ *
+ * `sr-only` keeps it out of sight; `select-none` keeps it out of *selections*. Measured in
+ * Chromium: a drag that left the terminal extended the document's selection over the pane and a
+ * copy put 51 characters of pane text (rows plus prompt) on the clipboard — the mirror holds the
+ * entire transcript, so it must never be selectable. It stays in the accessibility tree.
+ */
+export const TRANSCRIPT_MIRROR_CLASS = "sr-only select-none";
+
 /** The clipboard API, or null when this context has none (plain http, an old browser). */
-function clipboard(): { readText(): Promise<string>; writeText(text: string): Promise<void> } | null {
+function clipboard(): ClipboardPort | null {
   const api = (globalThis.navigator as Navigator | undefined)?.clipboard as
     | { readText?: () => Promise<string>; writeText?: (text: string) => Promise<void> }
     | undefined;
@@ -146,6 +164,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
   const activeIdRef = useRef<string | null>(null);
   const nextNumberRef = useRef(1);
   const autoOpenedRef = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const applyModifiers = useCallback((next: ModifierState) => {
     modifiersRef.current = next;
@@ -209,71 +228,29 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
     return id === null ? null : (handlesRef.current.get(id) ?? null);
   };
 
+  /**
+   * Every clipboard action reports the result the same way, and never touches the DOM: the text
+   * comes from `terminal.getSelection()` inside `terminal-clipboard.ts` (see that file for the
+   * measured reason — the browser's own copy takes the *document's* selection, which includes the
+   * pane's transcript mirror).
+   */
+  const reportClipboard = useCallback((result: ClipboardResult) => {
+    setNotice({ kind: result.ok ? "ok" : "error", text: result.notice });
+  }, []);
+
   const copySelection = useCallback(async (): Promise<string | null> => {
-    const handle = currentHandle();
-    if (handle === null) return null;
-    const selection = handle.terminal.getSelection();
-    if (selection.length === 0) {
-      setNotice({ kind: "error", text: "Nothing is selected: drag across the terminal text first." });
-      return null;
-    }
-    const api = clipboard();
-    if (api === null) {
-      setNotice({
-        kind: "error",
-        text: "This browser exposes no clipboard API here (it needs https or localhost), so copy is unavailable.",
-      });
-      return null;
-    }
-    try {
-      await api.writeText(selection);
-      setNotice({ kind: "ok", text: `Copied ${String(selection.length)} characters.` });
-      return selection;
-    } catch (cause) {
-      setNotice({ kind: "error", text: `The browser refused the copy: ${messageOf(cause)}` });
-      return null;
-    }
-  }, []);
+    const result = await copyFromTerminal(currentHandle()?.terminal ?? null, clipboard());
+    reportClipboard(result);
+    return result.ok ? result.text : null;
+  }, [reportClipboard]);
 
-  const paste = useCallback(async () => {
-    const handle = currentHandle();
-    if (handle === null) return;
-    const api = clipboard();
-    if (api === null) {
-      setNotice({
-        kind: "error",
-        text: "This browser exposes no clipboard API here (it needs https or localhost), so paste is unavailable.",
-      });
-      return;
-    }
-    try {
-      const text = await api.readText();
-      if (text.length === 0) {
-        setNotice({ kind: "error", text: "The clipboard is empty." });
-        return;
-      }
-      // `paste()` runs the text through the terminal, so it reaches the pty exactly as a
-      // typed paste would (newlines converted, bracketed-paste mode honoured).
-      handle.terminal.paste(text);
-      handle.focus();
-      setNotice({ kind: "ok", text: `Pasted ${String(text.length)} characters.` });
-    } catch (cause) {
-      setNotice({ kind: "error", text: `The browser refused the paste: ${messageOf(cause)}` });
-    }
-  }, []);
+  const paste = useCallback(async (): Promise<void> => {
+    reportClipboard(await pasteClipboard(currentHandle()?.terminal ?? null, clipboard()));
+  }, [reportClipboard]);
 
-  const cut = useCallback(async () => {
-    const copied = await copySelection();
-    if (copied === null) return;
-    // A terminal has no "cut": the shell's scrollback is the guest's output, and nothing in
-    // the browser can delete a line from it. So the selection is copied and then
-    // unhighlighted, and the notice says so rather than implying the text was removed.
-    currentHandle()?.terminal.clearSelection();
-    setNotice({
-      kind: "ok",
-      text: `Copied ${String(copied.length)} characters and cleared the selection (the shell's scrollback is untouched).`,
-    });
-  }, [copySelection]);
+  const cut = useCallback(async (): Promise<void> => {
+    reportClipboard(await cutFromTerminal(currentHandle()?.terminal ?? null, clipboard()));
+  }, [reportClipboard]);
 
   const clearScreen = useCallback(() => {
     const handle = currentHandle();
@@ -281,6 +258,36 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
     handle?.focus();
     setNotice({ kind: "ok", text: "Terminal cleared." });
   }, []);
+
+  /**
+   * Ctrl/Cmd+C and Ctrl/Cmd+X, handled here rather than by the browser.
+   *
+   * Measured in Chromium: the header buttons move focus out of the terminal, and after that the
+   * browser's own copy takes the *document's* selection — which is the pane, its header and the
+   * sr-only transcript mirror — while xterm's copy handler (bound to the terminal element) never
+   * runs at all. This listener sits on the panel in the capture phase, so it runs before xterm's
+   * textarea handler and can stop the event; with nothing selected it does nothing, because `^C`
+   * is how a user interrupts a build.
+   */
+  useEffect(() => {
+    const element = rootRef.current;
+    if (element === null) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const action = clipboardKeyAction(
+        event.key,
+        event.ctrlKey || event.metaKey,
+        currentHandle()?.terminal.getSelection() ?? "",
+      );
+      if (action === "passthrough") return;
+      event.preventDefault();
+      event.stopPropagation();
+      void (action === "copy" ? copySelection() : cut());
+    };
+    element.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      element.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [copySelection, cut]);
 
   const pressKey = useCallback(
     (key: KeyDefinition) => {
@@ -301,9 +308,9 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
 
   const active = activeTabOf(tabs, activeId);
   const activeStatus = active === null ? null : (statuses[active.id] ?? null);
-  const badge =
+  const badge: { label: string; tone: StatusTone } =
     active === null
-      ? { label: "No shell", variant: "muted" as const }
+      ? { label: "No shell", tone: "grey" }
       : describeConnection(activeStatus?.connection ?? "connecting");
   const attached = activeStatus?.connection === "connected";
   const modifierHints = [modifiers.ctrl ? "CTRL" : null, modifiers.alt ? "ALT" : null].filter(
@@ -312,6 +319,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
 
   return (
     <div
+      ref={rootRef}
       data-testid="terminal-panel"
       data-connection={activeStatus?.connection ?? "waiting"}
       className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-800 bg-[#0b1020]"
@@ -379,9 +387,7 @@ export function TerminalPanel({ ready, cwd, openShell, unavailableReason }: Term
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5">
         <SquareTerminal aria-hidden="true" className="size-3.5 text-slate-400" />
         <span className="font-mono text-[11px] text-slate-200">{cwd}</span>
-        <Badge data-testid="terminal-status" variant={badge.variant} className="ml-auto text-[10px]">
-          {badge.label}
-        </Badge>
+        <StatusDot testId="terminal-status" tone={badge.tone} label={badge.label} className="ml-auto" />
 
         <div className="flex items-center gap-0.5">
           <Button
@@ -778,12 +784,17 @@ function ShellTab({
         A readable mirror of what the terminal printed. xterm draws into its own
         layers, so without this neither a screen reader nor a browser test can see the
         output at all.
+
+        `select-none`: the mirror holds the *whole* transcript, and a mouse drag that
+        leaves the terminal can otherwise extend the document's selection over it — which
+        is how a "copy" of three words could put the entire pane on the clipboard. It stays
+        in the accessibility tree; it is only kept out of selections.
       */}
       <pre
         data-testid="terminal-output"
         aria-live="polite"
         aria-atomic="false"
-        className="sr-only"
+        className={TRANSCRIPT_MIRROR_CLASS}
       >
         {transcript}
       </pre>
@@ -791,20 +802,28 @@ function ShellTab({
   );
 }
 
-function describeConnection(connection: Connection): {
+/**
+ * The terminal's connection state as one dot, with the words that go in its label.
+ *
+ * Exported because this mapping is the contract the user reads: a state that is not
+ * `connected` must never paint green, and `error` must never paint anything but red. The
+ * component test asserts every case, so a new `Connection` member cannot compile without
+ * a decision here (the switch is exhaustive and the return type is checked).
+ */
+export function describeConnection(connection: Connection): {
   label: string;
-  variant: "muted" | "warning" | "success" | "destructive";
+  tone: StatusTone;
 } {
   switch (connection) {
     case "connected":
-      return { label: "Connected", variant: "success" };
+      return { label: "Connected", tone: "green" };
     case "connecting":
-      return { label: "Connecting", variant: "warning" };
+      return { label: "Connecting", tone: "amber" };
     case "ended":
-      return { label: "Exited", variant: "muted" };
+      return { label: "Exited", tone: "grey" };
     case "error":
-      return { label: "Failed", variant: "destructive" };
+      return { label: "Failed", tone: "red" };
     case "waiting":
-      return { label: "Not connected", variant: "muted" };
+      return { label: "Not connected", tone: "grey" };
   }
 }

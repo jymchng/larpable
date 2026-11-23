@@ -138,7 +138,39 @@ describe("Dashboard", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('aria-controls="diagnostics-body"');
     expect(html).toContain('id="diagnostics-body"');
-    expect(html).toContain("3/3 requirements");
+  });
+
+  it("shows the requirement count as a green dot, not a sentence in the toolbar", () => {
+    const html = renderDashboard();
+
+    expect(html).toContain('data-testid="requirements-status"');
+    expect(html).toContain('data-tone="green"');
+    // The words are still there for a screen reader and a tooltip…
+    expect(html).toContain('aria-label="Requirements: 3/3 met"');
+    expect(html).toContain('title="Requirements: 3/3 met"');
+    // …but nothing is painted between the toggle's label and the dot.
+    expect(html).not.toContain("3/3 requirements");
+    expect(html).not.toContain(">3/3<");
+  });
+
+  it("paints the dot amber while requirements are partly met, and red when none are", () => {
+    const partial = evaluateSupport({
+      crossOriginIsolated: false,
+      jspi: true,
+      sharedArrayBuffer: false,
+    });
+    const partialHtml = renderDashboard({ support: partial });
+    expect(partialHtml).toContain('data-tone="amber"');
+    expect(partialHtml).toContain('aria-label="Requirements: 1/3 met"');
+
+    const none = evaluateSupport({
+      crossOriginIsolated: false,
+      jspi: false,
+      sharedArrayBuffer: false,
+    });
+    const noneHtml = renderDashboard({ support: none });
+    expect(noneHtml).toContain('data-tone="red"');
+    expect(noneHtml).toContain('aria-label="Requirements: 0/3 met"');
   });
 });
 

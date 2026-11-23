@@ -182,6 +182,102 @@ export function clearSnapshot() {
 }
 
 // ---------------------------------------------------------------------------
+// Server mode: the preview of a *running* app
+// ---------------------------------------------------------------------------
+
+/**
+ * A second way to answer a preview request: ask the page, which asks the guest.
+ *
+ * A static build is bytes, so `installSnapshot` can hold them. A running app (Next.js,
+ * Express, a dev server) has no such set: `/_next/image?url=…` does not exist until it is
+ * requested, and its HTML is produced per request. A service worker cannot call the
+ * kernel — it has no `fetch()` into the guest — so the request has to travel back to a page
+ * that does: this worker posts `larpable:preview:forward`, the page answers with the
+ * status, headers and body, and the worker hands that to the browser.
+ *
+ * What stays the same as the static path: the URL shape (`/__preview__/<id>/…`), the
+ * document headers a cross-origin-isolated app needs, and the rule that a stale id is
+ * refused rather than served. What changes is only where the bytes come from.
+ */
+const FORWARD_TIMEOUT_MS = 30_000;
+
+/** The session a running app is being served under, or null in static mode. */
+let forwarder = null;
+/** Requests waiting for a page's answer, keyed by request id. */
+const pendingForwards = new Map();
+
+export function installForwarder(message) {
+  forwarder = {
+    buildId: message.buildId,
+    timeoutMs: message.timeoutMs ?? FORWARD_TIMEOUT_MS,
+  };
+  return forwarder.buildId;
+}
+
+export function clearForwarder() {
+  forwarder = null;
+}
+
+export function forwarderBuildId() {
+  return forwarder === null ? null : forwarder.buildId;
+}
+
+/** A page's answer, as a `Response` an iframe can render. */
+export function forwardResponse(reply) {
+  const headers = new Headers(reply.headers ?? {});
+  headers.set("x-larpable-served-by", "app");
+  return new Response(reply.body ?? null, { status: reply.status ?? 502, headers });
+}
+
+/**
+ * Ask the page for one request's bytes, with a budget.
+ *
+ * The timeout is not decoration: an iframe waiting on a page that is itself waiting on a
+ * guest app that never answers would hang forever, and a hanging preview looks like a
+ * frozen tab. 504 says "the app did not answer", which is the truth.
+ */
+export function forwardRequest(request, options) {
+  const requestId =
+    options.requestId ?? `f-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+  const timeoutMs = options.timeoutMs ?? FORWARD_TIMEOUT_MS;
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingForwards.delete(requestId);
+      resolve(
+        textResponse(
+          504,
+          `The app did not answer for ${request.url} within ${String(Math.round(timeoutMs / 1000))} s. ` +
+            "It may still be compiling; reload the preview.",
+        ),
+      );
+    }, timeoutMs);
+
+    pendingForwards.set(requestId, (reply) => {
+      clearTimeout(timer);
+      resolve(forwardResponse(reply));
+    });
+
+    options.post({
+      type: "larpable:preview:forward",
+      requestId,
+      url: request.url,
+      method: request.method ?? "GET",
+      buildId: forwarder?.buildId ?? null,
+    });
+  });
+}
+
+/** Resolve a pending forward with the page's answer. Returns false for an unknown id. */
+export function settleForward(message) {
+  const resolve = pendingForwards.get(message.requestId);
+  if (resolve === undefined) return false;
+  pendingForwards.delete(message.requestId);
+  resolve(message);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Service-worker wiring
 // ---------------------------------------------------------------------------
 
@@ -211,12 +307,45 @@ if (inServiceWorker) {
       });
     } else if (message.type === "larpable:preview:clear") {
       clearSnapshot();
+      clearForwarder();
+    } else if (message.type === "larpable:preview:forward:install") {
+      const buildId = installForwarder(message);
+      event.source?.postMessage?.({ type: "larpable:preview:forward:installed", buildId });
+    } else if (message.type === "larpable:preview:forward:reply") {
+      settleForward(message);
     }
   });
 
   self.addEventListener("fetch", (event) => {
-    const response = handlePreviewRequest(event.request, { get snapshot() { return snapshot; } });
+    const request = event.request;
+    const snapshotAnswer = handlePreviewRequest(request, {
+      get snapshot() {
+        return snapshot;
+      },
+    });
     // `null` means "not a preview request": let the network have it, untouched.
-    if (response !== null) event.respondWith(response);
+    if (snapshotAnswer === null) return;
+
+    // Server mode takes precedence for its own session: its bytes do not exist in any
+    // snapshot, so a static 404/503 here would be a lie about a running app.
+    const target = parsePath(request.url);
+    const session = forwarderBuildId();
+    if (forwarder !== null && target !== null && target.buildId === session) {
+      event.respondWith(
+        forwardRequest(request, {
+          timeoutMs: forwarder.timeoutMs,
+          post: (message) => {
+            // Every client is asked: the frame's requests may be attributed to a page the
+            // worker cannot single out, and a page that is not the app ignores the message.
+            void self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then((clients) => {
+              for (const client of clients) client.postMessage(message);
+            });
+          },
+        }),
+      );
+      return;
+    }
+
+    event.respondWith(snapshotAnswer);
   });
 }

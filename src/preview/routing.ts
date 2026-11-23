@@ -363,9 +363,9 @@ function rebaseValue(value: string, base: string): string {
 /** Attributes that hold one URL. `srcset` is handled separately: it holds a list. */
 const URL_ATTRIBUTE = /(\s(?:src|href|poster|action|formaction|data)\s*=\s*)(["'])([\s\S]*?)\2/gi;
 const SRCSET_ATTRIBUTE = /(\ssrcset\s*=\s*)(["'])([\s\S]*?)\2/gi;
-/** `url(/x.woff2)` and `@import "/x.css"` inside a stylesheet. */
-const CSS_URL = /(url\(\s*)(["']?)(?=\/(?!\/))/gi;
-const CSS_IMPORT = /(@import\s+)(["'])(?=\/(?!\/))/gi;
+/** `url(/x.woff2)` and `@import "/x.css"` inside a stylesheet, with the leading slash. */
+const CSS_URL = /(url\(\s*)(["']?)(\/)(?!\/)/gi;
+const CSS_IMPORT = /(@import\s+)(["'])(\/)(?!\/)/gi;
 
 /**
  * Rebase a document's root-absolute references onto the build's preview URL.
@@ -404,7 +404,14 @@ export function rebaseDocument(text: string, base: string): string {
     );
 }
 
-/** The same rewrite for a stylesheet: `url(/…)` and `@import "/…"`. */
+/**
+ * The same rewrite for a stylesheet: `url(/…)` and `@import "/…"`.
+ *
+ * The leading slash is *consumed* by the pattern rather than left in place: `base` already
+ * ends in `/`, so keeping it produced `/__preview__/<id>//fonts/x.woff2` — a path with a
+ * double slash, which the guest's server answers with 404 while the browser's own URL
+ * handling hides the bug from a casual look.
+ */
 export function rebaseStylesheet(text: string, base: string): string {
   return text
     .replace(CSS_URL, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)

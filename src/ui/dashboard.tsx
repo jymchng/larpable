@@ -6,6 +6,7 @@ import type { EnvironmentSnapshot } from "@/env/status";
 import { describeEnvironment } from "@/env/status";
 import type { SupportReport } from "@/env/support";
 import { Badge } from "@/ui/components/badge";
+import { StatusDot, type StatusTone } from "@/ui/components/status-dot";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/components/card";
 import { cn } from "@/lib/utils";
 
@@ -131,12 +132,12 @@ export function Dashboard({
             className={cn("size-3.5 transition-transform", diagnosticsOpen && "rotate-90")}
           />
           This browser
-          <Badge
-            variant={passed === 3 ? "success" : "warning"}
-            className="ml-auto font-mono text-[10px] normal-case"
-          >
-            {passed}/3 requirements
-          </Badge>
+          <StatusDot
+            testId="requirements-status"
+            tone={requirementsTone(passed)}
+            label={`Requirements: ${String(passed)}/3 met`}
+            className="ml-auto"
+          />
         </button>
 
         {diagnosticsOpen && (
@@ -215,6 +216,20 @@ export function Dashboard({
       </footer>
     </div>
   );
+}
+
+/**
+ * How many of the three requirements are met, as a dot colour.
+ *
+ * Exported so the rule is testable on its own: 3 → green, 1-2 → amber (partly there, which
+ * is a warning and not a success). The dot is not the only place the answer lives: opening
+ * the diagnostics panel lists each of the three requirements by name with
+ * `available`/`missing`, and the dot's label and tooltip spell out the count.
+ */
+export function requirementsTone(passed: number): StatusTone {
+  if (passed >= 3) return "green";
+  if (passed > 0) return "amber";
+  return "red";
 }
 
 function CheckRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {

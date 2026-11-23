@@ -21,7 +21,7 @@ import {
   hasModifiers,
   toggleModifier,
 } from "../src/ui/terminal-keys";
-import { TerminalPanel } from "../src/ui/terminal-panel";
+import { TerminalPanel, TRANSCRIPT_MIRROR_CLASS } from "../src/ui/terminal-panel";
 
 describe("controlCodeFor", () => {
   it("maps letters the way every terminal does", () => {
@@ -173,10 +173,23 @@ describe("TerminalPanel chrome", () => {
     expect(markup).not.toContain(">New shell<");
   });
 
-  it("starts with no tab, and says so instead of showing a blank pane", () => {
+  it("starts with no tab, and says so with a dot instead of a word", () => {
     expect(markup).toContain('data-testid="terminal-empty"');
     expect(markup).toContain("Boot Linux to get a shell in /workspace.");
-    expect(markup).toContain("No shell");
+    // The status is one filled circle: the words live in the label and the tooltip.
+    expect(markup).toContain('data-testid="terminal-status"');
+    expect(markup).toContain('data-tone="grey"');
+    expect(markup).toContain('aria-label="No shell"');
+    expect(markup).toContain('title="No shell"');
+    expect(markup).not.toContain(">No shell<");
+  });
+
+  it("keeps the sr-only transcript out of the browser's selection", () => {
+    // The mirror only renders once a shell exists, which a static render cannot reach, so the
+    // classes are asserted where they are defined; the browser probe
+    // (`scripts/probe-clipboard.ts`) asserts the computed `user-select` and the clipboard text.
+    expect(TRANSCRIPT_MIRROR_CLASS).toContain("sr-only");
+    expect(TRANSCRIPT_MIRROR_CLASS).toContain("select-none");
   });
 
   it("renders the whole key row, disabled until a shell is attached", () => {

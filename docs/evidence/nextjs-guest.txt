@@ -1,0 +1,21 @@
+
+## run 2026-11-23T06:18:46.302Z
+
+boot: ready
+uname: aarch64 | PRETTY_NAME="Debian GNU/Linux 13 (trixie)" | NAME="Debian GNU/Linux"
+runtime warm (1 ms): failed: warm.warm is not a function
+bun --version: exit 0 in 28408 ms -> 1.4.5
+bun install (76061 ms): exit 0
+bun add v1.4.5 (a7733435c)
+Resolving dependencies
+Resolved, downloaded and extracted [159]
+Saved lockfile
+
+installed next@16.4.6 with binaries:
+ - next
+installed react@19.3.1
+installed react-dom@19.3.1
+
+22 packages installed [76.00s]
+installer: bun
+next version: 16.4.6
