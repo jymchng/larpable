@@ -1,7 +1,7 @@
 # Notifications are toasts
 
 Every message the app produces about *something that just happened* is a toast: a tinted pill at
-the bottom of the window, in a colour that means what it says, gone in five to eight seconds, and
+the top of the window (user request: "make all the toasts appear at the top not at the bottom"), in a colour that means what it says, gone in five to eight seconds, and
 dismissible with a real button.
 
 That is a product rule, not a component (user request: "ALL NOTIFICATIONS SHOULD BE TOASTS IN
