@@ -37,6 +37,14 @@ export interface UsePreviewOptions {
    * anyway. Rebuilding is that stop, done by the hook's own cleanup.
    */
   prod?: boolean;
+  /**
+   * The controller factory. Default: `createPreviewController`.
+   *
+   * Injected by tests, which need the guest boundary faked: what this hook owns is the
+   * controller's *lifetime* — made when the machine becomes usable, stopped when the machine is
+   * replaced or the mode changes — and a test of that has to watch a server being stopped.
+   */
+  createController?: typeof createPreviewController;
 }
 
 export interface PreviewControl {
@@ -84,14 +92,15 @@ export function usePreview(options: UsePreviewOptions): PreviewControl {
 
   const controller = useMemo(() => {
     if (environment === null) return null;
-    return createPreviewController({
+    const create = options.createController ?? createPreviewController;
+    return create({
       environment,
       http: () => httpRef.current(),
       ...(port !== undefined ? { port } : {}),
       ...(root !== undefined ? { root } : {}),
       ...(prod !== undefined ? { prod } : {}),
     });
-  }, [environment, port, root, prod]);
+  }, [environment, options.createController, port, root, prod]);
 
   const [phase, setPhase] = useState<PreviewPhase>({ kind: "idle" });
 

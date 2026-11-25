@@ -212,9 +212,12 @@ export async function startAppServer(options: AppServerOptions): Promise<AppServ
  * a project without one has no start. A Next project created by `create-next-app` always has
  * `"dev": "next dev"` and `"start": "next start"`, which is why this product can offer a
  * "run the app" control at all.
+ *
+ * Kept for the callers that only ever wanted "start"; `readStartScript` below is the fuller
+ * answer and is what the preview uses.
  */
 export function startCommandFor(options: {
-  packageManager: "npm" | "bun" | "pnpm" | "yarn";
+  packageManager: PackageManager;
   /** `scripts.start`, if the project has one. */
   startScript: string | null;
 }): string | null {
@@ -222,11 +225,126 @@ export function startCommandFor(options: {
   return managerCommand(options.packageManager, "start");
 }
 
+/** The package managers whose lockfile decides how a script is run. */
+export type PackageManager = "npm" | "bun" | "pnpm" | "yarn";
+
+/** One of the scripts the preview is willing to run. */
+export type RunnableScript = "dev" | "start";
+
+/**
+ * The scripts the preview runs, best first.
+ *
+ * `dev` before `start`, because a project that has both — `create-next-app` writes both — is
+ * telling us two different things: `dev` is the server a developer has running (hot reload, the
+ * app's own HTML per request), and `start` is the deployed form, which the *build-and-publish*
+ * preview already answers. Showing the second under a preview that says "dev" would be showing
+ * the wrong one of the two truths. A project with only `start` still works.
+ */
+const RUNNABLE_SCRIPTS: readonly RunnableScript[] = ["dev", "start"];
+
+/**
+ * What a project's `package.json` says about running it, as far as the preview needs.
+ *
+ * Every field is answered, including on failure: a caller that paints a sentence needs
+ * `problem`, and one that runs a command needs `command`, and neither should have to ask twice.
+ */
+export interface StartScriptFacts {
+  /** `scripts.dev`, when the project has one. */
+  dev: string | null;
+  /** `scripts.start`, when the project has one. */
+  start: string | null;
+  /**
+   * The command to run — `bun run dev`, `npm run start`, … — for the first script in
+   * `RUNNABLE_SCRIPTS` the project has. Null when it has neither, and then `problem` says why.
+   */
+  command: string | null;
+  /** Which script `command` runs. Named so the pane can say "*dev* answered 200". */
+  script: RunnableScript | null;
+  /** The package manager, from the lockfile. */
+  packageManager: PackageManager;
+  /** Why there is no command, when there is none. */
+  problem: string | null;
+}
+
+/**
+ * Read `package.json` and the lockfile out of the guest and answer the two facts a start
+ * command needs: which script, and how this project spells "run a script".
+ *
+ * Lives here rather than in the UI that first needed it (`use-app-preview.ts`), because the
+ * *preview* is what runs the project now — the dev preview starts the app itself before
+ * attaching — and a decision two layers depend on belongs in the layer that has no browser in
+ * it, where it can be tested without one.
+ */
+export async function readStartScript(
+  environment: ExecutionEnvironment,
+  root: string,
+): Promise<StartScriptFacts> {
+  const readText = async (path: string): Promise<string | null> => {
+    try {
+      return new TextDecoder().decode(await environment.readFile(path));
+    } catch {
+      return null;
+    }
+  };
+
+  const packageManager: PackageManager =
+    (await readText(`${root}/bun.lock`)) !== null || (await readText(`${root}/bun.lockb`)) !== null
+      ? "bun"
+      : (await readText(`${root}/pnpm-lock.yaml`)) !== null
+        ? "pnpm"
+        : (await readText(`${root}/yarn.lock`)) !== null
+          ? "yarn"
+          : "npm";
+
+  const nothing = (problem: string): StartScriptFacts => ({
+    dev: null,
+    start: null,
+    command: null,
+    script: null,
+    packageManager,
+    problem,
+  });
+
+  const packageJson = await readText(`${root}/package.json`);
+  if (packageJson === null) {
+    return nothing(
+      "There is no package.json in the project, so it has no script to run. Create the project first.",
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(packageJson);
+  } catch {
+    return nothing("package.json is not valid JSON, so its scripts cannot be read.");
+  }
+
+  const scripts = (parsed as { scripts?: Record<string, unknown> } | null)?.scripts ?? {};
+  /** A script that is present and not blank; `"dev": ""` is not a dev server. */
+  const script = (name: RunnableScript): string | null => {
+    const value = scripts[name];
+    return typeof value === "string" && value.trim().length > 0 ? value : null;
+  };
+
+  const dev = script("dev");
+  const start = script("start");
+  const chosen = RUNNABLE_SCRIPTS.find((name) => (name === "dev" ? dev : start) !== null) ?? null;
+
+  return {
+    dev,
+    start,
+    command: chosen === null ? null : managerCommand(packageManager, chosen),
+    script: chosen,
+    packageManager,
+    problem:
+      chosen === null
+        ? "No `dev` or `start` script in package.json, so the project has nothing to run. Add one — `\"dev\": \"vite\"`, for example."
+        : null,
+  };
+}
+
 /** How each package manager spells "run a script". Mirrors `src/build/plan.ts`. */
-export function managerCommand(
-  manager: "npm" | "bun" | "pnpm" | "yarn",
-  script: string,
-): string {
+export function managerCommand(manager: PackageManager, script: string): string {
   switch (manager) {
     case "npm":
       return `npm run ${script}`;

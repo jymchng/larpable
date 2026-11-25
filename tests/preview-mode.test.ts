@@ -50,6 +50,11 @@ describe("describePreviewMode", () => {
   it("says which server answers, in the mode's own words", () => {
     const dev = describePreviewMode(previewPlan({ prod: false, port: 1234 }));
     expect(dev).toContain("1234");
+    // Dev is now the mode that *runs* something: the project's own script, whose output is then
+    // what the pane shows. The old sentence said only that it attached, which was true when the
+    // pane expected a server the user had already started and misleading once it did not.
+    expect(dev).toContain("dev or start script");
+    expect(dev).toContain("serves");
     expect(dev).toContain("no build");
 
     const prod = describePreviewMode(previewPlan({ prod: true, port: 1234, buildDirectory: "out" }));

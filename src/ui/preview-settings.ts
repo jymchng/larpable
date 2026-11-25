@@ -24,10 +24,11 @@
  * - **A build directory is workspace-relative.** An absolute path, or one that walks out with
  *   `..`, is refused rather than silently reinterpreted: reading a directory the guest cannot
  *   reach is a different question from mistyping a name.
- * - **Prod says which of the two previews the user wants.** Off (the default) the preview
- *   attaches to the server *they* started on the port above \u2014 `bun run dev -- -p 1234` in the
- *   terminal plus port 1234 is the whole configuration. On, it is the older behaviour: the
- *   project's build output is read out of the guest and served statically on that same port.
+ * - **Prod says which of the two previews the user wants.** Off (the default for a developer)
+ *   the preview runs the project's own `dev`/`start` script on the port above, and attaches to
+ *   whatever is already answering there — so `bun run dev -- -p 1234` in the terminal remains
+ *   the faster loop once it is warm. On, it is the older behaviour: the project's build output
+ *   is read out of the guest and served statically on that same port.
  *   It is a boolean beside the two fields rather than a mode selector because it is one bit of
  *   information, and `src/preview/mode.ts` is what turns it into a plan.
  */
@@ -51,7 +52,8 @@ export interface PreviewSettings {
   buildDirectory: string;
   /**
    * `true` serves the built `buildDirectory` statically on `port` (the older behaviour).
-   * `false` starts nothing and attaches to the server the user already runs on `port`.
+   * `false` runs the project's own `dev`/`start` script on `port`, or attaches to the server
+   * that already answers there — the user's, if they started one themselves.
    */
   prod: boolean;
 }
@@ -67,7 +69,8 @@ export function defaultPreviewSettings(): PreviewSettings {
     port: DEFAULT_PREVIEW_SETTINGS_PORT,
     buildDirectory: DEFAULT_BUILD_DIRECTORY,
     // Prod, for now (user request: "set prod=true by default for now"). The switch is still the
-    // user's: off means the preview attaches to the server they run, and `src/preview/mode.ts`
+    // user's: off means the preview runs the project's server (or attaches to one already up), and
+    // `src/preview/mode.ts`
     // turns the bit into a plan either way.
     prod: true,
   };

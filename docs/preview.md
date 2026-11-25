@@ -162,6 +162,8 @@ not arrive in time, the publish is reported as a failure.
 | the build id and the publish-directory listing | `tests/preview-build-id.test.ts` |
 | the pane's phase → state mapping and controls | `tests/preview-pane.test.tsx` |
 | the guest server itself | `tests/preview-guest-server.test.ts` |
+| the project's `dev`/`start` facts, and running one | `tests/preview-app-server.test.ts` |
+| the hook's ownership of a server it started | `tests/use-preview.test.tsx`, `tests/preview-dev-refresh.test.tsx` |
 | a real guest serving a real build | `LARPABLE_GUEST_TESTS=1 bun run test:guest` |
 
 ## The pane looks like a browser, and never fakes it
@@ -226,7 +228,7 @@ The phases are the user's experience, not the implementation's:
 | Phase | The pane shows |
 | --- | --- |
 | `idle` | nothing on the status line, and no publish button of its own: the browser bar's reload arrow publishes |
-| `starting` | `Starting the guest's server for dist/…` — this is a real `node` start, seconds to a minute |
+| `starting` | `Starting the guest's server for dist/…` (Prod on), or `Nothing answers on guest port 5173 yet, so the preview is starting the project's server…` then `Starting \`bun run dev\` in the guest…` (Prod off) — this is a real `node` start, seconds to a minute |
 | `publishing` | `Reading N files out of the guest…` |
 | `ready` | the iframe, plus whether a **worker** or the **guest** is serving |
 | `failed` | the reason in full, e.g. `There is no build to preview: dist/ is empty or missing in the guest.` |
@@ -259,3 +261,49 @@ will do once `BuildManager.onBuilt` is wired to the pane:
 ```ts
 preview.refresh(build.id); // `/__preview__/build-mf3k2-1/…`
 ```
+
+## Prod off: the arrow runs the project's own server
+
+With **Prod** off the preview builds nothing. It shows what the project serves *itself* —
+Vite, Next, Express, whatever `package.json` names — forwarded request by request out of the
+guest (`src/preview/attach.ts`). The bytes are the dev server's, HMR and all, so a source
+change shows up the way it does in a terminal.
+
+That used to be a control that could not keep its promise. The reload arrow said "attach to
+whatever answers on the port", and on a fresh project nothing answered, so the one button that
+offers a preview could only report an empty port. The arrow now **starts** the server:
+
+1. **Probe the port first.** One `GET http://127.0.0.1:<port>/` through the same `http()` door
+   every forwarded request uses. *Any* HTTP status means something answers — a `404` from an
+   unrelated process is still a listening socket, and duplicating or killing it would be worse
+   than showing its answer.
+2. **Nothing answers, so start the project.** `readStartScript()` in
+   `src/preview/app-server.ts` reads `package.json` from the *project* — not from the publish
+   directory — and prefers `scripts.dev`, then `scripts.start`, with the package manager taken
+   from the lockfile (`bun run dev`, `pnpm start`, …). `startAppServer()` runs it with `PORT`
+   set to the Settings port, so the URL in the address bar is the port the app really listens
+   on.
+3. **Attach to whatever came up.** The forwarder knocks exactly as before; the start's only job
+   was to make something answer.
+
+The two stages are on screen while it happens, because a cold start is seconds to a minute and
+a silent wait reads as a broken button.
+
+Three consequences are deliberate:
+
+- **A missing script fails in the project's words.** `No \`dev\` or \`start\` script in
+  package.json, so the project has nothing to run. Add one — \`"dev": "vite"\`, for example.`
+  A blank script counts as absent.
+- **A failed start still knocks.** A server started by hand in the terminal, or one that
+  claimed its own port, is attached to even when our start reported `EADDRINUSE`; the probe
+  decides, and both sentences are shown rather than one being invented.
+- **The controller owns only what it started.** `stop()` kills the session the arrow began —
+  before starting a new one, and when the controller is rebuilt (Prod switched on, machine
+  replaced). A server that answered the first probe was never ours: it is attached to, never
+  killed. A stop that lands mid-start also wins, because `attachTo()` re-reads the controller's
+  `generation` after the start returns and stops the session a late start produced, so a pane
+  that closed cannot leave a listener behind.
+
+A second press, or a press while a start is still running, attaches instead of starting
+another process — the probe answers once the first server is up, and an in-flight run is
+shared rather than repeated.

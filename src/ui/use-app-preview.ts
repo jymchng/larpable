@@ -6,8 +6,9 @@
  * per request. So this hook does what a developer does by hand in the terminal, in the same
  * order, and with the same words:
  *
- * 1. read `package.json` and take the project's own `scripts.start` (never guess one);
- * 2. run it in the guest (`bun run start` / `npm run start`) through `startAppServer`, which
+ * 1. read `package.json` and take the project's own `dev` script, falling back to `start` (never
+ *    guess one) — the reading itself lives in `src/preview/app-server.ts`, beside the runner;
+ * 2. run it in the guest (`bun run dev` / `npm run start`) through `startAppServer`, which
  *    waits for the port to *answer* rather than sleeping;
  * 3. attach the page-side forwarder, so the preview worker's requests reach the guest via
  *    `kernel.fetch()` (`src/preview/forwarder.ts` + `src/preview/app-preview.ts`);
@@ -24,9 +25,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExecutionEnvironment } from "@/env/execution";
 import type { GuestHttpFetch } from "@/env/unkernel-kernel";
 import { serveAppRequest } from "@/preview/app-preview";
-import { managerCommand, startAppServer, type AppServerSession } from "@/preview/app-server";
+import {
+  readStartScript,
+  startAppServer,
+  type AppServerSession,
+  type StartScriptFacts,
+} from "@/preview/app-server";
 import { attachPreviewForwarder, type PreviewForwarder } from "@/preview/forwarder";
 import { kernelPreviewTransport } from "@/preview/transport";
+
+/**
+ * The two facts a start command needs, re-exported so the callers that imported them from this
+ * hook keep compiling: they now live in `src/preview/app-server.ts`, beside the code that runs
+ * them, and are read without a browser.
+ */
+export { readStartScript, type StartScriptFacts };
 
 export type AppPreviewState =
   | { kind: "idle" }
@@ -58,63 +71,8 @@ export interface UseAppPreviewOptions {
   root?: string;
   /** Guest port for the app. Default 3000 (Next's own default). */
   port?: number;
-  /** Where the app's `scripts.start` came from; injected in tests. */
+  /** Where the app's start facts came from; injected in tests. */
   readStartScript?: (environment: ExecutionEnvironment, root: string) => Promise<StartScriptFacts>;
-}
-
-export interface StartScriptFacts {
-  /** `scripts.start`, or null when the project has none. */
-  start: string | null;
-  /** The project's package manager, from its lockfile. */
-  packageManager: "npm" | "bun" | "pnpm" | "yarn";
-  /** Why there is no start script, when there is none. */
-  problem: string | null;
-}
-
-/** Read `package.json` out of the guest and answer the two facts a start command needs. */
-export async function readStartScript(
-  environment: ExecutionEnvironment,
-  root: string,
-): Promise<StartScriptFacts> {
-  const readText = async (path: string): Promise<string | null> => {
-    try {
-      return new TextDecoder().decode(await environment.readFile(path));
-    } catch {
-      return null;
-    }
-  };
-
-  const packageJson = await readText(`${root}/package.json`);
-  const manager: StartScriptFacts["packageManager"] =
-    (await readText(`${root}/bun.lock`)) !== null || (await readText(`${root}/bun.lockb`)) !== null
-      ? "bun"
-      : (await readText(`${root}/pnpm-lock.yaml`)) !== null
-        ? "pnpm"
-        : (await readText(`${root}/yarn.lock`)) !== null
-          ? "yarn"
-          : "npm";
-
-  if (packageJson === null) {
-    return { start: null, packageManager: manager, problem: "There is no package.json in the project, so it has no start script to run." };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(packageJson);
-  } catch {
-    return { start: null, packageManager: manager, problem: "package.json is not valid JSON, so its scripts cannot be read." };
-  }
-
-  const scripts = (parsed as { scripts?: Record<string, unknown> } | null)?.scripts ?? {};
-  const start = typeof scripts.start === "string" ? scripts.start : null;
-  return {
-    start,
-    packageManager: manager,
-    problem:
-      start === null
-        ? "No `start` script in package.json."
-        : null,
-  };
 }
 
 export function useAppPreview(options: UseAppPreviewOptions): AppPreviewControl {
@@ -162,16 +120,15 @@ export function useAppPreview(options: UseAppPreviewOptions): AppPreviewControl 
     void (async () => {
       try {
         const facts = await (options.readStartScript ?? readStartScript)(environment, projectRoot);
-        if (facts.problem !== null) {
-          setState({ kind: "failed", message: facts.problem });
-          return;
-        }
-        if (facts.start === null) {
-          setState({ kind: "failed", message: "The project has no start script." });
+        if (facts.command === null) {
+          setState({
+            kind: "failed",
+            message: facts.problem ?? "The project has no script to run.",
+          });
           return;
         }
 
-        const command = managerCommand(facts.packageManager, "start");
+        const command = facts.command;
         setState({ kind: "starting", message: `Starting \`${command}\` in the guest on port ${String(guestPort)}…` });
 
         const started = await startAppServer({

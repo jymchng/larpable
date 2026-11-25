@@ -175,6 +175,20 @@ describe("SettingsPanel: the preview half", () => {
     expect(html).not.toContain("http://localhost:80<");
   });
 
+  it("says the preview starts the project itself when Prod is off", () => {
+    const html = renderWithPreview(
+      previewFields({
+        settings: { port: 5173, buildDirectory: "dist", prod: false },
+        draft: { port: "5173", buildDirectory: "dist" },
+      }),
+    );
+    // Prod off means the pane's reload arrow runs the project's own script; the user is not
+    // asked to start it themselves any more.
+    expect(html).toContain("runs the project&#x27;s dev or start script in the guest");
+    expect(html).toContain("http://localhost:5173");
+    expect(html).not.toContain("start it in the terminal");
+  });
+
   it("shows a half-typed port and the reason it is not used yet", () => {
     const html = renderWithPreview(
       previewFields({

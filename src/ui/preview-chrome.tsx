@@ -160,8 +160,9 @@ export interface PreviewBrowserBarProps {
   /**
    * What the Reload arrow will do, in the caller's words.
    *
-   * A prod preview reloads a published build; a dev preview attaches to the server the user runs.
-   * One arrow, two meanings, so the sentence comes from whoever knows which preview this is.
+   * A prod preview reloads a published build; a dev preview runs the project's own server (or
+   * attaches to one already answering) and shows what it serves. One arrow, two meanings, so
+   * the sentence comes from whoever knows which preview this is.
    */
   reloadTitle?: string;
   /**

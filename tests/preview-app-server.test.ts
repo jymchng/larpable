@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ExecutionEnvironment } from "../src/env/execution";
-import { startAppServer, startCommandFor } from "../src/preview/app-server";
+import { readStartScript, startAppServer, startCommandFor } from "../src/preview/app-server";
 
 /** The smallest environment `startAppServer` needs, with the behaviour under test. */
 function environment(options: {
@@ -235,5 +235,120 @@ describe("startCommandFor", () => {
   it("has no answer for a project with no start script, rather than inventing one", () => {
     expect(startCommandFor({ packageManager: "bun", startScript: null })).toBeNull();
     expect(startCommandFor({ packageManager: "bun", startScript: "   " })).toBeNull();
+  });
+});
+
+/** A guest whose files are exactly `files`, keyed by absolute path. */
+function filesystem(files: Record<string, string>): ExecutionEnvironment {
+  const base = environment({ execute: async () => undefined });
+  return {
+    ...base,
+    readFile: async (path: string) => {
+      const content = files[path];
+      if (content === undefined) throw new Error(`no such file: ${path}`);
+      return new TextEncoder().encode(content);
+    },
+  } as ExecutionEnvironment;
+}
+
+function packageJson(scripts: Record<string, unknown>): string {
+  return JSON.stringify({ name: "demo", scripts });
+}
+
+describe("readStartScript", () => {
+  it("prefers `dev` when the project has both, because that is the developer's server", async () => {
+    const facts = await readStartScript(
+      filesystem({
+        "/workspace/package.json": packageJson({ dev: "next dev", start: "next start" }),
+        "/workspace/bun.lock": "",
+      }),
+      "/workspace",
+    );
+
+    expect(facts).toEqual({
+      dev: "next dev",
+      start: "next start",
+      command: "bun run dev",
+      script: "dev",
+      packageManager: "bun",
+      problem: null,
+    });
+  });
+
+  it("falls back to `start` for a project that only documents one", async () => {
+    const facts = await readStartScript(
+      filesystem({ "/workspace/package.json": packageJson({ start: "next start" }) }),
+      "/workspace",
+    );
+
+    expect(facts.command).toBe("npm run start");
+    expect(facts.script).toBe("start");
+    expect(facts.dev).toBeNull();
+    expect(facts.problem).toBeNull();
+  });
+
+  it("answers with a sentence, not a guessed command, when the project has neither", async () => {
+    const facts = await readStartScript(
+      filesystem({ "/workspace/package.json": packageJson({ build: "vite build" }) }),
+      "/workspace",
+    );
+
+    expect(facts.command).toBeNull();
+    expect(facts.script).toBeNull();
+    expect(facts.problem).toContain("No `dev` or `start` script");
+    // The manager is still reported: the build half of the app needs it either way.
+    expect(facts.packageManager).toBe("npm");
+  });
+
+  it("treats a blank script as absent, because `\"dev\": \"\"` is not a dev server", async () => {
+    const facts = await readStartScript(
+      filesystem({
+        "/workspace/package.json": packageJson({ dev: "   ", start: "node server.js" }),
+      }),
+      "/workspace",
+    );
+
+    expect(facts.dev).toBeNull();
+    expect(facts.script).toBe("start");
+    expect(facts.command).toBe("npm run start");
+  });
+
+  it("says package.json is unreadable rather than pretending the project has no scripts", async () => {
+    const facts = await readStartScript(
+      filesystem({
+        "/workspace/package.json": "{ this is not json",
+        "/workspace/pnpm-lock.yaml": "",
+      }),
+      "/workspace",
+    );
+
+    expect(facts.command).toBeNull();
+    expect(facts.problem).toContain("not valid JSON");
+    expect(facts.packageManager).toBe("pnpm");
+  });
+
+  it("names a missing package.json as the reason", async () => {
+    const facts = await readStartScript(filesystem({ "/workspace/index.html": "" }), "/workspace");
+
+    expect(facts.command).toBeNull();
+    expect(facts.problem).toContain("no package.json");
+  });
+
+  it("spells the command the way each project's own manager does", async () => {
+    const manager = async (lockfile: string | null) => {
+      const files: Record<string, string> = {
+        "/workspace/package.json": packageJson({ dev: "vite" }),
+      };
+      if (lockfile !== null) files[`/workspace/${lockfile}`] = "";
+      const facts = await readStartScript(filesystem(files), "/workspace");
+      return `${facts.packageManager}: ${facts.command ?? "(none)"}`;
+    };
+
+    expect(await manager("bun.lock")).toBe("bun: bun run dev");
+    expect(await manager("bun.lockb")).toBe("bun: bun run dev");
+    expect(await manager("pnpm-lock.yaml")).toBe("pnpm: pnpm dev");
+    expect(await manager("yarn.lock")).toBe("yarn: yarn dev");
+    // No lockfile at all is npm: the only manager that needs no marker to be the default.
+    expect(await manager(null)).toBe("npm: npm run dev");
   });
 });

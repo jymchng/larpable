@@ -22,9 +22,17 @@
  *
  * - **prod** (`prod: true`, the default here) publishes a build: list `dist/`, start the guest's
  *   static server, read the bytes out of it, hand them to the worker.
- * - **dev** (`prod: false`, the Settings switch off) *attaches*: one knock on the port, then
- *   every request is forwarded to the server the user runs (`attach.ts`). No build, no static
- *   server of ours, no snapshot — which is the whole point of previewing a dev server.
+ * - **dev** (`prod: false`, the Settings switch off) *attaches*: it makes sure something answers
+ *   on the port — starting the project's own `dev`/`start` script when nothing does — then
+ *   forwards every request to it (`attach.ts`). No build and no static server of ours, which is
+ *   the whole point of previewing a dev server.
+ *
+ * The starting is the part that used to be missing, and it was a visible failure: the arrow said
+ * "attach to whatever answers", and on a fresh project *nothing* did, so the one control that
+ * promised a preview could only report that there was nothing on the port. A preview that shows
+ * the site served by the project's own dev server has to be allowed to *run* that server; the
+ * user's terminal remains a perfectly good place to run it instead, which is why the probe comes
+ * first and an already-listening server is attached to rather than duplicated.
  *
  * The mode is a constructor option rather than a method because it changes what the controller
  * *is*: switching it rebuilds the controller (`use-preview.ts` memoises on it), so a prod
@@ -47,6 +55,14 @@ import {
   type GuestAttachOptions,
   type GuestAttachResult,
 } from "./attach";
+import {
+  readStartScript,
+  startAppServer,
+  type AppServerOptions,
+  type AppServerSession,
+  type AppServerStart,
+  type StartScriptFacts,
+} from "./app-server";
 import { deriveBuildId, listPublishFiles, type PublishFile } from "./build-id";
 import { startPreviewSession, type PreviewSession, type StartPreviewSessionOptions } from "./session";
 
@@ -116,6 +132,26 @@ export interface PreviewControllerOptions {
   prod?: boolean;
   /** Injected by tests and by the acceptance run. Default: `attachGuestServer`. */
   attach?: (options: GuestAttachOptions) => Promise<GuestAttachResult>;
+  /**
+   * Ask the guest whether anything is already listening on `port`: the HTTP status it answered
+   * with, or null when nothing answered. Default: one `GET http://127.0.0.1:<port>/`.
+   *
+   * Injected so a test can decide "a server is already there" (no start) or "nothing is" (a
+   * start) without a guest, and so the acceptance run can record which of the two happened.
+   */
+  probe?: (http: GuestHttpFetch, port: number) => Promise<number | null>;
+  /**
+   * Read the project's own start command, for the dev preview. Default: `readStartScript`.
+   *
+   * Given the workspace (not the publish directory): `package.json` lives at the project root,
+   * and `dist/` is a directory inside it.
+   */
+  readScript?: (environment: ExecutionEnvironment, root: string) => Promise<StartScriptFacts>;
+  /**
+   * Run the project's server in the guest. Default: `startAppServer`, which waits for the port
+   * to answer instead of sleeping. Injected by tests, which have no process to run.
+   */
+  startApp?: (options: AppServerOptions) => Promise<AppServerStart>;
   /** Called on every phase change, after the state is readable. */
   onPhase?: (phase: PreviewPhase) => void;
 }
@@ -164,9 +200,28 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
   let session: PreviewSession | null = null;
   /** The dev preview: a forwarded session, or null. Mutually exclusive with `session`. */
   let attach: GuestAttach | null = null;
+  /**
+   * The server the dev preview started *itself*, or null.
+   *
+   * Null and "a server is listening" are different states: a server the user started in the
+   * terminal answers the probe too, but it is theirs and this controller must never kill it.
+   * Only what we started is stopped, and it is stopped before another start and with `stop()`.
+   */
+  let startedServer: AppServerSession | null = null;
   /** How many attaches this controller has made, so each gets its own URL and frame key. */
   let attaches = 0;
   let inFlight: Promise<PreviewPhase> | null = null;
+  /**
+   * Bumped by `stop()`: work that was already in flight must not publish a phase afterwards.
+   *
+   * A start can take a minute, and the things that stop a preview — the pane's own stop, a
+   * machine being replaced, Prod being switched on (which rebuilds this controller) — do not
+   * wait for it. Without this, such a stop would be undone by the attach that was already
+   * running: a server nobody asked for would be left listening, and the pane would show a
+   * preview after being told to stop. It is a counter rather than a boolean because the
+   * controller is not dead after a stop — a later `refresh()` is a new generation.
+   */
+  let generation = 0;
 
   function set(next: PreviewPhase): PreviewPhase {
     phase = next;
@@ -183,13 +238,87 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
   }
 
   /**
-   * The dev preview: knock on `port` and forward every request to it.
+   * Stop the server *we* started. The user's own server is never touched, and this is idempotent
+   * because the reference is cleared before the await.
+   */
+  async function stopStartedServer(): Promise<void> {
+    const started = startedServer;
+    startedServer = null;
+    await started?.stop().catch(() => undefined);
+  }
+
+  /**
+   * Make something answer on `port`, running the project's own script when nothing does.
    *
-   * Deliberately short. There is no build step, no `dist/` listing and no guest `node`: the
-   * server is the user's, and this side's whole job is to find out whether it is there and then
-   * hand each request to it. The id is derived from the count rather than from the bytes, because
-   * there are no bytes here to fingerprint — and it has to change on every attach so the iframe
-   * gets a fresh document at a URL no cached response can answer.
+   * Returns the sentence to show when the project could not be started, or null when the port
+   * answers. A non-null answer is *not* a final failure: `attachTo` still knocks, because a
+   * server the user started elsewhere may well be answering — the start that failed is then
+   * reported beside a preview that works, which is more useful than either alone.
+   *
+   * Failure is deliberately not fatal to the attach, and success is deliberately not a claim:
+   * `startAppServer` only resolves `ok` once the port has answered, so this cannot report a
+   * green ready over a socket nobody is holding.
+   */
+  async function ensureServer(http: GuestHttpFetch, port: number): Promise<string | null> {
+    const probe = options.probe ?? portAnswers;
+    const already = await probe(http, port);
+    if (already !== null) return null;
+
+    // Ours first: a previous start whose server has died (or is on an older port) must not stay
+    // listening while a second one takes its port.
+    await stopStartedServer();
+
+    set({
+      kind: "starting",
+      detail: `Nothing answers on guest port ${String(port)} yet, so the preview is starting the project's server…`,
+    });
+
+    const readScript = options.readScript ?? readStartScript;
+    let facts: StartScriptFacts;
+    try {
+      facts = await readScript(options.environment, options.environment.workspacePath);
+    } catch (error) {
+      return describe("read the project's start script", error);
+    }
+    // Said in the project's own terms ("No `dev` or `start` script in package.json…") rather
+    // than as a timeout on a port that was never going to answer.
+    if (facts.command === null) return facts.problem ?? "The project has no script to run.";
+
+    set({
+      kind: "starting",
+      detail: `Starting \`${facts.command}\` in the guest, on port ${String(port)}…`,
+    });
+
+    const startApp = options.startApp ?? startAppServer;
+    let started: AppServerStart;
+    try {
+      started = await startApp({
+        environment: options.environment,
+        command: facts.command,
+        port,
+        // The same door every forwarded request will use, so the probe and the preview cannot
+        // disagree about which guest they are talking to.
+        fetch: http,
+        onStage: (detail) => set({ kind: "starting", detail }),
+      });
+    } catch (error) {
+      return describe(`run \`${facts.command}\``, error);
+    }
+
+    if (!started.ok || started.session === null) return started.message;
+    startedServer = started.session;
+    return null;
+  }
+
+  /**
+   * The dev preview: make sure something answers on `port`, then forward every request to it.
+   *
+   * Deliberately short after that. There is no build step, no `dist/` listing and no guest
+   * `node` of our own serving bytes: the server is the project's (or the user's), and this
+   * side's job is to find out whether it is there, start it if not, and then hand each request
+   * to it. The id is derived from the count rather than from the bytes, because there are no
+   * bytes here to fingerprint — and it has to change on every attach so the iframe gets a fresh
+   * document at a URL no cached response can answer.
    */
   async function attachTo(port: number): Promise<PreviewPhase> {
     if (options.environment.status() !== "ready") {
@@ -207,13 +336,41 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
     // ends up at the port that was configured a minute ago.
     await detach();
 
+    // Read before the first await: `stop()` may land at any point after this, and what it means
+    // is "the run that was happening is not wanted any more" — see `generation`.
+    const myGeneration = generation;
+
+    const startProblem = await ensureServer(http, port);
+    if (generation !== myGeneration) {
+      // Stopped while the project's server was starting. The session it just produced is the one
+      // this controller would have owned, so it is stopped here instead of being left listening;
+      // nothing is published, because the pane is idle by request.
+      await stopStartedServer();
+      return phase;
+    }
+
     attaches += 1;
     const buildId = `dev-${String(attaches)}`;
-    set({ kind: "starting", detail: `Looking for a server on guest port ${String(port)}…` });
+    if (startProblem === null) {
+      set({ kind: "starting", detail: `Looking for a server on guest port ${String(port)}…` });
+    }
 
     const attachFn = options.attach ?? attachGuestServer;
     const result = await attachFn({ http, port, buildId });
-    if (!result.ok) return set({ kind: "failed", message: result.message });
+    if (generation !== myGeneration) {
+      // Stopped while the knock was out: a forwarder that answered after the stop is stopped too,
+      // so a stopped pane holds neither a server nor a forwarder.
+      if (result.ok) await result.attach.stop().catch(() => undefined);
+      return phase;
+    }
+    if (!result.ok) {
+      return set({
+        kind: "failed",
+        // Both sentences, in the order they happened: what the project's own script did, then
+        // what the port answered. Either alone would send the user to the wrong place.
+        message: startProblem === null ? result.message : `${startProblem} ${result.message}`,
+      });
+    }
 
     const live = result.attach;
     attach = live;
@@ -224,7 +381,10 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
       files: 0,
       // `guest` is exact: nothing was published, so the bytes are answered on demand.
       served: "guest",
-      note: live.note,
+      note:
+        startProblem === null
+          ? live.note
+          : `${startProblem} The preview is attached to what does answer on guest port ${String(port)}.`,
       forwarded: { port: live.port },
     });
   }
@@ -362,13 +522,35 @@ export function createPreviewController(options: PreviewControllerOptions): Prev
     },
 
     async stop() {
+      // Before anything is awaited: whatever is in flight from here on must not publish a phase
+      // or keep a listener, including a start that resolves after this call returns.
+      generation += 1;
       const active = session;
       session = null;
       await detach();
+      // Before the session: a decided stop is a stop, and the process we started is the one
+      // thing here that keeps listening after the pane is gone.
+      await stopStartedServer();
       await active?.stop();
       set({ kind: "idle" });
     },
   };
+}
+
+/**
+ * One `GET` to the guest's own loopback: the status anything listening answered with, or null.
+ *
+ * A 404 is an answer — a dev server that has not compiled a route yet is still a running dev
+ * server, and starting a second one on the same port would be the wrong repair. A throw is the
+ * only "nothing is there": the kernel's `fetch()` rejects when the connection is refused.
+ */
+async function portAnswers(http: GuestHttpFetch, port: number): Promise<number | null> {
+  try {
+    const response = await http(`http://127.0.0.1:${String(port)}/`, { method: "GET" });
+    return response.status;
+  } catch {
+    return null;
+  }
 }
 
 /** One sentence naming the step that failed, keeping the cause's own words. */

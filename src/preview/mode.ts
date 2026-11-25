@@ -3,11 +3,13 @@
  *
  * There are two honest ways to show a site, and they differ in *who runs the server*:
  *
- * - **dev** (the switch off): the user runs their own server — `bun run dev -- -p 1234` in the
- *   terminal — and the preview does nothing but attach to it on the port in Settings. No build,
- *   no static server of ours, no snapshot: a request for `localhost:1234/app` is forwarded to
- *   whatever is listening there, which is the whole point of previewing a dev server (hot
- *   reload, server routes, the app's real HTML).
+ * - **dev** (the switch off): the preview runs the project's own server — its `dev` script, else
+ *   its `start` script — in the guest on the port in Settings, and forwards every request to it.
+ *   If something is already listening there (the user ran `bun run dev -- -p 1234` in the
+ *   terminal, which is still the faster loop once it is warm) it attaches to that and starts
+ *   nothing. No build, no static server of ours, no snapshot: a request for
+ *   `localhost:1234/app` is forwarded to whatever is listening there, which is the whole point of
+ *   previewing a dev server (hot reload, server routes, the app's real HTML).
  * - **prod** (the default, for now): the older behaviour. The project is built, its output
  *   directory is read out of the guest and served statically on the same port — the bytes that
  *   would ship.
@@ -68,7 +70,7 @@ export function previewPlan(choice: PreviewChoice): PreviewPlan {
 export function describePreviewMode(plan: PreviewPlan): string {
   return plan.mode === "prod"
     ? `Serving the built ${plan.buildDirectory} statically on port ${String(plan.port)}.`
-    : `Attaching to whatever answers on guest port ${String(plan.port)} — no build, and no server of the preview's own.`;
+    : `Running the project's own dev or start script in the guest on port ${String(plan.port)}, then showing whatever it serves — no build of the preview's own.`;
 }
 
 /** True when the mode reads a build at all. The hammer is only useful in that mode. */

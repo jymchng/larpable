@@ -227,8 +227,9 @@ export interface PreviewPaneProps {
    * The Prod switch, as the pane needs it: which of the two previews this is.
    *
    * On (the default here, matching the Settings default) means the build-and-publish path the pane
-   * has always had, and the empty state points at the hammer. Off means the reload arrow attaches
-   * to the server the user runs, so the empty state points at their terminal instead.
+   * has always had, and the empty state points at the hammer. Off means the reload arrow runs the
+   * project's own `dev`/`start` script in the guest (attaching instead to whatever already answers
+   * there), so the empty state points at the arrow rather than at the hammer.
    */
   prod?: boolean;
   /** The port in Settings, used for the address bar's own examples. */
@@ -421,7 +422,7 @@ export function PreviewPane({
             ? undefined
             : builds
               ? "Click the hammer above — Install & build — to build the project in the guest. The real output appears here when it finishes."
-              : `Prod is off, so nothing is built here: this pane attaches to the server you run on guest port ${String(port)}. Start it in the terminal, then press the reload arrow above.`
+              : `Prod is off, so nothing is built here: press the reload arrow above and this pane runs the project's dev or start script in the guest, then shows what it serves on guest port ${String(port)}.`
         }
         canGoBack={canGoBack(browser.history)}
         canGoForward={canGoForward(browser.history)}
@@ -435,7 +436,7 @@ export function PreviewPane({
         reloadTitle={
           builds
             ? "Publish the build and load this URL again"
-            : `Attach to whatever answers on guest port ${String(port)}`
+            : `Run the project's dev or start script in the guest, then show what it serves on guest port ${String(port)}`
         }
         onBack={() => dispatch({ type: "back" })}
         onForward={() => dispatch({ type: "forward" })}

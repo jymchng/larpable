@@ -267,7 +267,7 @@ export function SettingsPanel({
           <p data-testid="settings-preview-note" className="text-muted-foreground text-[11px]">
             {preview.settings.prod
               ? `The preview reads ${preview.settings.buildDirectory}/ out of the guest and serves it statically on ${baseUrlFor(preview.settings)}.`
-              : `The preview attaches to whatever is already listening on ${baseUrlFor(preview.settings)} \u2014 start it in the terminal, for example \`bun run dev -- -p ${String(preview.settings.port)}\`. No build and no server of the preview's own.`}
+              : `The preview runs the project's dev or start script in the guest and shows what it serves on ${baseUrlFor(preview.settings)} \u2014 no build of the preview's own, and nothing for you to start in the terminal.`}
           </p>
 
           {preview.problem !== null ? (

@@ -228,6 +228,22 @@ async function settle(rounds = 10): Promise<void> {
   }
 }
 
+/**
+ * Wait until `check` holds, letting React and the preview's promises run.
+ *
+ * The start path waits for the port to *answer* rather than sleeping a fixed time, so a test that
+ * guessed at a number of microtask rounds would be flaky by construction. This waits for the fact
+ * it is about, with a budget so a real failure fails rather than hangs.
+ */
+async function until(check: () => boolean, timeoutMs = 8_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check() && Date.now() < deadline) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+}
+
 function reload(): void {
   const button = document.querySelector<HTMLButtonElement>('[data-testid="preview-reload"]');
   if (button === null) throw new Error("the pane has no reload arrow");
@@ -338,6 +354,87 @@ describe("a dev server on the Settings port, Prod off", () => {
     const refusal = stale.find((message) => message.type === FORWARD_REPLY_MESSAGE);
     expect(refusal?.status).toBe(404);
     expect(new TextDecoder().decode(new Uint8Array(refusal?.body as ArrayBuffer))).toContain("dev-2");
+  });
+
+  it("starts the project itself on one press when nothing is listening", async () => {
+    // The case the fix was reported for: a fresh project, nothing running, Prod off, one press of
+    // the reload arrow. Nothing in this test is a stand-in for the parts that were wrong — the real
+    // `usePreview`, the real controller, the real `readStartScript` and `startAppServer`. The only
+    // fakes are the two a test cannot have: the guest (a `fetch` that refuses until the project's
+    // script has been "run", then answers like Vite) and the service worker.
+    const worker = fakeWorker();
+    installWorker(worker);
+
+    let running = false;
+    const commands: string[] = [];
+    const http = (async (url: string): Promise<Response> => {
+      // A refused connection is the only "nothing is there", which is what makes the preview
+      // start the project instead of attaching to nothing.
+      if (!running) throw new Error(`connection refused: ${url}`);
+      if (url.endsWith("/")) {
+        return new Response(VITE_HTML, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response("", { status: 404 });
+    }) as GuestHttpFetch;
+
+    const environment = new FakeEnvironment({
+      tree: {
+        // The project's own facts: a `dev` script, and the lockfile that says how to run it.
+        "package.json": JSON.stringify({ scripts: { dev: "vite" } }),
+        "bun.lock": "",
+      },
+      guestHttp: http,
+      // No real process: the command is recorded, and the guest starts answering from then on.
+      fallback: (command) => {
+        running = true;
+        commands.push(command);
+        return { stdout: "VITE v5.0.0  ready in 120 ms\n" };
+      },
+    });
+    await environment.initialize();
+
+    mount(<PreviewTab environment={environment} />);
+    expect(frameSrc()).toBeNull();
+
+    // 1. One press: the project is read, started in the guest, and attached to.
+    reload();
+    await until(() => frameSrc() !== null);
+
+    expect(commands).toEqual(["bun run dev"]);
+    expect(frameSrc()).toBe("/__preview__/dev-1/");
+    expect(document.body.textContent ?? "").not.toContain("Nothing answered");
+
+    // The document the started server serves is what the pane's forwarder hands back.
+    const first = await worker.forward("https://app.example/__preview__/dev-1/");
+    const firstReply = first.find((message) => message.type === FORWARD_REPLY_MESSAGE);
+    expect(firstReply?.status).toBe(200);
+    expect(new TextDecoder().decode(new Uint8Array(firstReply?.body as ArrayBuffer))).toContain(
+      "/__preview__/dev-1/@vite/client",
+    );
+
+    // 2. A second press finds the server answering, so it attaches again and starts nothing: a
+    //    second `bun run dev` on the same port would fail with EADDRINUSE.
+    reload();
+    await until(() => frameSrc() === "/__preview__/dev-2/");
+
+    expect(commands).toHaveLength(1);
+
+    // 3. And after the worker was stopped and restarted — the state that once produced "No
+    //    preview build has been published yet" — the arrow still shows the site.
+    worker.restart();
+    reload();
+    await until(() => frameSrc() === "/__preview__/dev-3/");
+
+    expect(commands).toHaveLength(1);
+    const third = await worker.forward("https://app.example/__preview__/dev-3/");
+    const thirdReply = third.find((message) => message.type === FORWARD_REPLY_MESSAGE);
+    expect(thirdReply?.status).toBe(200);
+    expect(new TextDecoder().decode(new Uint8Array(thirdReply?.body as ArrayBuffer))).toContain(
+      "/__preview__/dev-3/@vite/client",
+    );
   });
 
   it("says what to run when nothing is listening, instead of showing a blank frame", async () => {

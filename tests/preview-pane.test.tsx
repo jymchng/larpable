@@ -395,6 +395,16 @@ describe("build strip", () => {
     expect(dev).not.toContain("Click the hammer above");
     expect(dev).toContain("guest port 1234");
     expect(dev).toContain("reload arrow");
+    // The arrow now *runs* the project, so the empty state says so: the old hint told the user to
+    // start the server in the terminal, which they no longer have to do.
+    expect(dev).toContain("runs the project");
+    expect(dev).toContain("shows what it serves");
+    expect(dev).not.toContain("Start it in the terminal");
+
+    // The arrow's tooltip is the only place the difference is stated before the click, so it says
+    // the same thing in one line.
+    expect(dev).toContain("Run the project");
+    expect(dev).toContain("then show what it serves");
 
     // A caller with no build control has no hammer, so the placeholder must not name one.
     const withoutHammer = renderToStaticMarkup(
