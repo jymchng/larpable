@@ -34,19 +34,19 @@ describe("orphanPreviewMessage", () => {
   it("names the session and says the id changes on every reload", () => {
     const message = orphanPreviewMessage("/__preview__/dev-6/");
     expect(message).toContain("not a page of its own");
-    expect(message).toContain("`dev-6`");
+    expect(message).toContain("dev-6");
     expect(message).toContain("changes every time the pane reloads");
     expect(message).toContain("Open Larpable");
   });
 
   it("says the same thing without inventing a session when the path has none", () => {
     const message = orphanPreviewMessage("/__preview__/");
-    expect(message).not.toContain("``");
+    expect(message).not.toContain("undefined");
     expect(message).toContain("changes every time the pane reloads");
   });
 
   it("decodes a percent-encoded id rather than showing the escapes", () => {
-    expect(orphanPreviewMessage("/__preview__/dev%2D6/")).toContain("`dev-6`");
+    expect(orphanPreviewMessage("/__preview__/dev%2D6/")).toContain("dev-6");
   });
 });
 
@@ -58,7 +58,7 @@ describe("renderOrphanPreviewVisit", () => {
     const page = root.querySelector("[data-testid=preview-orphan]");
     expect(page).not.toBeNull();
     expect(root.textContent).toContain("This preview lives inside Larpable");
-    expect(root.textContent).toContain("`dev-6`");
+    expect(root.textContent).toContain("dev-6");
     const link = root.querySelector("a");
     expect(link?.getAttribute("href")).toBe("/");
     expect(link?.textContent).toBe("Open Larpable");

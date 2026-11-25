@@ -43,7 +43,7 @@ function describeSession(pathname: string): string {
   const session = decodeURIComponent(raw);
   return session.length === 0
     ? "Its id changes every time the pane reloads."
-    : `\`${session}\` was the id of one pane in a session that has ended, and the id changes every time the pane reloads.`;
+    : `${session} was the id of one pane in a session that has ended, and the id changes every time the pane reloads.`;
 }
 
 /**
