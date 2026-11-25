@@ -133,6 +133,32 @@ describe("serveAppRequest", () => {
     expect(script).toContain('fetch("/api/status")');
   });
 
+  it("rebases CSS that lives inside the document, not in a .css file", async () => {
+    // Measured against a real Vite dev server: an inline `<style>` block was the one request
+    // left pointing at the host app, so a full-page background came from the wrong origin.
+    const html = [
+      "<!doctype html><html><head>",
+      "<style>body{background:url(/bg.svg)} @import \"/base.css\";</style>",
+      '</head><body><div style="background:url(/hero.png)">hi</div></body></html>',
+    ].join("");
+    const answer = await serveAppRequest(
+      { path: "/" },
+      {
+        transport: transport({
+          "/": { headers: { "content-type": "text/html" }, body: html },
+        }),
+        port: 3000,
+        buildId: "app-1",
+      },
+    );
+
+    const served = new TextDecoder().decode(answer.body);
+    expect(served).toContain("url(/__preview__/app-1/bg.svg)");
+    expect(served).toContain('@import "/__preview__/app-1/base.css"');
+    expect(served).toContain('style="background:url(/__preview__/app-1/hero.png)"');
+    expect(served).not.toContain("url(/bg.svg)");
+  });
+
   it("rebases a stylesheet's url() references too", async () => {
     const answer = await serveAppRequest(
       { path: "/_next/static/css/app.css" },

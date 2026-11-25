@@ -335,6 +335,11 @@ that, so query strings survive — `/src/index.css?import` becomes
 keep their meaning. It also rewrites `url(/…)` inside a script, because a dev server hands a
 stylesheet over *as* a module (`__vite__css = "body{background:url(/fonts/x.woff2)}"`).
 
+`rebaseDocument()` applies the stylesheet rule to the document as well, so an inline
+`<style>body{background:url(/bg.svg)}</style>` and a `style="cursor:url(/x.png)"` attribute are
+rebased like a `.css` file. That gap was measured, not guessed: crawling a real Vite dev server
+through this code, the inline style was the single request still pointing at the host app.
+
 What it does not rewrite, deliberately:
 
 - **Relative specifiers** (`./local.js`, `../up.js`) — resolving against the module URL is
@@ -349,3 +354,23 @@ Two consequences worth knowing when previewing a dev server: the HMR **websocket
 carried (a service worker cannot intercept one), so the pane shows the document as it is when
 you press reload rather than live-updating; and a `<base href="/">` in the document still wins
 over the pane's URL, as it does for a built preview.
+
+### Opening a preview URL on its own
+
+`/__preview__/<id>/…` is answered by the service worker the running app registered, using a
+snapshot or a forwarder that lives in that app's page. It is therefore **not a shareable
+page**: open it in a new tab, or paste it to someone else, and nothing is behind it — the
+host's SPA fallback answers with the app's own `index.html`. On a static host that used to
+mean Larpable booting a Linux machine on an address that promised a preview, and inside a
+stale frame, a second machine booting inside itself. The id is a counter (`dev-6` is the sixth
+attach since the page loaded), so a copied URL is stale immediately anyway.
+
+`src/preview/orphan-url.ts` decides the case and paints a short page — a heading, one sentence
+naming the session, and an **Open Larpable** link — from `src/main.tsx`, before React mounts
+and before any machine boots. The test is `navigator.serviceWorker.controller === null`:
+
+| Document | Controlled by the worker? | What happens |
+| --- | --- | --- |
+| the pane's iframe at `/__preview__/dev-6/` | yes | the preview renders normally |
+| a new tab at `/__preview__/dev-6/` | no | the explanation page |
+| any other path | no | the app, as usual |

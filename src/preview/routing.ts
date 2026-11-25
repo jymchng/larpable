@@ -427,7 +427,13 @@ export function rebaseDocument(text: string, base: string): string {
           return [rebaseValue(url, base), ...descriptor].join(" ");
         })
         .join(", ")}${quote}`,
-    );
+    )
+    // An inline `<style>` block and a `style="…"` attribute are stylesheets too, and their
+    // `url(/bg.svg)` is owed the same rewrite as a `.css` file's: a full-page background, a
+    // `@font-face` source, a `cursor: url(…)` all escape the prefix otherwise. Measured against
+    // a real Vite dev server: an inline style was the one request left pointing at the host app.
+    .replace(CSS_URL, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(CSS_IMPORT, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`);
 }
 
 /**
