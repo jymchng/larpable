@@ -210,6 +210,41 @@ describe("attachGuestServer", () => {
     expect(body).toContain("/__preview__/dev-1/assets/x.css");
   });
 
+  it("rebases a dev server's module specifiers, so the graph and its CSS load", async () => {
+    // The reported bug: a Vite dev server answers `/src/main.tsx` with root-absolute imports.
+    // They escaped the prefix, so the module graph died and the page showed as unstyled text.
+    const h = await harness({
+      answer: (url) =>
+        url.endsWith("/src/main.tsx")
+          ? new Response(
+              'import "/@vite/client";\nimport "/src/index.css";\nexport const x = 1;\n',
+              { status: 200, headers: { "content-type": "text/javascript" } },
+            )
+          : new Response("", { status: 200 }),
+    });
+    if (!h.attach.ok) throw new Error(h.attach.message);
+
+    const replies: unknown[] = [];
+    h.deliver(
+      {
+        type: "larpable:preview:forward",
+        requestId: "r1",
+        url: "http://app.example/__preview__/dev-1/src/main.tsx",
+        method: "GET",
+      },
+      { postMessage: (message) => replies.push(message) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The guest is asked for the *unprefixed* path — the prefix is the pane's own address.
+    expect(h.requested.at(-1)).toBe("http://127.0.0.1:1234/src/main.tsx");
+    const [answer] = ofType(replies, FORWARD_REPLY_MESSAGE) as { body: ArrayBuffer | null }[];
+    const body = new TextDecoder().decode(new Uint8Array(answer?.body ?? new ArrayBuffer(0)));
+    expect(body).toContain('import "/__preview__/dev-1/@vite/client"');
+    expect(body).toContain('import "/__preview__/dev-1/src/index.css"');
+    expect(body).not.toContain('import "/@vite/client"');
+  });
+
   it("ignores another session's requests, so a stale frame cannot be answered here", async () => {
     const h = await harness();
     if (!h.attach.ok) throw new Error(h.attach.message);

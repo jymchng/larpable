@@ -307,3 +307,45 @@ Three consequences are deliberate:
 A second press, or a press while a start is still running, attaches instead of starting
 another process — the probe answers once the first server is up, and an in-flight run is
 shared rather than repeated.
+
+### Why a dev server's modules need rewriting
+
+A built bundle is self-contained: `rebaseDocument` only has to fix the HTML's `/assets/…`
+references, because every chunk after that names its neighbours relatively.
+
+A dev server is the opposite. It transforms one module at a time and leaves the specifiers
+root-absolute, because it assumes its app owns the origin root:
+
+```js
+import "/@vite/client";
+import { jsx } from "/node_modules/.vite/deps/react.js?v=abc123";
+import "/src/index.css";
+const lazy = () => import("/src/lazy.tsx");
+const logo = new URL("/logo.svg", import.meta.url);
+```
+
+Served from `/__preview__/<id>/`, those requests go to the *host* app, the module graph dies on
+the first import, and the page renders as unstyled text — Vite injects a project's CSS from
+JavaScript, so one broken import costs every stylesheet. This was a real bug: pressing reload
+after `bun i && bun run dev -- --port 1234` showed bare text.
+
+`rebaseModule()` (`src/preview/routing.ts`) rewrites the specifier's leading slash, and only
+that, so query strings survive — `/src/index.css?import` becomes
+`/__preview__/<id>/src/index.css?import`, and Vite's `?import`, `?direct` and `?v=` variants
+keep their meaning. It also rewrites `url(/…)` inside a script, because a dev server hands a
+stylesheet over *as* a module (`__vite__css = "body{background:url(/fonts/x.woff2)}"`).
+
+What it does not rewrite, deliberately:
+
+- **Relative specifiers** (`./local.js`, `../up.js`) — resolving against the module URL is
+  already correct.
+- **URLs the app computes at runtime** — `fetch("/api/status")`, `history.pushState({}, "", "/x")`.
+  These are values, not places the module graph names. An app that hard-codes them cannot be
+  proxied from a subpath; that is the standing limit of a server-app preview.
+- **Source-map columns**, which shift by the prefix's length. Having devtools open on a
+  dev preview is worth more than perfect columns.
+
+Two consequences worth knowing when previewing a dev server: the HMR **websocket** is not
+carried (a service worker cannot intercept one), so the pane shows the document as it is when
+you press reload rather than live-updating; and a `<base href="/">` in the document still wins
+over the pane's URL, as it does for a built preview.

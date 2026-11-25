@@ -363,9 +363,35 @@ function rebaseValue(value: string, base: string): string {
 /** Attributes that hold one URL. `srcset` is handled separately: it holds a list. */
 const URL_ATTRIBUTE = /(\s(?:src|href|poster|action|formaction|data)\s*=\s*)(["'])([\s\S]*?)\2/gi;
 const SRCSET_ATTRIBUTE = /(\ssrcset\s*=\s*)(["'])([\s\S]*?)\2/gi;
-/** `url(/x.woff2)` and `@import "/x.css"` inside a stylesheet, with the leading slash. */
-const CSS_URL = /(url\(\s*)(["']?)(\/)(?!\/)/gi;
+/**
+ * `url(/x.woff2)` and `@import "/x.css"` inside a stylesheet, with the leading slash.
+ *
+ * The `(?<!new )` matters: this pattern is applied to JavaScript too (a dev server hands CSS
+ * over as a module), where `new URL("/x", import.meta.url)` would otherwise match `URL(` and
+ * get the prefix twice — once here, once from `MODULE_ASSET`.
+ */
+const CSS_URL = /(?<!new )(url\(\s*)(["']?)(\/)(?!\/)/gi;
 const CSS_IMPORT = /(@import\s+)(["'])(\/)(?!\/)/gi;
+/**
+ * The module specifiers that survive into a *dev* server's response, with their leading slash.
+ *
+ * A dev server transforms per request and leaves import specifiers root-absolute — Vite emits
+ * `import … from "/node_modules/.vite/deps/react.js?v=…"`, `import "/src/index.css"`,
+ * `import("/src/x.tsx")` — because it assumes the app owns the origin root. Served from
+ * `/__preview__/<id>/`, those escape to the host app and 404, so the whole module graph fails
+ * and the page renders as unstyled text.
+ *
+ * Each pattern anchors on the syntactic position, not on the string: a specifier can only
+ * appear after `from`, after a bare `import`, inside `import(`, inside `new URL(` (which is
+ * how a module names an asset), or after `sourceMappingURL=`. A quoted `"/api/x"` passed to
+ * `fetch()` is deliberately *not* matched — rewriting a runtime URL is a different question
+ * from rewriting a static one, and guessing at it would break apps that compute paths.
+ */
+const MODULE_FROM = /(\bfrom\s*)(["'])(\/)(?!\/)/g;
+const MODULE_BARE = /(\bimport\s+)(["'])(\/)(?!\/)/g;
+const MODULE_DYNAMIC = /(\bimport\s*\(\s*)(["'])(\/)(?!\/)/g;
+const MODULE_ASSET = /(\bnew\s+URL\s*\(\s*)(["'])(\/)(?!\/)/g;
+const SOURCE_MAP = /(\/\/[#@]\s*sourceMappingURL=)(\/)(?!\/)/g;
 
 /**
  * Rebase a document's root-absolute references onto the build's preview URL.
@@ -416,6 +442,58 @@ export function rebaseStylesheet(text: string, base: string): string {
   return text
     .replace(CSS_URL, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
     .replace(CSS_IMPORT, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`);
+}
+
+/**
+ * The same rewrite for a JavaScript *module*: static imports, re-exports, dynamic `import()`,
+ * `new URL("/asset", import.meta.url)` and `sourceMappingURL`.
+ *
+ * This is the rewrite that makes a *dev* server usable in the pane. A built bundle is
+ * self-contained — chunks reference each other relatively — so the static preview never sees a
+ * root-absolute specifier. A dev server is the opposite: it transforms one module at a time and
+ * emits `from "/node_modules/.vite/deps/react.js?v=…"`, because it assumes its app owns the
+ * origin root. Under `/__preview__/<id>/` those requests go to the *host* app instead, the
+ * module graph collapses on the first import, and the page shows as unstyled text — Vite injects
+ * a project's CSS from JavaScript, so one broken import costs every stylesheet.
+ *
+ * Only the specifier's leading slash is consumed (`base` already ends in one), so query strings
+ * survive: `/src/index.css?import` becomes `/__preview__/<id>/src/index.css?import`, and Vite's
+ * `?import`, `?direct` and `?v=` variants mean what they meant before.
+ *
+ * What is left alone, on purpose: relative (`./x.js`) and protocol-relative (`//cdn/x.js`)
+ * specifiers, and *runtime* strings — `fetch("/api/status")`, `history.pushState`. Those are
+ * values the app computes, not places the module graph names, and an app that hard-codes them
+ * cannot be proxied from a subpath (see `docs/preview.md`).
+ *
+ * Source maps are approximate after this: the prefix shifts every column by its length. A dev
+ * preview with slightly-shifted column numbers is worth more than no preview at all, and the
+ * alternative — not rewriting — is a blank page.
+ */
+export function rebaseModule(text: string, base: string): string {
+  return text
+    .replace(MODULE_FROM, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(MODULE_BARE, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(MODULE_DYNAMIC, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(MODULE_ASSET, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(SOURCE_MAP, (_match, prefix: string) => `${prefix}${base}`)
+    // A dev server hands a project's CSS over *as* a module: the stylesheet's bytes are a string
+    // inside the script (`__vite__css = "body{background:url(/fonts/x.woff2)}"`). Its `url(/)`
+    // references leave the prefix exactly like the module's imports do, so the stylesheet rule
+    // is applied to scripts too — here, and only here.
+    .replace(CSS_URL, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`)
+    .replace(CSS_IMPORT, (_match, prefix: string, quote: string) => `${prefix}${quote}${base}`);
+}
+
+/** True for the content types a browser will execute as a module or classic script. */
+export function isJavaScriptType(contentType: string): boolean {
+  const type = contentType.toLowerCase();
+  return (
+    type.startsWith("text/javascript") ||
+    type.startsWith("application/javascript") ||
+    type.startsWith("application/x-javascript") ||
+    type.startsWith("application/ecmascript") ||
+    type.startsWith("text/ecmascript")
+  );
 }
 
 /**

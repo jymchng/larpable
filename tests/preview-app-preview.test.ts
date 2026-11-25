@@ -60,13 +60,25 @@ describe("serveAppRequest", () => {
     expect(answer.headers["x-larpable-build"]).toBe("app-1");
   });
 
-  it("keeps the app's own content type for a module, and does not rewrite its bytes", async () => {
-    const source = "export const x = 1;\n";
+  it("rebases a module's root-absolute specifiers onto the preview prefix", async () => {
+    // Exactly what a Vite dev server answers for `/src/main.tsx`: the document's script was
+    // rebased, but this module's own imports were still root-absolute and escaped the prefix,
+    // so the graph died on the first line and the page rendered as unstyled text.
+    const source = [
+      'import "/@vite/client";',
+      'import { jsx } from "/node_modules/.vite/deps/react.js?v=abc123";',
+      'import "/src/index.css";',
+      'export * from "/src/shared.ts";',
+      'const lazy = () => import("/src/lazy.tsx");',
+      'const asset = new URL("/logo.svg", import.meta.url);',
+      "//# sourceMappingURL=/src/main.tsx.map",
+      "",
+    ].join("\n");
     const answer = await serveAppRequest(
-      { path: "/_next/static/chunks/main.js" },
+      { path: "/src/main.tsx" },
       {
         transport: transport({
-          "/_next/static/chunks/main.js": {
+          "/src/main.tsx": {
             headers: { "content-type": "application/javascript; charset=utf-8" },
             body: source,
           },
@@ -76,8 +88,49 @@ describe("serveAppRequest", () => {
       },
     );
 
+    const script = new TextDecoder().decode(answer.body);
+    // The app's own content type survives: a browser will not execute a module served as text.
     expect(answer.headers["content-type"]).toBe("application/javascript; charset=utf-8");
-    expect(new TextDecoder().decode(answer.body)).toBe(source);
+    expect(script).toContain('import "/__preview__/app-1/@vite/client"');
+    expect(script).toContain(
+      'from "/__preview__/app-1/node_modules/.vite/deps/react.js?v=abc123"',
+    );
+    expect(script).toContain('import "/__preview__/app-1/src/index.css"');
+    expect(script).toContain('from "/__preview__/app-1/src/shared.ts"');
+    expect(script).toContain('import("/__preview__/app-1/src/lazy.tsx")');
+    expect(script).toContain('new URL("/__preview__/app-1/logo.svg", import.meta.url)');
+    expect(script).toContain("sourceMappingURL=/__preview__/app-1/src/main.tsx.map");
+    expect(script).not.toMatch(/from "\/node_modules/);
+  });
+
+  it("leaves a module's relative and runtime URLs alone", async () => {
+    const source = [
+      'import "./local.js";',
+      'import { x } from "../up.js";',
+      'import { y } from "/abs.js";',
+      'fetch("/api/status");',
+      "",
+    ].join("\n");
+    const answer = await serveAppRequest(
+      { path: "/src/main.tsx" },
+      {
+        transport: transport({
+          "/src/main.tsx": {
+            headers: { "content-type": "text/javascript" },
+            body: source,
+          },
+        }),
+        port: 3000,
+        buildId: "app-1",
+      },
+    );
+
+    const script = new TextDecoder().decode(answer.body);
+    expect(script).toContain('import "./local.js"');
+    expect(script).toContain('from "../up.js"');
+    expect(script).toContain('from "/__preview__/app-1/abs.js"');
+    // A URL the app computes at runtime is not a specifier: rewriting it would change behaviour.
+    expect(script).toContain('fetch("/api/status")');
   });
 
   it("rebases a stylesheet's url() references too", async () => {
