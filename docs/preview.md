@@ -228,7 +228,7 @@ The phases are the user's experience, not the implementation's:
 | Phase | The pane shows |
 | --- | --- |
 | `idle` | nothing on the status line, and no publish button of its own: the browser bar's reload arrow publishes |
-| `starting` | `Starting the guest's server for dist/…` (Prod on), or `Nothing answers on guest port 5173 yet, so the preview is starting the project's server…` then `Starting \`bun run dev\` in the guest…` (Prod off) — this is a real `node` start, seconds to a minute |
+| `starting` | Prod on: `Starting the guest's server for dist/…`. Prod off: `Nothing answers on guest port 5173 yet, so the preview is starting the project's server…`, then the command itself, e.g. `Starting bun run dev in the guest, on port 5173…`. Either way this is a real `node` start, seconds to a minute |
 | `publishing` | `Reading N files out of the guest…` |
 | `ready` | the iframe, plus whether a **worker** or the **guest** is serving |
 | `failed` | the reason in full, e.g. `There is no build to preview: dist/ is empty or missing in the guest.` |
@@ -291,8 +291,8 @@ a silent wait reads as a broken button.
 
 Three consequences are deliberate:
 
-- **A missing script fails in the project's words.** `No \`dev\` or \`start\` script in
-  package.json, so the project has nothing to run. Add one — \`"dev": "vite"\`, for example.`
+- **A missing script fails in the project's words.** *No `dev` or `start` script in
+  package.json, so the project has nothing to run. Add one — `"dev": "vite"`, for example.*
   A blank script counts as absent.
 - **A failed start still knocks.** A server started by hand in the terminal, or one that
   claimed its own port, is attached to even when our start reported `EADDRINUSE`; the probe
